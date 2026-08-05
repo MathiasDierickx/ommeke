@@ -20,6 +20,7 @@ DEM_TILES = ["N50E003", "N50E004", "N51E003", "N51E004"]
 
 HEAT_DIR = HOME / "heat"          # drop hier je eigen GPX-ritten
 HEAT_PKL = CACHE / "heat.pkl"
+OSM_TRACES_PKL = CACHE / "osm_traces.pkl"
 CUSTOM_AREAS = GH_DIR / "custom_areas"
 
 EXTRACT_PKL = CACHE / "extract.pkl"

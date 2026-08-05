@@ -63,11 +63,79 @@ def _rects(cells) -> list[list[list[float]]]:
     return rects
 
 
-def build(min_passes: int = 1) -> dict:
+def fetch_osm(max_pages_per_tile: int = 150) -> dict:
+    """Publieke GPS-traces van OpenStreetMap binnenhalen voor de regio-bbox.
+
+    De trackpoints-API is open data (ODbL); identificeerbare traces komen als
+    geordende tracks, anonieme als losse punten — beide tellen als dichtheid
+    per cel. Eenmalige download, daarna gecached.
+    """
+    import time
+    import urllib.request
+
+    minlat, minlon, maxlat, maxlon = config.BBOX
+    # API-limiet: 0.25 vierkante graad per bbox -> 2x2 tegels
+    tiles = []
+    for i in range(2):
+        for j in range(2):
+            tiles.append((
+                minlon + (maxlon - minlon) * j / 2, minlat + (maxlat - minlat) * i / 2,
+                minlon + (maxlon - minlon) * (j + 1) / 2, minlat + (maxlat - minlat) * (i + 1) / 2,
+            ))
+
+    counts: dict = defaultdict(int)
+    total = 0
+    for t, (l, b, r, tp) in enumerate(tiles):
+        for page in range(max_pages_per_tile):
+            url = (f"https://api.openstreetmap.org/api/0.6/trackpoints"
+                   f"?bbox={l:.4f},{b:.4f},{r:.4f},{tp:.4f}&page={page}")
+            req = urllib.request.Request(url, headers={"User-Agent": "lusmaker/0.1 (hobby routeplanner)"})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = resp.read()
+            except OSError as e:
+                print(f"[heat] tegel {t} pagina {page}: {e} — stop deze tegel", file=sys.stderr)
+                break
+            pts = []
+            for _ev, el in ET.iterparse(__import__("io").BytesIO(data)):
+                if el.tag.endswith("trkpt"):
+                    try:
+                        pts.append((float(el.get("lat")), float(el.get("lon"))))
+                    except (TypeError, ValueError):
+                        pass
+                    el.clear()
+            if not pts:
+                break
+            prev = None
+            for p in pts:
+                # geordende tracks kort interpoleren; anonieme puntenwolken niet
+                if prev and 0 < geo.haversine(*prev, *p) <= 150:
+                    for q in geo.resample([prev, p], 60.0):
+                        counts[geo.cell(*q)] += 1
+                else:
+                    counts[geo.cell(*p)] += 1
+                prev = p
+            total += len(pts)
+            if page % 20 == 0:
+                print(f"[heat] tegel {t + 1}/4 pagina {page}: {total} punten totaal", file=sys.stderr)
+            time.sleep(0.25)
+
+    with open(config.OSM_TRACES_PKL, "wb") as f:
+        pickle.dump({"counts": dict(counts), "points": total}, f)
+    return {"punten": total, "cellen": len(counts)}
+
+
+def _osm_cells(min_points: int) -> set:
+    if not config.OSM_TRACES_PKL.exists():
+        return set()
+    with open(config.OSM_TRACES_PKL, "rb") as f:
+        counts = pickle.load(f)["counts"]
+    return {c for c, n in counts.items() if n >= min_points}
+
+
+def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
     config.ensure_dirs()
     files = sorted(config.HEAT_DIR.glob("*.gpx"))
-    if not files:
-        raise RuntimeError(f"geen GPX-bestanden in {config.HEAT_DIR} — drop daar je ritten")
 
     cell_sources = defaultdict(set)
     for fi, f in enumerate(files):
@@ -77,7 +145,13 @@ def build(min_passes: int = 1) -> dict:
         for c in _track_cells(pts):
             cell_sources[c].add(fi)
 
-    popular = {c for c, srcs in cell_sources.items() if len(srcs) >= min_passes}
+    own = {c for c, srcs in cell_sources.items() if len(srcs) >= min_passes}
+    osm = _osm_cells(osm_min_points)
+    popular = own | osm
+    if not popular:
+        raise RuntimeError(
+            f"geen data: drop GPX-ritten in {config.HEAT_DIR} en/of draai `lus heat fetch-osm`"
+        )
     rects = _rects(popular)
 
     geojson = {
@@ -96,11 +170,15 @@ def build(min_passes: int = 1) -> dict:
     }
     (config.CUSTOM_AREAS / "popular.geojson").write_text(json.dumps(geojson))
     with open(config.HEAT_PKL, "wb") as f:
-        pickle.dump({"cells": popular, "files": len(files), "min_passes": min_passes}, f)
+        pickle.dump({"cells": popular, "files": len(files), "min_passes": min_passes,
+                     "own_cells": len(own), "osm_cells": len(osm),
+                     "osm_min_points": osm_min_points}, f)
     gh_config.write_gh_files()  # quiet.json krijgt nu de !in_popular-regel
 
     return {
         "gpx_bestanden": len(files),
+        "eigen_cellen": len(own),
+        "osm_cellen": len(osm),
         "cellen": len(popular),
         "polygonen": len(rects),
         "km_corridor": round(len(popular) * 0.13 * 0.13 / 0.13, 1),

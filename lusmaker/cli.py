@@ -255,7 +255,13 @@ def cmd_climbs_detect(args):
 def cmd_heat_build(args):
     from . import heat
 
-    return heat.build(min_passes=args.min_passes)
+    return heat.build(min_passes=args.min_passes, osm_min_points=args.osm_min_points)
+
+
+def cmd_heat_fetch_osm(args):
+    from . import heat
+
+    return heat.fetch_osm(max_pages_per_tile=args.max_pages)
 
 
 def cmd_heat_status(args):
@@ -331,9 +337,13 @@ def main(argv=None):
 
     h = sub.add_parser("heat", help="persoonlijke heatmap uit eigen GPX-ritten")
     hsub = h.add_subparsers(dest="subcmd", required=True)
-    s = hsub.add_parser("build", help="heatmap bouwen uit ~/.lusmaker/heat/*.gpx")
-    s.add_argument("--min-passes", type=int, default=1, help="min. aantal ritten per cel")
+    s = hsub.add_parser("build", help="heatmap bouwen uit eigen GPX + OSM-traces")
+    s.add_argument("--min-passes", type=int, default=1, help="min. aantal eigen ritten per cel")
+    s.add_argument("--osm-min-points", type=int, default=30, help="min. OSM-tracepunten per cel")
     s.set_defaults(func=cmd_heat_build)
+    s = hsub.add_parser("fetch-osm", help="publieke OSM GPS-traces downloaden (eenmalig)")
+    s.add_argument("--max-pages", type=int, default=150)
+    s.set_defaults(func=cmd_heat_fetch_osm)
     s = hsub.add_parser("status")
     s.set_defaults(func=cmd_heat_status)
 
