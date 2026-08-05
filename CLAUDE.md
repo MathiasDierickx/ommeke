@@ -36,10 +36,22 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 | "geen kasseien" / "liever asfalt" | `--vermijd-kasseien` bij `draft new` |
 | "betonbanen bollen slecht" | `--vermijd-beton` bij `draft new` |
 | "zo weinig mogelijk steenwegen" (hard) | `--strict` bij `draft new` |
+| "rij graag waar veel gefietst wordt" | `lus heat build` na GPX-drop (zie hieronder) |
 
 Dit zijn zachte voorkeuren (penalties, geen verboden) — kort meerijden op een
 steenweg kan dus nog. Check het effect in `computed.kwaliteit`
 (kassei_m, steenweg_m, steenweg_kruisingen) en koppel terug naar de gebruiker.
+
+## Persoonlijke heatmap (populaire wegen)
+
+De gebruiker kan eigen ritten (Strava/Garmin-export, toertocht-GPX) in
+`~/.lusmaker/heat/` droppen. Dan: `lus heat build`, gevolgd door
+`rm -rf ~/.lusmaker/gh/graph-cache && docker compose restart graphhopper`
+(herimport ~5 min). Daarna krijgen bereden corridors een relatieve boost in
+alle routing, en rapporteert `computed.kwaliteit.populair_pct` hoeveel van de
+route op bekende wegen ligt. `lus heat status` toont wat actief is.
+De Strava Global Heatmap zelf mag juridisch niet gebruikt worden; dit is de
+legale variant met eigen data.
 
 ## Weetjes
 

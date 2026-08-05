@@ -62,17 +62,21 @@ Alle output is JSON; zie `CLAUDE.md` voor de LLM-instructies.
 
 PoC. Al gebouwd naast de basisflow: auto-klimdetectie (DEM-sweep, ~700 klimmen
 naast de namenlijst), zachte voorkeuren (kasseien/beton/strict), vermijdzones
-rond plaatsen (`draft avoid`), en kwaliteitsmetrieken per route (kassei- en
-steenwegmeters, kruisingen met drukke wegen).
+rond plaatsen (`draft avoid`), kwaliteitsmetrieken per route (kassei- en
+steenwegmeters, kruisingen met drukke wegen), en een persoonlijke heatmap
+(`lus heat build`): eigen GPX-ritten worden een GraphHopper custom area die
+bereden wegen een relatieve boost geeft — de legale variant van
+Strava-heatmap-routing.
 
 Bekende beperkingen en volgende stappen:
 
 - [ ] MCP-server (elke CLI-subcommand mapt 1-op-1 op een MCP-tool) voor gebruik
       buiten Claude Code, incl. elicitation voor de suggestie-vragen
-- [ ] Populariteitslaag uit eigen Strava-historiek (map-matching op OSM-ways,
-      injectie in het custom model)
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
-- [ ] Corridor-penalty is zacht (×0.15); bij smalle valleien kan een stukje
-      heenweg toch hergebruikt worden
+- [ ] Corridor-penalty is zacht; bij smalle valleien kan een stukje heenweg
+      toch hergebruikt worden
+- [ ] Heat-polygonen schalen: bij duizenden ritten eerst vereenvoudigen
+      (concave hulls) voor de GH-import
+- [ ] Strava API-sync voor automatische eigen-ritten-import (OAuth)
 - Regio is nu de bbox Wetteren–Vlaamse Ardennen (`config.BBOX`)

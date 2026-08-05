@@ -252,6 +252,18 @@ def cmd_climbs_detect(args):
     }
 
 
+def cmd_heat_build(args):
+    from . import heat
+
+    return heat.build(min_passes=args.min_passes)
+
+
+def cmd_heat_status(args):
+    from . import heat
+
+    return heat.status()
+
+
 def cmd_draft_route(args):
     from . import climbs, draft
 
@@ -316,6 +328,14 @@ def main(argv=None):
     s.add_argument("--min-gain", type=float, default=18.0)
     s.add_argument("--min-avg", type=float, default=3.0)
     s.set_defaults(func=cmd_climbs_detect)
+
+    h = sub.add_parser("heat", help="persoonlijke heatmap uit eigen GPX-ritten")
+    hsub = h.add_subparsers(dest="subcmd", required=True)
+    s = hsub.add_parser("build", help="heatmap bouwen uit ~/.lusmaker/heat/*.gpx")
+    s.add_argument("--min-passes", type=int, default=1, help="min. aantal ritten per cel")
+    s.set_defaults(func=cmd_heat_build)
+    s = hsub.add_parser("status")
+    s.set_defaults(func=cmd_heat_status)
 
     d = sub.add_parser("draft", help="routes bouwen")
     dsub = d.add_subparsers(dest="subcmd", required=True)

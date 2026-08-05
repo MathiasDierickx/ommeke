@@ -101,8 +101,16 @@ def route_stats(legs_geometry, legs_details) -> dict:
             continue
         kassei += detail_meters(leg, det.get("surface", []), COBBLE_SURFACES | {"cobblestone"})
         steenweg += detail_meters(leg, det.get("road_class", []), BIG_ROADS)
-    return {
+    out = {
         "kassei_m": round(kassei),
         "steenweg_m": round(steenweg),
         "steenweg_kruisingen": count_crossings(all_coords),
     }
+    from . import heat
+
+    cells = heat.popular_cells()
+    if cells is not None:
+        pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
+        hits = sum(1 for p in pts if geo.cell(*p) in cells)
+        out["populair_pct"] = round(hits / max(len(pts), 1) * 100, 1)
+    return out

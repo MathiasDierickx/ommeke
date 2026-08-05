@@ -15,6 +15,7 @@ graphhopper:
 
   import.osm.ignored_highways: motorway, trunk
 
+  custom_areas.directory: /lus/gh/custom_areas
   custom_models.directory: /lus/gh/custom_models
   profiles:
     - name: quiet
@@ -51,10 +52,17 @@ QUIET_MODEL = {
 }
 
 
+# relatieve boost voor bereden corridors: alles daarbuiten een zachte straf
+POPULAR_RULE = {"if": "!in_popular", "multiply_by": "0.75"}
+
+
 def write_gh_files() -> list[str]:
     config.ensure_dirs()
     cfg = config.GH_DIR / "config.yml"
     cfg.write_text(GH_CONFIG_YML)
+    model = dict(QUIET_MODEL)
+    if (config.CUSTOM_AREAS / "popular.geojson").exists():
+        model = {"priority": QUIET_MODEL["priority"] + [POPULAR_RULE]}
     quiet = config.GH_DIR / "custom_models" / "quiet.json"
-    quiet.write_text(json.dumps(QUIET_MODEL, indent=2))
+    quiet.write_text(json.dumps(model, indent=2))
     return [str(cfg), str(quiet)]
