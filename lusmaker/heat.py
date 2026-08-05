@@ -83,9 +83,28 @@ def fetch_osm(max_pages_per_tile: int = 150) -> dict:
                 minlon + (maxlon - minlon) * (j + 1) / 2, minlat + (maxlat - minlat) * (i + 1) / 2,
             ))
 
+    # incrementeel: per afgewerkte tegel opslaan zodat een afgebroken run
+    # hervat kan worden zonder alles opnieuw te downloaden
     counts: dict = defaultdict(int)
+    done_tiles: set = set()
     total = 0
+    if config.OSM_TRACES_PKL.exists():
+        with open(config.OSM_TRACES_PKL, "rb") as f:
+            prev = pickle.load(f)
+        counts.update(prev.get("counts", {}))
+        done_tiles = set(prev.get("done_tiles", []))
+        total = prev.get("points", 0)
+        if done_tiles:
+            print(f"[heat] hervat: tegels {sorted(done_tiles)} al binnen", file=sys.stderr)
+
+    def _save():
+        with open(config.OSM_TRACES_PKL, "wb") as f:
+            pickle.dump({"counts": dict(counts), "points": total,
+                         "done_tiles": sorted(done_tiles)}, f)
+
     for t, (l, b, r, tp) in enumerate(tiles):
+        if t in done_tiles:
+            continue
         for page in range(max_pages_per_tile):
             url = (f"https://api.openstreetmap.org/api/0.6/trackpoints"
                    f"?bbox={l:.4f},{b:.4f},{r:.4f},{tp:.4f}&page={page}")
@@ -119,9 +138,10 @@ def fetch_osm(max_pages_per_tile: int = 150) -> dict:
             if page % 20 == 0:
                 print(f"[heat] tegel {t + 1}/4 pagina {page}: {total} punten totaal", file=sys.stderr)
             time.sleep(0.25)
+        done_tiles.add(t)
+        _save()
 
-    with open(config.OSM_TRACES_PKL, "wb") as f:
-        pickle.dump({"counts": dict(counts), "points": total}, f)
+    _save()
     return {"punten": total, "cellen": len(counts)}
 
 
