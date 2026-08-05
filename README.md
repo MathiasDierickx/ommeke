@@ -65,6 +65,34 @@ het harde `--max-km`-budget overschrijdt.
 
 Alle output is JSON; zie `CLAUDE.md` voor de LLM-instructies.
 
+## MCP
+
+Dezelfde routeflow is beschikbaar als lokale MCP-server via stdio. Vervang
+`/absoluut/pad/naar/lusmaker` hieronder door het absolute pad naar deze
+repository.
+
+Voor Claude Code:
+
+```bash
+claude mcp add lusmaker -- /absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp
+```
+
+Voor Claude Desktop, voeg dit toe aan de MCP-configuratie:
+
+```json
+{
+  "mcpServers": {
+    "lusmaker": {
+      "command": "/absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp"
+    }
+  }
+}
+```
+
+De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.
+GraphHopper moet draaien wanneer MCP-tools routeren, suggesties berekenen of
+optimaliseren; controleer dit met `lus status`.
+
 ## Status / roadmap
 
 PoC. Al gebouwd naast de basisflow: auto-klimdetectie (DEM-sweep, ~700 klimmen
@@ -79,8 +107,7 @@ Bekende beperkingen en volgende stappen:
 
 - [x] M1: `draft optimize` — greedy klimselectie met afstandsbudget en
       budget-rollback
-- [ ] MCP-server (elke CLI-subcommand mapt 1-op-1 op een MCP-tool) voor gebruik
-      buiten Claude Code, incl. elicitation voor de suggestie-vragen
+- [x] M2: stdio MCP-server met LLM-gerichte tools bovenop dezelfde kern
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
 - [ ] Corridor-penalty is zacht; bij smalle valleien kan een stukje heenweg

@@ -4,6 +4,7 @@ Lusmaker bouwt fiets-GPX-lussen (Vlaamse Ardennen) stap voor stap via de `lus`-C
 Jij bent de conversatielaag: vertaal wensen van de gebruiker ("mooie lus naar de
 Berendries, rustige wegen, geen twee keer dezelfde baan") naar CLI-stappen, en
 speel vragen/suggesties van de tool terug naar de gebruiker.
+Dezelfde flow is ook beschikbaar via de stdio MCP-server `lus-mcp`.
 
 ## Aanroepen
 
