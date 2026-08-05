@@ -110,7 +110,7 @@ def cmd_climbs_near(args):
     from . import climbs, geo
 
     point, _ = _parse_point(args.plaats)
-    db = climbs.load()
+    db = {"climbs": climbs.all_climbs()}
     out = []
     for c in db["climbs"].values():
         dist = geo.haversine(point["lat"], point["lon"], c["foot"][0], c["foot"][1])
@@ -138,7 +138,8 @@ def cmd_draft_new(args):
     if args.end:
         end, _ = _parse_point(args.end)
     d = draft.new(start=start, name=args.name, loop=not args.no_loop, end=end,
-                  strict=args.strict, avoid_cobbles=args.vermijd_kasseien)
+                  strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
+                  avoid_concrete=args.vermijd_beton)
     out = draft.summary(d)
     out["start_geocoded_als"] = start["label"]
     if alternatieven:
@@ -177,7 +178,7 @@ def cmd_draft_add_climb(args):
     from . import climbs, draft
 
     d = draft.load(args.id)
-    db = climbs.load()["climbs"]
+    db = climbs.all_climbs()
     if args.climb not in db:
         raise RuntimeError(f"onbekende klim '{args.climb}' — zie `lus climbs list`")
     if args.climb in d["climbs"]:
@@ -205,11 +206,57 @@ def cmd_draft_remove_climb(args):
     return draft.summary(d)
 
 
+def cmd_draft_avoid(args):
+    from . import draft
+
+    d = draft.load(args.id)
+    point, alternatieven = _parse_point(args.plaats)
+    d.setdefault("avoid_places", []).append(
+        {"label": point["label"], "lat": point["lat"], "lon": point["lon"],
+         "radius_km": args.radius_km, "factor": args.factor}
+    )
+    d["computed"] = None
+    d.pop("_geometry", None)
+    draft.save(d)
+    out = draft.summary(d)
+    if alternatieven:
+        out["andere_kandidaten"] = alternatieven
+    out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
+    return out
+
+
+def cmd_draft_unavoid(args):
+    from . import draft
+
+    d = draft.load(args.id)
+    before = len(d.get("avoid_places", []))
+    d["avoid_places"] = [p for p in d.get("avoid_places", [])
+                         if args.plaats.lower() not in p["label"].lower()]
+    if len(d["avoid_places"]) == before:
+        raise RuntimeError(f"geen vermijdzone gevonden voor '{args.plaats}'")
+    d["computed"] = None
+    d.pop("_geometry", None)
+    draft.save(d)
+    return draft.summary(d)
+
+
+def cmd_climbs_detect(args):
+    from . import climbs, osm
+
+    extract = osm.build_extract()
+    res = climbs.detect_auto(extract, min_gain=args.min_gain, min_avg=args.min_avg)
+    top = sorted(res["auto"].values(), key=lambda c: -c["gain_m"])[:15]
+    return {
+        "auto_klimmen": len(res["auto"]),
+        "top15_op_hoogtemeters": [climbs.summary(c) for c in top],
+    }
+
+
 def cmd_draft_route(args):
     from . import climbs, draft
 
     d = draft.load(args.id)
-    db = climbs.load()["climbs"]
+    db = climbs.all_climbs()
     return draft.route(d, db)
 
 
@@ -217,7 +264,7 @@ def cmd_draft_suggest(args):
     from . import climbs, draft
 
     d = draft.load(args.id)
-    db = climbs.load()["climbs"]
+    db = climbs.all_climbs()
     sugg = draft.suggest(d, db, max_detour_km=args.max_detour_km, limit=args.limit)
     return {
         "draft": d["id"],
@@ -231,7 +278,7 @@ def cmd_draft_export(args):
     from . import climbs, draft, gpx
 
     d = draft.load(args.id)
-    db = climbs.load()["climbs"]
+    db = climbs.all_climbs()
     path = args.output or f"{d['name']}.gpx"
     return gpx.export(d, db, path)
 
@@ -265,6 +312,10 @@ def main(argv=None):
     s.set_defaults(func=cmd_climbs_near)
     s = csub.add_parser("resolve", help="klim-database opnieuw opbouwen uit climbs.yaml")
     s.set_defaults(func=cmd_climbs_resolve)
+    s = csub.add_parser("detect", help="auto-detectie: DEM-sweep over alle wegen")
+    s.add_argument("--min-gain", type=float, default=18.0)
+    s.add_argument("--min-avg", type=float, default=3.0)
+    s.set_defaults(func=cmd_climbs_detect)
 
     d = sub.add_parser("draft", help="routes bouwen")
     dsub = d.add_subparsers(dest="subcmd", required=True)
@@ -275,6 +326,7 @@ def main(argv=None):
     s.add_argument("--no-loop", action="store_true")
     s.add_argument("--strict", action="store_true", help="steenwegen maximaal vermijden")
     s.add_argument("--vermijd-kasseien", action="store_true", help="zachte straf op kasseistroken")
+    s.add_argument("--vermijd-beton", action="store_true", help="zachte straf op betonbanen")
     s.set_defaults(func=cmd_draft_new)
     s = dsub.add_parser("list")
     s.set_defaults(func=cmd_draft_list)
@@ -294,6 +346,16 @@ def main(argv=None):
     s.add_argument("id")
     s.add_argument("climb")
     s.set_defaults(func=cmd_draft_remove_climb)
+    s = dsub.add_parser("avoid", help="zachte vermijdzone rond een plaats")
+    s.add_argument("id")
+    s.add_argument("plaats")
+    s.add_argument("--radius-km", type=float, default=2.5)
+    s.add_argument("--factor", type=float, default=0.35)
+    s.set_defaults(func=cmd_draft_avoid)
+    s = dsub.add_parser("unavoid", help="vermijdzone weghalen")
+    s.add_argument("id")
+    s.add_argument("plaats")
+    s.set_defaults(func=cmd_draft_unavoid)
     s = dsub.add_parser("route", help="routeer alle legs (lus vermijdt eigen heenweg)")
     s.add_argument("id")
     s.set_defaults(func=cmd_draft_route)

@@ -244,6 +244,96 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
     return out
 
 
+def _slug(name: str) -> str:
+    return "".join(ch if ch.isalnum() else "-" for ch in name.lower()).strip("-")
+
+
+def _nearest_place(places, lat, lon):
+    best = None
+    for name, ptype, plat, plon in places:
+        if ptype not in ("city", "town", "village", "municipality"):
+            continue
+        d = geo.haversine(lat, lon, plat, plon)
+        if best is None or d < best[0]:
+            best = (d, name)
+    return best[1] if best else None
+
+
+def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> dict:
+    """DEM-sweep over alle benoemde wegen: vind klimmen die niet in de
+    namenlijst staan (het 'low hanging fruit' zoals de Diepestraat)."""
+    data = load()
+    known_ways = set()
+    for c in data["climbs"].values():
+        known_ways.update(c.get("osm_way_ids", []))
+
+    by_name = defaultdict(list)
+    for way in extract["ways"]:
+        name = way[3].get("name")
+        hw = way[3].get("highway", "")
+        if not name or hw in ("footway", "path", "steps", "pedestrian", "bridleway"):
+            continue
+        by_name[name].append(way)
+
+    auto: dict[str, dict] = {}
+    n_profiled = 0
+    for name, ways in by_name.items():
+        for idxs in _components(ways):
+            merged, way_ids = _order_chain(ways, idxs)
+            if len(merged) < 2 or geo.path_length(merged) < 250:
+                continue
+            if known_ways.intersection(way_ids):
+                continue  # al gedekt door een bekende klim
+            # goedkope prefilter: 3 hoogtesamples voor de dure profielstap
+            e = [dem.elevation(*merged[0]), dem.elevation(*geo.midpoint(merged)), dem.elevation(*merged[-1])]
+            if any(v is None for v in e) or max(e) - min(e) < min_gain * 0.6:
+                continue
+            n_profiled += 1
+            seg = _best_segment(merged)
+            if not seg:
+                continue
+            geom, gain_m, _seg_len = seg
+            length = geo.path_length(geom)
+            avg = gain_m / length * 100 if length else 0
+            if gain_m < min_gain or avg < min_avg:
+                continue
+            _, eles = dem.profile(geom, step=25.0)
+            sm = dem.smooth(eles, 5)
+            max_pct = 0.0
+            for i in range(len(sm) - 4):
+                max_pct = max(max_pct, (sm[i + 4] - sm[i]) / 100.0 * 100.0)
+            town = _nearest_place(extract["places"], *geo.midpoint(geom))
+            surfaces = {w[3].get("surface", "") for w in ways if w[0] in way_ids}
+            cid = f"auto-{_slug(name)}"
+            if cid in auto:
+                cid = f"{cid}-{len([k for k in auto if k.startswith(cid)]) + 1}"
+            auto[cid] = {
+                "id": cid,
+                "name": f"{name}",
+                "town": town,
+                "auto": True,
+                "surface": sorted(s for s in surfaces if s) or None,
+                "length_m": round(length),
+                "gain_m": round(gain_m, 1),
+                "avg_pct": round(avg, 1),
+                "max_pct": round(max_pct, 1),
+                "ele_foot": round(dem.elevation(*geom[0]) or 0, 1),
+                "ele_top": round(dem.elevation(*geom[-1]) or 0, 1),
+                "foot": [round(geom[0][0], 6), round(geom[0][1], 6)],
+                "top": [round(geom[-1][0], 6), round(geom[-1][1], 6)],
+                "mid": [round(geo.midpoint(geom)[0], 6), round(geo.midpoint(geom)[1], 6)],
+                "geom": [[round(a, 6), round(b, 6)] for a, b in geom],
+                "osm_way_ids": way_ids,
+                "warnings": [],
+            }
+
+    data["auto"] = auto
+    with open(config.CLIMBS_JSON, "w") as f:
+        json.dump(data, f, ensure_ascii=False)
+    print(f"[climbs] {n_profiled} kandidaten geprofileerd, {len(auto)} auto-klimmen", file=sys.stderr)
+    return data
+
+
 def load() -> dict:
     if not config.CLIMBS_JSON.exists():
         raise RuntimeError("klim-database ontbreekt — draai eerst `lus build`")
@@ -251,5 +341,18 @@ def load() -> dict:
         return json.load(f)
 
 
+def all_climbs() -> dict:
+    """Bekende + auto-gedetecteerde klimmen in één pool."""
+    data = load()
+    merged = dict(data["climbs"])
+    merged.update(data.get("auto", {}))
+    return merged
+
+
 def summary(c: dict) -> dict:
-    return {k: c[k] for k in ("id", "name", "town", "length_m", "gain_m", "avg_pct", "max_pct", "warnings")}
+    out = {k: c[k] for k in ("id", "name", "town", "length_m", "gain_m", "avg_pct", "max_pct", "warnings")}
+    if c.get("auto"):
+        out["auto"] = True
+    if c.get("surface"):
+        out["surface"] = c["surface"]
+    return out

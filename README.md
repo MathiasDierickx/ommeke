@@ -60,14 +60,18 @@ Alle output is JSON; zie `CLAUDE.md` voor de LLM-instructies.
 
 ## Status / roadmap
 
-PoC. Bekende beperkingen en volgende stappen:
+PoC. Al gebouwd naast de basisflow: auto-klimdetectie (DEM-sweep, ~700 klimmen
+naast de namenlijst), zachte voorkeuren (kasseien/beton/strict), vermijdzones
+rond plaatsen (`draft avoid`), en kwaliteitsmetrieken per route (kassei- en
+steenwegmeters, kruisingen met drukke wegen).
+
+Bekende beperkingen en volgende stappen:
 
 - [ ] MCP-server (elke CLI-subcommand mapt 1-op-1 op een MCP-tool) voor gebruik
       buiten Claude Code, incl. elicitation voor de suggestie-vragen
 - [ ] Populariteitslaag uit eigen Strava-historiek (map-matching op OSM-ways,
       injectie in het custom model)
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
-- [ ] Klimdetectie zonder namenlijst (DEM-sweep over alle wegen)
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
 - [ ] Corridor-penalty is zacht (×0.15); bij smalle valleien kan een stukje
       heenweg toch hergebruikt worden

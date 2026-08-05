@@ -55,16 +55,23 @@ AVOID_COBBLES_PRIORITY = [
     {"if": "surface == COBBLESTONE", "multiply_by": "0.25"},
 ]
 
+# oude betonbanen bollen slecht: milde straf (veel landelijk Vlaanderen is
+# beton, dus niet te agressief)
+AVOID_CONCRETE_PRIORITY = [
+    {"if": "surface == CONCRETE", "multiply_by": "0.60"},
+]
+
 
 def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           strict: bool = False, avoid_cobbles: bool = False,
-          details: bool = False) -> dict:
+          avoid_concrete: bool = False, details: bool = False) -> dict:
     """Route langs waypoints [(lat, lon), ...].
 
-    avoid_polygons: GeoJSON-ringen ([[lon,lat],...]) die sterk ontmoedigd worden
-    (voor de geen-zelfde-weg-terug-lus).
+    avoid_polygons: lijst van GeoJSON-ringen ([[lon,lat],...]) of dicts
+    {"ring": ..., "factor": 0.x} die ontmoedigd worden — corridors van eerdere
+    legs en/of vermijdzones rond plaatsen.
     strict: extra straf op steenwegen/drukke wegen bovenop het quiet-profiel.
-    avoid_cobbles: zachte straf op kasseien.
+    avoid_cobbles / avoid_concrete: zachte oppervlakte-voorkeuren.
     details: per-segment surface/road_class in het resultaat ("details").
     """
     body = {
@@ -81,9 +88,13 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     custom = {"priority": list(STRICT_PRIORITY) if strict else []}
     if avoid_cobbles:
         custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
+    if avoid_concrete:
+        custom["priority"] = custom["priority"] + list(AVOID_CONCRETE_PRIORITY)
     if avoid_polygons:
         features = []
-        for k, ring in enumerate(avoid_polygons):
+        for k, item in enumerate(avoid_polygons):
+            ring = item["ring"] if isinstance(item, dict) else item
+            factor = item.get("factor", priority_factor) if isinstance(item, dict) else priority_factor
             features.append(
                 {
                     "type": "Feature",
@@ -93,7 +104,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
                 }
             )
             custom["priority"].append(
-                {"if": f"in_corridor{k}", "multiply_by": str(priority_factor)}
+                {"if": f"in_corridor{k}", "multiply_by": str(factor)}
             )
         custom["areas"] = {"type": "FeatureCollection", "features": features}
     body["custom_model"] = custom

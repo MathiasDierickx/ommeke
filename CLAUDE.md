@@ -28,9 +28,28 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
    ~X km extra?"); elk voorstel bevat het exacte add-climb-commando.
 6. Herhaal 3–5 tot de gebruiker tevreden is, dan `lus draft export <id> -o naam.gpx`.
 
+## Taalgestuurde voorkeuren -> tool calls
+
+| Gebruiker zegt | Commando |
+|---|---|
+| "vermijd Zottegem" / "liever niet door X" | `lus draft avoid <id> "X" [--radius-km 2.5] [--factor 0.35]` |
+| "geen kasseien" / "liever asfalt" | `--vermijd-kasseien` bij `draft new` |
+| "betonbanen bollen slecht" | `--vermijd-beton` bij `draft new` |
+| "zo weinig mogelijk steenwegen" (hard) | `--strict` bij `draft new` |
+
+Dit zijn zachte voorkeuren (penalties, geen verboden) — kort meerijden op een
+steenweg kan dus nog. Check het effect in `computed.kwaliteit`
+(kassei_m, steenweg_m, steenweg_kruisingen) en koppel terug naar de gebruiker.
+
 ## Weetjes
 
 - Klim-ids: zie `lus climbs list` (bv. `berendries`, `molenberg`, `oude-kwaremont`).
+- Naast de bekende klimmen zijn er ~700 auto-gedetecteerde (`auto-*`, uit een
+  DEM-sweep over alle wegen; `lus climbs detect` om te verversen). Ze doen
+  gewoon mee in `suggest` en `climbs near` — zo mis je geen onbekende
+  hellingen zoals de Diepestraat.
+- `suggest`-schattingen zijn corridor-vrij; na toevoegen kan de werkelijke
+  meerprijs ~1-2 km hoger uitvallen. Herrouteer en meld het echte totaal.
 - Volgorde van klimmen = volgorde in `draft.climbs`; `--at N` voegt op positie N in.
 - `suggest` geeft `invoegen_op_positie` — gebruik die in het add-climb-commando.
 - Na add/remove-climb is de route stale; altijd opnieuw `draft route` draaien.

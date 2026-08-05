@@ -30,7 +30,7 @@ def save(d: dict) -> None:
 
 
 def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False,
-        avoid_cobbles: bool = False) -> dict:
+        avoid_cobbles: bool = False, avoid_concrete: bool = False) -> dict:
     d = {
         "id": uuid.uuid4().hex[:6],
         "name": name or "lus",
@@ -40,6 +40,8 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "loop": loop,
         "strict": strict,
         "avoid_cobbles": avoid_cobbles,
+        "avoid_concrete": avoid_concrete,
+        "avoid_places": [],  # [{label, lat, lon, radius_km, factor}]
         "climbs": [],    # geordende lijst klim-ids
         "computed": None,
     }
@@ -88,6 +90,25 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
     return legs
 
 
+def _circle_ring(lat, lon, radius_km, n=24):
+    import math
+
+    ring = []
+    for i in range(n + 1):
+        a = 2 * math.pi * i / n
+        dlat = radius_km * 1000 * math.cos(a) / 111320.0
+        dlon = radius_km * 1000 * math.sin(a) / (111320.0 * math.cos(math.radians(lat)))
+        ring.append([round(lon + dlon, 6), round(lat + dlat, 6)])
+    return ring
+
+
+def place_areas(d: dict) -> list[dict]:
+    return [
+        {"ring": _circle_ring(p["lat"], p["lon"], p["radius_km"]), "factor": p["factor"]}
+        for p in d.get("avoid_places", [])
+    ]
+
+
 def route(d: dict, climb_db: dict) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
     legs = _waypoints(d, climb_db)
@@ -96,7 +117,7 @@ def route(d: dict, climb_db: dict) -> dict:
 
     start_pt = (d["start"]["lat"], d["start"]["lon"])
     protect = [start_pt]
-    avoid = []
+    avoid = list(place_areas(d))
     leg_details = []
     computed_legs = []
     total_m = ascend = descend = 0.0
@@ -104,13 +125,16 @@ def route(d: dict, climb_db: dict) -> dict:
     for leg in legs:
         is_climb = "climb" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
-        res = gh.route(leg["points"], avoid_polygons=None if is_climb else avoid,
+        res = gh.route(leg["points"],
+                       avoid_polygons=place_areas(d) if is_climb else avoid,
                        strict=d.get("strict", False),
-                       avoid_cobbles=d.get("avoid_cobbles", False), details=True)
+                       avoid_cobbles=d.get("avoid_cobbles", False),
+                       avoid_concrete=d.get("avoid_concrete", False), details=True)
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
-            geo.corridor_polygons(coords_latlon, seg_len_m=seg_len, protect=protect)
+            {"ring": r, "factor": 0.30}
+            for r in geo.corridor_polygons(coords_latlon, seg_len_m=seg_len, protect=protect)
         )
         leg_details.append(res.get("details", {}))
         total_m += res["distance_m"]
@@ -155,6 +179,8 @@ def summary(d: dict) -> dict:
         "loop": d["loop"],
         "strict": d.get("strict", False),
         "avoid_cobbles": d.get("avoid_cobbles", False),
+        "avoid_concrete": d.get("avoid_concrete", False),
+        "avoid_places": d.get("avoid_places", []),
         "climbs": d["climbs"],
         "computed": d.get("computed"),
     }
@@ -198,15 +224,17 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
     candidates.sort()
     strict = d.get("strict", False)
     cobb = d.get("avoid_cobbles", False)
+    conc = d.get("avoid_concrete", False)
+    zones = place_areas(d)
     per_climb: dict[str, dict] = {}
     for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
         try:
-            r1 = gh.route([a, tuple(c["foot"])], strict=strict, avoid_cobbles=cobb)
-            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict, avoid_cobbles=cobb)
-            r3 = gh.route([tuple(c["top"]), b], strict=strict, avoid_cobbles=cobb)
+            r1 = gh.route([a, tuple(c["foot"])], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            r3 = gh.route([tuple(c["top"]), b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
             # eerlijke baseline: zelfde leg zonder corridor-constraint, anders
             # vertekent een omweg-leg de vergelijking (negatieve extra's)
-            base_r = gh.route([a, b], strict=strict, avoid_cobbles=cobb)
+            base_r = gh.route([a, b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
         except gh.GhError:
             continue
         extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base_r["distance_m"]
