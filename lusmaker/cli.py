@@ -229,6 +229,14 @@ def cmd_draft_export(args):
     return gpx.export(d, db, path)
 
 
+def cmd_draft_preview(args):
+    from . import climbs, draft, preview
+
+    d = draft.load(args.id)
+    path = args.output or f"{d['name']}-preview.html"
+    return preview.export(d, climbs.all_climbs(), path)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="lus", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -333,6 +341,10 @@ def main(argv=None):
     s.add_argument("id")
     s.add_argument("-o", "--output")
     s.set_defaults(func=cmd_draft_export)
+    s = dsub.add_parser("preview", help="schrijf een HTML-kaartpreview")
+    s.add_argument("id")
+    s.add_argument("-o", "--output")
+    s.set_defaults(func=cmd_draft_preview)
 
     args = p.parse_args(argv)
     try:

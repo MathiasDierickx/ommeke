@@ -5,7 +5,7 @@ try:
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
 
-from . import climbs, config, draft, geocode as geocode_mod, geo, gpx
+from . import climbs, config, draft, geocode as geocode_mod, geo, gpx, preview
 
 
 mcp = FastMCP("lusmaker")
@@ -176,6 +176,14 @@ def export_gpx(draft_id: str, output_path: str | None = None) -> dict:
     d = draft.load(draft_id)
     path = output_path or f"{d['name']}.gpx"
     return gpx.export(d, climbs.all_climbs(), path)
+
+
+@mcp.tool()
+def preview_draft(draft_id: str, output_path: str | None = None) -> dict:
+    """Schrijf een HTML-kaartpreview van een gerouteerde draft."""
+    d = draft.load(draft_id)
+    path = output_path or f"{d['name']}-preview.html"
+    return preview.export(d, climbs.all_climbs(), path)
 
 
 def main() -> None:

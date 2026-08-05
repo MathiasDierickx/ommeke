@@ -25,6 +25,7 @@ EXPECTED_TOOLS = {
     "suggest_climbs",
     "optimize_draft",
     "export_gpx",
+    "preview_draft",
 }
 
 
