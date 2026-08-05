@@ -1,0 +1,12 @@
+services:
+  graphhopper:
+    image: israelhikingmap/graphhopper:latest
+    container_name: lusmaker-graphhopper
+    command: ["-c", "/lus/gh/config.yml"]
+    environment:
+      JAVA_OPTS: "-Xmx6g -Xms1g"
+    ports:
+      - "8989:8989"
+    volumes:
+      - ${LUSMAKER_HOME:-~/.lusmaker}:/lus
+    restart: unless-stopped

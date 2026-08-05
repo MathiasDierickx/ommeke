@@ -1,0 +1,97 @@
+# Bekende hellingen in de Vlaamse Ardennen.
+# Resolutie gebeurt op OSM-straatnaam (match) + nabijheid van de gemeente (town).
+# Kopieer dit bestand naar ~/.lusmaker/climbs.yaml om zelf klimmen toe te voegen;
+# draai daarna `lus climbs resolve --refresh`.
+
+- id: berendries
+  name: Berendries
+  town: Brakel
+  match: [Berendries]
+- id: valkenberg
+  name: Valkenberg
+  town: Brakel
+  match: [Valkenberg, Valkenbergstraat]
+- id: leberg
+  name: Leberg
+  town: Brakel
+  match: [Leberg]
+- id: wolvenberg
+  name: Wolvenberg
+  town: Zwalm
+  match: [Wolvenberg]
+- id: tenbosse
+  name: Tenbosse
+  town: Brakel
+  match: [Tenbosse, Tenbossestraat]
+- id: molenberg
+  name: Molenberg
+  town: Zwalm
+  match: [Molenberg]
+- id: paddestraat
+  name: Paddestraat
+  town: Zwalm
+  match: [Paddestraat]
+- id: muur-van-geraardsbergen
+  name: Muur van Geraardsbergen
+  town: Geraardsbergen
+  match: [Muur, Kapelmuur, Oudebergstraat, Oudeberg]
+- id: bosberg
+  name: Bosberg
+  town: Geraardsbergen
+  match: [Bosberg]
+- id: denderoordberg
+  name: Denderoordberg
+  town: Geraardsbergen
+  match: [Denderoordberg, Denderoordstraat]
+- id: oude-kwaremont
+  name: Oude Kwaremont
+  town: Kluisbergen
+  match: [Broektestraat, Kwaremontplein, Schilderstraat, Ommegangstraat]
+- id: paterberg
+  name: Paterberg
+  town: Kluisbergen
+  match: [Paterberg, Paterbergstraat]
+- id: koppenberg
+  name: Koppenberg
+  town: Oudenaarde
+  match: [Koppenberg]
+- id: volkegemberg
+  name: Volkegemberg
+  town: Oudenaarde
+  match: [Volkegemberg]
+- id: holleweg
+  name: Holleweg
+  town: Oudenaarde
+  match: [Holleweg]
+- id: taaienberg
+  name: Taaienberg
+  town: Maarkedal
+  match: [Taaienberg]
+- id: eikenberg
+  name: Eikenberg
+  town: Maarkedal
+  match: [Eikenberg]
+- id: steenbeekdries
+  name: Steenbeekdries
+  town: Maarkedal
+  match: [Steenbeekdries]
+- id: boigneberg
+  name: Boigneberg
+  town: Maarkedal
+  match: [Boigneberg]
+- id: berg-ten-houte
+  name: Berg Ten Houte
+  town: Maarkedal
+  match: [Ten Houtestraat, Ten Houte]
+- id: kanarieberg
+  name: Kanarieberg
+  town: Ronse
+  match: [Kanarieberg]
+- id: kruisberg
+  name: Kruisberg
+  town: Ronse
+  match: [Kruisstraat]
+- id: hotondberg
+  name: Hotondberg
+  town: Ronse
+  match: [Hotondstraat, Hotond, Hotondberg]
