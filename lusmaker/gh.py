@@ -50,13 +50,22 @@ STRICT_PRIORITY = [
 ]
 
 
+# zachte voorkeur, geen verbod: kasseien mijden waar het weinig kost
+AVOID_COBBLES_PRIORITY = [
+    {"if": "surface == COBBLESTONE", "multiply_by": "0.25"},
+]
+
+
 def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
-          strict: bool = False) -> dict:
+          strict: bool = False, avoid_cobbles: bool = False,
+          details: bool = False) -> dict:
     """Route langs waypoints [(lat, lon), ...].
 
     avoid_polygons: GeoJSON-ringen ([[lon,lat],...]) die sterk ontmoedigd worden
     (voor de geen-zelfde-weg-terug-lus).
     strict: extra straf op steenwegen/drukke wegen bovenop het quiet-profiel.
+    avoid_cobbles: zachte straf op kasseien.
+    details: per-segment surface/road_class in het resultaat ("details").
     """
     body = {
         "points": [[lon, lat] for lat, lon in points_latlon],
@@ -67,7 +76,11 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         "locale": "nl",
         "ch.disable": True,
     }
+    if details:
+        body["details"] = ["surface", "road_class"]
     custom = {"priority": list(STRICT_PRIORITY) if strict else []}
+    if avoid_cobbles:
+        custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
     if avoid_polygons:
         features = []
         for k, ring in enumerate(avoid_polygons):
@@ -90,10 +103,13 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         raise GhError("geen route gevonden")
     p = data["paths"][0]
     coords = [(lat, lon, (c[2] if len(c) > 2 else None)) for c in p["points"]["coordinates"] for lon, lat in [(c[0], c[1])]]
-    return {
+    out = {
         "distance_m": p["distance"],
         "time_s": p["time"] / 1000.0,
         "ascend_m": round(p.get("ascend", 0.0), 1),
         "descend_m": round(p.get("descend", 0.0), 1),
         "coords": coords,
     }
+    if details:
+        out["details"] = p.get("details", {})
+    return out

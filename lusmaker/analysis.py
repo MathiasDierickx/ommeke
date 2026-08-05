@@ -1,0 +1,108 @@
+"""Route-kwaliteitsmetrieken: kasseien, steenweg-meters, kruisingen met drukke wegen."""
+import math
+import pickle
+from functools import lru_cache
+
+from . import config, geo
+
+BIG_ROADS = {"primary", "primary_link", "secondary", "secondary_link"}
+COBBLE_SURFACES = {"cobblestone", "sett", "unhewn_cobblestone", "cobblestone:flattened"}
+
+
+def detail_meters(coords, detail_intervals, wanted) -> float:
+    """Meters van een route waar een GH-detail (bv. surface) in `wanted` zit."""
+    total = 0.0
+    for frm, to, value in detail_intervals:
+        if str(value).lower() not in wanted:
+            continue
+        for i in range(frm, min(to, len(coords) - 1)):
+            a, b = coords[i], coords[i + 1]
+            total += geo.haversine(a[0], a[1], b[0], b[1])
+    return total
+
+
+@lru_cache(maxsize=1)
+def _big_road_grid():
+    """Gridindex van primaire/secundaire wegsegmenten uit het OSM-extract."""
+    with open(config.EXTRACT_PKL, "rb") as f:
+        extract = pickle.load(f)
+    segs = []
+    grid = {}
+    for _wid, _refs, coords, tags in extract["ways"]:
+        if tags.get("highway") not in BIG_ROADS:
+            continue
+        for i in range(len(coords) - 1):
+            k = len(segs)
+            segs.append((coords[i], coords[i + 1]))
+            for pt in (coords[i], coords[i + 1]):
+                grid.setdefault(geo.cell(*pt), []).append(k)
+    return segs, grid
+
+
+def _seg_intersect(p1, p2, p3, p4):
+    """2D-segmentsnijding (vlakke benadering, ok op deze schaal)."""
+    d1x, d1y = p2[0] - p1[0], p2[1] - p1[1]
+    d2x, d2y = p4[0] - p3[0], p4[1] - p3[1]
+    denom = d1x * d2y - d1y * d2x
+    if abs(denom) < 1e-15:
+        return None
+    t = ((p3[0] - p1[0]) * d2y - (p3[1] - p1[1]) * d2x) / denom
+    u = ((p3[0] - p1[0]) * d1y - (p3[1] - p1[1]) * d1x) / denom
+    if 0 <= t <= 1 and 0 <= u <= 1:
+        return (p1[0] + t * d1x, p1[1] + t * d1y)
+    return None
+
+
+def _angle_deg(a1, a2, b1, b2):
+    v1 = (a2[0] - a1[0], (a2[1] - a1[1]) * math.cos(math.radians(a1[0])))
+    v2 = (b2[0] - b1[0], (b2[1] - b1[1]) * math.cos(math.radians(b1[0])))
+    n1 = math.hypot(*v1) or 1e-12
+    n2 = math.hypot(*v2) or 1e-12
+    cos = abs((v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2))
+    return math.degrees(math.acos(min(1.0, cos)))
+
+
+def count_crossings(route_coords) -> int:
+    """Aantal keer dat de route een drukke steenweg dwars oversteekt.
+
+    Parallelle stukken (oprijden/afslaan, kort meerijden) tellen niet mee:
+    enkel snijdingen met een hoek > 30 graden, samengevoegd binnen 60 m.
+    """
+    segs, grid = _big_road_grid()
+    pts = [(c[0], c[1]) for c in route_coords]
+    events = []
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        cand = set()
+        for pt in (a, b):
+            c = geo.cell(*pt)
+            for di in (-1, 0, 1):
+                for dj in (-1, 0, 1):
+                    cand.update(grid.get((c[0] + di, c[1] + dj), ()))
+        for k in cand:
+            s1, s2 = segs[k]
+            hit = _seg_intersect(a, b, s1, s2)
+            if hit and _angle_deg(a, b, s1, s2) > 30:
+                events.append(hit)
+    # events op dezelfde kruising samenvoegen
+    merged = []
+    for e in events:
+        if all(geo.haversine(e[0], e[1], m[0], m[1]) > 60 for m in merged):
+            merged.append(e)
+    return len(merged)
+
+
+def route_stats(legs_geometry, legs_details) -> dict:
+    """Kwaliteitsrapport over een volledige (gerouteerde) draft."""
+    all_coords = [pt for leg in legs_geometry for pt in leg]
+    kassei = steenweg = 0.0
+    for leg, det in zip(legs_geometry, legs_details):
+        if not det:
+            continue
+        kassei += detail_meters(leg, det.get("surface", []), COBBLE_SURFACES | {"cobblestone"})
+        steenweg += detail_meters(leg, det.get("road_class", []), BIG_ROADS)
+    return {
+        "kassei_m": round(kassei),
+        "steenweg_m": round(steenweg),
+        "steenweg_kruisingen": count_crossings(all_coords),
+    }

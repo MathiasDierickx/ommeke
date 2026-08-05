@@ -29,7 +29,8 @@ def save(d: dict) -> None:
         json.dump(d, f, ensure_ascii=False)
 
 
-def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False) -> dict:
+def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False,
+        avoid_cobbles: bool = False) -> dict:
     d = {
         "id": uuid.uuid4().hex[:6],
         "name": name or "lus",
@@ -38,6 +39,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "end": end,      # None => zelfde als start bij loop
         "loop": loop,
         "strict": strict,
+        "avoid_cobbles": avoid_cobbles,
         "climbs": [],    # geordende lijst klim-ids
         "computed": None,
     }
@@ -95,6 +97,7 @@ def route(d: dict, climb_db: dict) -> dict:
     start_pt = (d["start"]["lat"], d["start"]["lon"])
     protect = [start_pt]
     avoid = []
+    leg_details = []
     computed_legs = []
     total_m = ascend = descend = 0.0
 
@@ -102,12 +105,14 @@ def route(d: dict, climb_db: dict) -> dict:
         is_climb = "climb" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
         res = gh.route(leg["points"], avoid_polygons=None if is_climb else avoid,
-                       strict=d.get("strict", False))
+                       strict=d.get("strict", False),
+                       avoid_cobbles=d.get("avoid_cobbles", False), details=True)
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
             geo.corridor_polygons(coords_latlon, seg_len_m=seg_len, protect=protect)
         )
+        leg_details.append(res.get("details", {}))
         total_m += res["distance_m"]
         ascend += res["ascend_m"]
         descend += res["descend_m"]
@@ -132,6 +137,12 @@ def route(d: dict, climb_db: dict) -> dict:
         ],
     }
     d["_geometry"] = [leg["coords"] for leg in computed_legs]
+    from . import analysis
+
+    try:
+        d["computed"]["kwaliteit"] = analysis.route_stats(d["_geometry"], leg_details)
+    except Exception as e:  # metriek mag routeren nooit blokkeren
+        d["computed"]["kwaliteit"] = {"error": str(e)}
     save(d)
     return summary(d)
 
@@ -143,6 +154,7 @@ def summary(d: dict) -> dict:
         "start": d["start"].get("label"),
         "loop": d["loop"],
         "strict": d.get("strict", False),
+        "avoid_cobbles": d.get("avoid_cobbles", False),
         "climbs": d["climbs"],
         "computed": d.get("computed"),
     }
@@ -185,15 +197,16 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
 
     candidates.sort()
     strict = d.get("strict", False)
+    cobb = d.get("avoid_cobbles", False)
     per_climb: dict[str, dict] = {}
     for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
         try:
-            r1 = gh.route([a, tuple(c["foot"])], strict=strict)
-            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict)
-            r3 = gh.route([tuple(c["top"]), b], strict=strict)
+            r1 = gh.route([a, tuple(c["foot"])], strict=strict, avoid_cobbles=cobb)
+            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict, avoid_cobbles=cobb)
+            r3 = gh.route([tuple(c["top"]), b], strict=strict, avoid_cobbles=cobb)
             # eerlijke baseline: zelfde leg zonder corridor-constraint, anders
             # vertekent een omweg-leg de vergelijking (negatieve extra's)
-            base_r = gh.route([a, b], strict=strict)
+            base_r = gh.route([a, b], strict=strict, avoid_cobbles=cobb)
         except gh.GhError:
             continue
         extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base_r["distance_m"]
