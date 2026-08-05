@@ -54,6 +54,7 @@ lus draft add-climb <id> berendries
 lus draft route <id>                      # lus, vermijdt eigen heenweg
 lus draft optimize <id> --max-km 45       # vul automatisch aan binnen budget
 lus draft suggest <id> --max-detour-km 10 # "Molenberg erbij voor +9.2 km?"
+lus draft preview <id> -o route.html      # kaart + hoogteprofiel bekijken
 lus draft export <id> -o route.gpx
 ```
 
@@ -62,6 +63,12 @@ lus draft export <id> -o route.gpx
 kilometer (`--objective hm-per-km`). Het commando gebruikt een veiligheidsmarge
 voor schattingsdrift en draait een toevoeging terug zodra de herrouteerde lus
 het harde `--max-km`-budget overschrijdt.
+
+`draft preview` schrijft één HTML-bestand met een interactieve routekaart,
+klimmarkers, kwaliteitsmetrieken en een hoogteprofiel. Zonder `-o` wordt
+`<draftnaam>-preview.html` in de huidige map geschreven. De kaart gebruikt bij
+het openen Leaflet en OpenStreetMap via internet; het routebestand zelf blijft
+lokaal.
 
 Alle output is JSON; zie `CLAUDE.md` voor de LLM-instructies.
 
@@ -108,6 +115,7 @@ Bekende beperkingen en volgende stappen:
 - [x] M1: `draft optimize` — greedy klimselectie met afstandsbudget en
       budget-rollback
 - [x] M2: stdio MCP-server met LLM-gerichte tools bovenop dezelfde kern
+- [x] M3: lokale HTML-kaartpreview per draft met hoogteprofiel
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
 - [ ] Corridor-penalty is zacht; bij smalle valleien kan een stukje heenweg

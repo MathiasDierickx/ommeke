@@ -24,16 +24,20 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 3. `lus draft add-climb <id> berendries` — voeg de doelklim toe.
 4. `lus draft route <id>` — routeer. De lus vermijdt automatisch de eigen
    heenweg (corridor-penalty), klimmen worden voet→top gereden.
-5. Bij een afstandsbudget: `lus draft optimize <id> --max-km 45` — vult de lus
+5. Bied na `route` altijd een kaartpreview aan:
+   `lus draft preview <id>`. Geef het teruggekomen `file`-pad aan de gebruiker,
+   zodat die de route, klimmen en het hoogteprofiel kan openen en controleren.
+6. Bij een afstandsbudget: `lus draft optimize <id> --max-km 45` — vult de lus
    automatisch aan met klimmen en bewaakt het harde budget na elke herroutering.
    Gebruik `--objective hm-per-km` als efficiënt klimmen belangrijker is dan
    het absolute aantal hoogtemeters. Zonder initiële klim kiest de optimizer
    zelf een bereikbaar anker voor een lus.
-6. Voor handmatige keuze: `lus draft suggest <id> --max-detour-km 10` — extra
+   Bied na `optimize` opnieuw een preview aan van het definitieve resultaat.
+7. Voor handmatige keuze: `lus draft suggest <id> --max-detour-km 10` — extra
    klimmen die weinig omweg vragen. **Stel deze voor aan de gebruiker** ("wil je
    de Molenberg erbij voor ~X km extra?"); elk voorstel bevat het exacte
    add-climb-commando.
-7. Exporteer wanneer de gebruiker tevreden is:
+8. Exporteer wanneer de gebruiker tevreden is:
    `lus draft export <id> -o naam.gpx`.
 
 ## Taalgestuurde voorkeuren -> tool calls

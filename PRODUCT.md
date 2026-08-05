@@ -44,7 +44,7 @@ zijn custom-model-regels. Vlaanderen is launch-regio, geen beperking.
 |---|-----------|--------|
 | M1 | `draft optimize` — greedy-lus in-tool, budget + doel | Grootste UX-win; minder LLM-calls; deterministisch |
 | M2 ✅ | **MCP-server** via stdio met LLM-gerichte tools bovenop de CLI-kern | Go-to-market-artefact |
-| M3 | Kaartpreview per draft (statische HTML, lokaal geserveerd) | Niemand vertrouwt een blinde GPX |
+| M3 ✅ | Kaartpreview per draft (zelfstandige HTML) | Niemand vertrouwt een blinde GPX |
 | M4 | Regiopacks: `lus region add <geofabrik-slug>` → extract, DEM-tegels uit bbox, eigen GH-graaf | Regio-agnostisch |
 | M5 | Profielen: gravel / mtb / hardlopen (varianten van quiet.json) | Sport-agnostisch |
 | M6 | Strava/Garmin OAuth-sync voor eigen-ritten-heat | Frictie weg bij de saus |
