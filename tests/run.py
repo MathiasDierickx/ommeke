@@ -2,12 +2,14 @@
 import importlib
 import pkgutil
 import traceback
+from unittest import SkipTest
 
 import tests
 
 
 def main() -> None:
     failures = 0
+    skipped = 0
     tests_run = 0
     for module_info in sorted(pkgutil.iter_modules(tests.__path__), key=lambda item: item.name):
         if not module_info.name.startswith("test_"):
@@ -21,11 +23,14 @@ def main() -> None:
             try:
                 test()
                 print(f"PASS {module_info.name}.{name}")
+            except SkipTest as exc:
+                skipped += 1
+                print(f"SKIP {module_info.name}.{name}: {exc}")
             except Exception:
                 failures += 1
                 print(f"FAIL {module_info.name}.{name}")
                 traceback.print_exc()
-    print(f"{tests_run} tests, {failures} mislukt")
+    print(f"{tests_run} tests, {failures} mislukt, {skipped} overgeslagen")
     if failures:
         raise SystemExit(1)
 

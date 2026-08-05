@@ -1,6 +1,9 @@
 """MCP-server bovenop de Lusmaker-domeinfuncties."""
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # mcp 2.x: FastMCP werd MCPServer
+    from mcp.server import MCPServer as FastMCP
 
 from . import climbs, config, draft, geocode as geocode_mod, geo, gpx
 
