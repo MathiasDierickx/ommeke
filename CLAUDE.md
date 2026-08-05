@@ -23,10 +23,17 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 3. `lus draft add-climb <id> berendries` — voeg de doelklim toe.
 4. `lus draft route <id>` — routeer. De lus vermijdt automatisch de eigen
    heenweg (corridor-penalty), klimmen worden voet→top gereden.
-5. `lus draft suggest <id> --max-detour-km 10` — extra klimmen die weinig omweg
-   vragen. **Stel deze voor aan de gebruiker** ("wil je de Molenberg erbij voor
-   ~X km extra?"); elk voorstel bevat het exacte add-climb-commando.
-6. Herhaal 3–5 tot de gebruiker tevreden is, dan `lus draft export <id> -o naam.gpx`.
+5. Bij een afstandsbudget: `lus draft optimize <id> --max-km 45` — vult de lus
+   automatisch aan met klimmen en bewaakt het harde budget na elke herroutering.
+   Gebruik `--objective hm-per-km` als efficiënt klimmen belangrijker is dan
+   het absolute aantal hoogtemeters. Zonder initiële klim kiest de optimizer
+   zelf een bereikbaar anker voor een lus.
+6. Voor handmatige keuze: `lus draft suggest <id> --max-detour-km 10` — extra
+   klimmen die weinig omweg vragen. **Stel deze voor aan de gebruiker** ("wil je
+   de Molenberg erbij voor ~X km extra?"); elk voorstel bevat het exacte
+   add-climb-commando.
+7. Exporteer wanneer de gebruiker tevreden is:
+   `lus draft export <id> -o naam.gpx`.
 
 ## Taalgestuurde voorkeuren -> tool calls
 
@@ -37,6 +44,8 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 | "betonbanen bollen slecht" | `--vermijd-beton` bij `draft new` |
 | "zo weinig mogelijk steenwegen" (hard) | `--strict` bij `draft new` |
 | "rij graag waar veel gefietst wordt" | `lus heat build` na GPX-drop (zie hieronder) |
+| "maximaal 45 km, zoveel mogelijk klimmen" | `lus draft optimize <id> --max-km 45 --objective hm` |
+| "efficiënt klimmen binnen 45 km" | `lus draft optimize <id> --max-km 45 --objective hm-per-km` |
 
 Dit zijn zachte voorkeuren (penalties, geen verboden) — kort meerijden op een
 steenweg kan dus nog. Check het effect in `computed.kwaliteit`
@@ -61,12 +70,14 @@ legale variant met eigen data.
   gewoon mee in `suggest` en `climbs near` — zo mis je geen onbekende
   hellingen zoals de Diepestraat.
 - `suggest`-schattingen zijn corridor-vrij; na toevoegen kan de werkelijke
-  meerprijs ~1-2 km hoger uitvallen. Herrouteer en meld het echte totaal.
+  meerprijs ~1-2 km hoger uitvallen. `optimize` vangt dit automatisch op met
+  een veiligheidsmarge en rollback; bij handmatig toevoegen moet je zelf
+  herrouteren en het echte totaal melden.
 - Volgorde van klimmen = volgorde in `draft.climbs`; `--at N` voegt op positie N in.
 - `suggest` geeft `invoegen_op_positie` — gebruik die in het add-climb-commando.
 - Na add/remove-climb is de route stale; altijd opnieuw `draft route` draaien.
-- `draft route` en `suggest` doen meerdere GraphHopper-calls en kunnen enkele
-  seconden duren.
+- `draft route`, `suggest` en `optimize` doen meerdere GraphHopper-calls en
+  kunnen enkele seconden duren.
 - Regio is beperkt tot de bbox Wetteren/Vlaamse Ardennen (config.BBOX). Punten
   daarbuiten geocoden niet.
 - Nieuwe klimmen toevoegen: kopieer `lusmaker/climbs.yaml` naar

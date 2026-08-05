@@ -52,9 +52,16 @@ lus draft new --start "Wetteren" --name berendries-lus
 lus climbs near Wetteren --radius-km 25
 lus draft add-climb <id> berendries
 lus draft route <id>                      # lus, vermijdt eigen heenweg
+lus draft optimize <id> --max-km 45       # vul automatisch aan binnen budget
 lus draft suggest <id> --max-detour-km 10 # "Molenberg erbij voor +9.2 km?"
 lus draft export <id> -o route.gpx
 ```
+
+`draft optimize` kiest per ronde de klim met de meeste extra hoogtemeters
+(`--objective hm`, standaard) of de beste verhouding hoogtemeters per extra
+kilometer (`--objective hm-per-km`). Het commando gebruikt een veiligheidsmarge
+voor schattingsdrift en draait een toevoeging terug zodra de herrouteerde lus
+het harde `--max-km`-budget overschrijdt.
 
 Alle output is JSON; zie `CLAUDE.md` voor de LLM-instructies.
 
@@ -70,6 +77,8 @@ Strava-heatmap-routing.
 
 Bekende beperkingen en volgende stappen:
 
+- [x] M1: `draft optimize` — greedy klimselectie met afstandsbudget en
+      budget-rollback
 - [ ] MCP-server (elke CLI-subcommand mapt 1-op-1 op een MCP-tool) voor gebruik
       buiten Claude Code, incl. elicitation voor de suggestie-vragen
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
