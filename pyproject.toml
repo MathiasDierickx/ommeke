@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Bouw stap voor stap fiets-GPX-lussen (Vlaamse Ardennen) via een CLI die door een LLM aangestuurd kan worden."
 requires-python = ">=3.11"
 dependencies = [
+    "mcp>=1.2",
     "osmium>=4.0",
     "numpy>=1.26",
     "PyYAML>=6.0",
@@ -11,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 lus = "lusmaker.cli:main"
+lus-mcp = "lusmaker.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
