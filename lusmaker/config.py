@@ -43,3 +43,29 @@ def climbs_yaml_path() -> Path:
 def ensure_dirs() -> None:
     for p in (DATA, CACHE, DRAFTS, GH_DIR, GH_DIR / "custom_models", HEAT_DIR, CUSTOM_AREAS):
         p.mkdir(parents=True, exist_ok=True)
+
+
+def status() -> dict:
+    """Geef de beschikbaarheid van lokale data en GraphHopper terug."""
+    out = {
+        "data": {
+            "pbf": PBF_PATH.exists(),
+            "dem_tiles": all((DATA / f"{tile}.hgt").exists() for tile in DEM_TILES),
+            "extract": EXTRACT_PKL.exists(),
+            "gazetteer": GAZETTEER_PKL.exists(),
+            "climbs": CLIMBS_JSON.exists(),
+        }
+    }
+    try:
+        from . import gh
+
+        info = gh.info()
+        out["graphhopper"] = {
+            "ok": True,
+            "version": info.get("version"),
+            "profiles": [profile.get("name") for profile in info.get("profiles", [])],
+            "elevation": info.get("elevation"),
+        }
+    except Exception as exc:
+        out["graphhopper"] = {"ok": False, "error": str(exc)}
+    return out

@@ -89,3 +89,25 @@ def geocode(query: str, limit: int = 5) -> list[dict]:
     if not out:
         out = [dict(p0, note=f"straat '{street_q}' niet gevonden, plaats zelf gebruikt")]
     return out[:limit]
+
+
+def resolve(query: str) -> tuple[dict, list[dict]]:
+    """Los een plaatsnaam of ``lat,lon`` op tot één punt en alternatieven."""
+    parts = query.split(",")
+    if len(parts) == 2:
+        try:
+            lat, lon = float(parts[0]), float(parts[1])
+            return {"lat": lat, "lon": lon, "label": query}, []
+        except ValueError:
+            pass
+
+    hits = geocode(query, limit=5)
+    if not hits:
+        raise RuntimeError(
+            f"'{query}' niet gevonden — probeer 'straat, plaats' of 'lat,lon'"
+        )
+    best = hits[0]
+    return (
+        {"lat": best["lat"], "lon": best["lon"], "label": best["label"]},
+        hits[1:],
+    )

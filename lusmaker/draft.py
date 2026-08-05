@@ -49,6 +49,34 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
     return d
 
 
+def create(start: str, name: str | None = None, loop: bool = True,
+           end: str | None = None, strict: bool = False,
+           avoid_cobbles: bool = False, avoid_concrete: bool = False) -> dict:
+    """Maak een draft vanuit gebruikersgerichte plaatsnamen of coördinaten."""
+    from . import geocode
+
+    start_point, alternatives = geocode.resolve(start)
+    end_point = geocode.resolve(end)[0] if end else None
+    d = new(
+        start=start_point,
+        name=name,
+        loop=loop,
+        end=end_point,
+        strict=strict,
+        avoid_cobbles=avoid_cobbles,
+        avoid_concrete=avoid_concrete,
+    )
+    out = summary(d)
+    out["start_geocoded_als"] = start_point["label"]
+    if alternatives:
+        out["andere_kandidaten"] = alternatives
+    out["hint"] = (
+        f"voeg klimmen toe: `lus draft add-climb {d['id']} <klim-id>` "
+        f"en routeer: `lus draft route {d['id']}`"
+    )
+    return out
+
+
 def list_all() -> list[dict]:
     out = []
     for p in sorted(config.DRAFTS.glob("*.json")):
@@ -65,6 +93,79 @@ def list_all() -> list[dict]:
             }
         )
     return out
+
+
+def add_climb(draft_id: str, climb_id: str, position: int | None = None,
+              climb_db: dict | None = None) -> dict:
+    """Voeg een bekende klim toe en maak een bestaande berekening ongeldig."""
+    d = load(draft_id)
+    db = climbs_mod.all_climbs() if climb_db is None else climb_db
+    if climb_id not in db:
+        raise DraftError(f"onbekende klim '{climb_id}' — zie `lus climbs list`")
+    if climb_id in d["climbs"]:
+        raise DraftError(f"klim '{climb_id}' zit al in de draft")
+    insert_at = position if position is not None else len(d["climbs"])
+    d["climbs"].insert(insert_at, climb_id)
+    d["computed"] = None
+    d.pop("_geometry", None)
+    save(d)
+    out = summary(d)
+    out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
+    return out
+
+
+def remove_climb(draft_id: str, climb_id: str) -> dict:
+    """Verwijder een klim en maak een bestaande berekening ongeldig."""
+    d = load(draft_id)
+    if climb_id not in d["climbs"]:
+        raise DraftError(f"klim '{climb_id}' zit niet in de draft")
+    d["climbs"].remove(climb_id)
+    d["computed"] = None
+    d.pop("_geometry", None)
+    save(d)
+    return summary(d)
+
+
+def avoid_place(draft_id: str, place: str, radius_km: float = 2.5,
+                factor: float = 0.35) -> dict:
+    """Voeg een zachte vermijdzone rond een plaats toe."""
+    from . import geocode
+
+    d = load(draft_id)
+    point, alternatives = geocode.resolve(place)
+    d.setdefault("avoid_places", []).append(
+        {
+            "label": point["label"],
+            "lat": point["lat"],
+            "lon": point["lon"],
+            "radius_km": radius_km,
+            "factor": factor,
+        }
+    )
+    d["computed"] = None
+    d.pop("_geometry", None)
+    save(d)
+    out = summary(d)
+    if alternatives:
+        out["andere_kandidaten"] = alternatives
+    out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
+    return out
+
+
+def unavoid_place(draft_id: str, place: str) -> dict:
+    """Verwijder vermijdzones waarvan het label de zoektekst bevat."""
+    d = load(draft_id)
+    before = len(d.get("avoid_places", []))
+    d["avoid_places"] = [
+        point for point in d.get("avoid_places", [])
+        if place.lower() not in point["label"].lower()
+    ]
+    if len(d["avoid_places"]) == before:
+        raise DraftError(f"geen vermijdzone gevonden voor '{place}'")
+    d["computed"] = None
+    d.pop("_geometry", None)
+    save(d)
+    return summary(d)
 
 
 def _waypoints(d: dict, climb_db: dict) -> list[dict]:

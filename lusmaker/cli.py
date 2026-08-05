@@ -20,23 +20,9 @@ def _err(msg: str) -> None:
 
 def _parse_point(s: str, limit: int = 1):
     """'lat,lon' of een plaats-/straatnaam via de lokale geocoder."""
-    parts = s.split(",")
-    if len(parts) == 2:
-        try:
-            lat, lon = float(parts[0]), float(parts[1])
-            return {"lat": lat, "lon": lon, "label": s}, []
-        except ValueError:
-            pass
     from . import geocode
 
-    hits = geocode.geocode(s, limit=5)
-    if not hits:
-        raise RuntimeError(f"'{s}' niet gevonden — probeer 'straat, plaats' of 'lat,lon'")
-    best = hits[0]
-    return (
-        {"lat": best["lat"], "lon": best["lon"], "label": best["label"]},
-        hits[1:],
-    )
+    return geocode.resolve(s)
 
 
 # ---------- commands ----------
@@ -66,28 +52,7 @@ def cmd_build(args):
 
 
 def cmd_status(args):
-    out = {
-        "data": {
-            "pbf": config.PBF_PATH.exists(),
-            "dem_tiles": all((config.DATA / f"{t}.hgt").exists() for t in config.DEM_TILES),
-            "extract": config.EXTRACT_PKL.exists(),
-            "gazetteer": config.GAZETTEER_PKL.exists(),
-            "climbs": config.CLIMBS_JSON.exists(),
-        }
-    }
-    try:
-        from . import gh
-
-        info = gh.info()
-        out["graphhopper"] = {
-            "ok": True,
-            "version": info.get("version"),
-            "profiles": [p.get("name") for p in info.get("profiles", [])],
-            "elevation": info.get("elevation"),
-        }
-    except Exception as e:
-        out["graphhopper"] = {"ok": False, "error": str(e)}
-    return out
+    return config.status()
 
 
 def cmd_geocode(args):
@@ -133,19 +98,11 @@ def cmd_climbs_resolve(args):
 def cmd_draft_new(args):
     from . import draft
 
-    start, alternatieven = _parse_point(args.start)
-    end = None
-    if args.end:
-        end, _ = _parse_point(args.end)
-    d = draft.new(start=start, name=args.name, loop=not args.no_loop, end=end,
-                  strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
-                  avoid_concrete=args.vermijd_beton)
-    out = draft.summary(d)
-    out["start_geocoded_als"] = start["label"]
-    if alternatieven:
-        out["andere_kandidaten"] = alternatieven
-    out["hint"] = f"voeg klimmen toe: `lus draft add-climb {d['id']} <klim-id>` en routeer: `lus draft route {d['id']}`"
-    return out
+    return draft.create(
+        start=args.start, name=args.name, loop=not args.no_loop, end=args.end,
+        strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
+        avoid_concrete=args.vermijd_beton,
+    )
 
 
 def cmd_draft_list(args):
@@ -175,69 +132,29 @@ def cmd_draft_delete(args):
 
 
 def cmd_draft_add_climb(args):
-    from . import climbs, draft
+    from . import draft
 
-    d = draft.load(args.id)
-    db = climbs.all_climbs()
-    if args.climb not in db:
-        raise RuntimeError(f"onbekende klim '{args.climb}' — zie `lus climbs list`")
-    if args.climb in d["climbs"]:
-        raise RuntimeError(f"klim '{args.climb}' zit al in de draft")
-    pos = args.at if args.at is not None else len(d["climbs"])
-    d["climbs"].insert(pos, args.climb)
-    d["computed"] = None
-    d.pop("_geometry", None)
-    draft.save(d)
-    out = draft.summary(d)
-    out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
-    return out
+    return draft.add_climb(args.id, args.climb, position=args.at)
 
 
 def cmd_draft_remove_climb(args):
     from . import draft
 
-    d = draft.load(args.id)
-    if args.climb not in d["climbs"]:
-        raise RuntimeError(f"klim '{args.climb}' zit niet in de draft")
-    d["climbs"].remove(args.climb)
-    d["computed"] = None
-    d.pop("_geometry", None)
-    draft.save(d)
-    return draft.summary(d)
+    return draft.remove_climb(args.id, args.climb)
 
 
 def cmd_draft_avoid(args):
     from . import draft
 
-    d = draft.load(args.id)
-    point, alternatieven = _parse_point(args.plaats)
-    d.setdefault("avoid_places", []).append(
-        {"label": point["label"], "lat": point["lat"], "lon": point["lon"],
-         "radius_km": args.radius_km, "factor": args.factor}
+    return draft.avoid_place(
+        args.id, args.plaats, radius_km=args.radius_km, factor=args.factor
     )
-    d["computed"] = None
-    d.pop("_geometry", None)
-    draft.save(d)
-    out = draft.summary(d)
-    if alternatieven:
-        out["andere_kandidaten"] = alternatieven
-    out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
-    return out
 
 
 def cmd_draft_unavoid(args):
     from . import draft
 
-    d = draft.load(args.id)
-    before = len(d.get("avoid_places", []))
-    d["avoid_places"] = [p for p in d.get("avoid_places", [])
-                         if args.plaats.lower() not in p["label"].lower()]
-    if len(d["avoid_places"]) == before:
-        raise RuntimeError(f"geen vermijdzone gevonden voor '{args.plaats}'")
-    d["computed"] = None
-    d.pop("_geometry", None)
-    draft.save(d)
-    return draft.summary(d)
+    return draft.unavoid_place(args.id, args.plaats)
 
 
 def cmd_climbs_detect(args):
