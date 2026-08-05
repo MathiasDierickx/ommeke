@@ -14,7 +14,7 @@ def _out(obj) -> None:
 
 
 def _err(msg: str) -> None:
-    print(json.dumps({"error": str(msg)}, ensure_ascii=False))
+    print(json.dumps({"error": str(msg)}, ensure_ascii=False, indent=2))
     sys.exit(1)
 
 
@@ -292,6 +292,17 @@ def cmd_draft_suggest(args):
     }
 
 
+def cmd_draft_optimize(args):
+    from . import climbs, draft
+
+    d = draft.load(args.id)
+    db = climbs.all_climbs()
+    return draft.optimize(
+        d, db, max_km=args.max_km, objective=args.objective,
+        min_ratio=args.min_ratio, max_rounds=args.max_rounds,
+    )
+
+
 def cmd_draft_export(args):
     from . import climbs, draft, gpx
 
@@ -394,6 +405,13 @@ def main(argv=None):
     s.add_argument("--max-detour-km", type=float, default=10.0)
     s.add_argument("--limit", type=int, default=5)
     s.set_defaults(func=cmd_draft_suggest)
+    s = dsub.add_parser("optimize", help="vul de route greedy met klimmen binnen een budget")
+    s.add_argument("id")
+    s.add_argument("--max-km", type=float, required=True, help="hard afstandsbudget")
+    s.add_argument("--objective", choices=("hm", "hm-per-km"), default="hm")
+    s.add_argument("--min-ratio", type=float, default=8.0, help="minimaal aantal hoogtemeters per extra km")
+    s.add_argument("--max-rounds", type=int, default=12, help="maximum aantal greedy-rondes")
+    s.set_defaults(func=cmd_draft_optimize)
     s = dsub.add_parser("export", help="schrijf GPX")
     s.add_argument("id")
     s.add_argument("-o", "--output")

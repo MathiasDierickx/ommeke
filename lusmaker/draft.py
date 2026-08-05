@@ -109,7 +109,7 @@ def place_areas(d: dict) -> list[dict]:
     ]
 
 
-def route(d: dict, climb_db: dict) -> dict:
+def route(d: dict, climb_db: dict, router=gh.route) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
     legs = _waypoints(d, climb_db)
     if not legs:
@@ -125,11 +125,11 @@ def route(d: dict, climb_db: dict) -> dict:
     for leg in legs:
         is_climb = "climb" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
-        res = gh.route(leg["points"],
-                       avoid_polygons=place_areas(d) if is_climb else avoid,
-                       strict=d.get("strict", False),
-                       avoid_cobbles=d.get("avoid_cobbles", False),
-                       avoid_concrete=d.get("avoid_concrete", False), details=True)
+        res = router(leg["points"],
+                     avoid_polygons=place_areas(d) if is_climb else avoid,
+                     strict=d.get("strict", False),
+                     avoid_cobbles=d.get("avoid_cobbles", False),
+                     avoid_concrete=d.get("avoid_concrete", False), details=True)
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
@@ -187,8 +187,9 @@ def summary(d: dict) -> dict:
     return out
 
 
-def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5) -> list[dict]:
-    """Klimmen dicht bij de huidige route, gerangschikt op extra kilometers."""
+def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
+                banned=frozenset(), router=gh.route) -> list[dict]:
+    """Bereken kandidaat-klimmen dicht bij de huidige route."""
     if not d.get("computed") or not d.get("_geometry"):
         raise DraftError("routeer eerst: `lus draft route <id>`")
 
@@ -197,7 +198,7 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
 
     candidates = []
     for cid, c in climb_db.items():
-        if cid in d["climbs"]:
+        if cid in d["climbs"] or cid in banned:
             continue
         foot = tuple(c["foot"])
         top = tuple(c["top"])
@@ -229,12 +230,12 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
     per_climb: dict[str, dict] = {}
     for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
         try:
-            r1 = gh.route([a, tuple(c["foot"])], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
-            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
-            r3 = gh.route([tuple(c["top"]), b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            r1 = router([a, tuple(c["foot"])], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            r2 = router([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            r3 = router([tuple(c["top"]), b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
             # eerlijke baseline: zelfde leg zonder corridor-constraint, anders
             # vertekent een omweg-leg de vergelijking (negatieve extra's)
-            base_r = gh.route([a, b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            base_r = router([a, b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
         except gh.GhError:
             continue
         extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base_r["distance_m"]
@@ -255,3 +256,138 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
         }
     out = sorted(per_climb.values(), key=lambda s: s["extra_km"])[:limit]
     return out
+
+
+def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5,
+            router=gh.route) -> list[dict]:
+    """Klimmen dicht bij de huidige route, gerangschikt op extra kilometers."""
+    return _candidates(d, climb_db, max_detour_km, limit, router=router)
+
+
+def _pick_anchor(start: dict, climb_db: dict, max_km: float) -> dict | None:
+    """Kies de zwaarste bereikbare klim als startpunt voor een lege lus."""
+    climbs = climb_db.values() if isinstance(climb_db, dict) else climb_db
+    reachable = []
+    for climb in climbs:
+        distance_m = geo.haversine(
+            start["lat"], start["lon"], climb["foot"][0], climb["foot"][1]
+        )
+        estimate_m = 2 * distance_m * 1.3 + climb["length_m"]
+        if estimate_m <= max_km * 1000:
+            reachable.append(climb)
+    if not reachable:
+        return None
+    return sorted(reachable, key=lambda c: (-c["gain_m"], c["id"]))[0]
+
+
+def _eligible_candidates(candidates: list[dict], budget_km: float,
+                         min_ratio: float, banned=frozenset()) -> list[dict]:
+    """Filter kandidaten puur op banlijst, veiligheidsbudget en hm/km."""
+    max_detour_km = budget_km * 0.85
+    return [
+        candidate for candidate in candidates
+        if candidate["climb"]["id"] not in banned
+        and candidate["extra_km"] <= max_detour_km
+        and candidate["extra_hoogtemeters"] / max(candidate["extra_km"], 0.3) >= min_ratio
+    ]
+
+
+def _select_candidate(candidates: list[dict], objective: str) -> dict | None:
+    """Kies deterministisch de beste kandidaat voor het gevraagde doel."""
+    if objective not in ("hm", "hm-per-km"):
+        raise DraftError("objective moet 'hm' of 'hm-per-km' zijn")
+    if not candidates:
+        return None
+
+    def key(candidate):
+        extra_km = candidate["extra_km"]
+        gain = candidate["extra_hoogtemeters"]
+        ratio = gain / max(extra_km, 0.3)
+        primary = gain if objective == "hm" else ratio
+        return (-primary, -gain, extra_km, candidate["climb"]["id"])
+
+    return sorted(candidates, key=key)[0]
+
+
+def optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
+             min_ratio: float = 8.0, max_rounds: int = 12,
+             route_fn=route, candidates_fn=_candidates) -> dict:
+    """Vul een draft greedy met klimmen binnen een hard afstandsbudget."""
+    if max_km <= 0:
+        raise DraftError("max-km moet groter dan 0 zijn")
+    if min_ratio < 0:
+        raise DraftError("min-ratio mag niet negatief zijn")
+    if max_rounds < 0:
+        raise DraftError("max-rounds mag niet negatief zijn")
+    # Valideer ook als er door max_rounds=0 geen kandidaat gekozen wordt.
+    _select_candidate([], objective)
+
+    if not d["climbs"] and d.get("loop"):
+        anchor = _pick_anchor(d["start"], climb_db, max_km)
+        if anchor is None:
+            raise DraftError("geen klim bereikbaar binnen het budget")
+        d["climbs"].append(anchor["id"])
+        d["computed"] = None
+        d.pop("_geometry", None)
+
+    if not d.get("computed") or not d.get("_geometry"):
+        route_fn(d, climb_db)
+    if d["computed"]["total_km"] > max_km:
+        raise DraftError(
+            f"huidige route is {d['computed']['total_km']:.1f} km en overschrijdt "
+            f"het budget van {max_km:.1f} km"
+        )
+
+    rounds = []
+    banned = set()
+    stopped_because = "maximum aantal rondes bereikt"
+    for round_number in range(1, max_rounds + 1):
+        budget_km = max_km - d["computed"]["total_km"]
+        if budget_km < 1.0:
+            stopped_because = "minder dan 1 km budget over"
+            break
+
+        candidates = candidates_fn(
+            d, climb_db, max_detour_km=budget_km * 0.85, limit=10,
+            banned=frozenset(banned),
+        )
+        eligible = _eligible_candidates(candidates, budget_km, min_ratio, banned)
+        selected = _select_candidate(eligible, objective)
+        if selected is None:
+            stopped_because = "geen kandidaten boven min-ratio binnen budget"
+            break
+
+        climb_id = selected["climb"]["id"]
+        position = selected["invoegen_op_positie"]
+        d["climbs"].insert(position, climb_id)
+        d["computed"] = None
+        d.pop("_geometry", None)
+        route_fn(d, climb_db)
+
+        round_result = {
+            "ronde": round_number,
+            "toegevoegd": climb_id,
+            "voorspeld_extra_km": selected["extra_km"],
+            "totaal_na": d["computed"]["total_km"],
+        }
+        if d["computed"]["total_km"] > max_km:
+            round_result["status"] = "teruggedraaid (budget)"
+            d["climbs"].pop(position)
+            d["computed"] = None
+            d.pop("_geometry", None)
+            banned.add(climb_id)
+            route_fn(d, climb_db)
+            save(d)
+        else:
+            round_result["status"] = "geaccepteerd"
+            save(d)
+        rounds.append(round_result)
+
+    return {
+        "id": d["id"],
+        "objective": objective,
+        "max_km": float(max_km),
+        "resultaat": summary(d),
+        "rondes": rounds,
+        "gestopt_omdat": stopped_because,
+    }
