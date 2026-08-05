@@ -137,7 +137,8 @@ def cmd_draft_new(args):
     end = None
     if args.end:
         end, _ = _parse_point(args.end)
-    d = draft.new(start=start, name=args.name, loop=not args.no_loop, end=end)
+    d = draft.new(start=start, name=args.name, loop=not args.no_loop, end=end,
+                  strict=args.strict)
     out = draft.summary(d)
     out["start_geocoded_als"] = start["label"]
     if alternatieven:
@@ -272,6 +273,7 @@ def main(argv=None):
     s.add_argument("--name")
     s.add_argument("--end", help="eindpunt (anders lus naar start)")
     s.add_argument("--no-loop", action="store_true")
+    s.add_argument("--strict", action="store_true", help="steenwegen maximaal vermijden")
     s.set_defaults(func=cmd_draft_new)
     s = dsub.add_parser("list")
     s.set_defaults(func=cmd_draft_list)

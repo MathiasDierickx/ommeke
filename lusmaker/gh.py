@@ -39,11 +39,24 @@ def info() -> dict:
         raise GhError(f"GraphHopper niet bereikbaar op {config.GH_URL}: {e}") from e
 
 
-def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.15) -> dict:
+# "zo weinig mogelijk steenwegen": milde extra nudge — het quiet-profiel straft
+# grote wegen al; deze factoren stapelen daar multiplicatief bovenop, dus
+# te agressieve waarden veroorzaken absurde omwegen.
+STRICT_PRIORITY = [
+    {"if": "road_class == PRIMARY", "multiply_by": "0.30"},
+    {"else_if": "road_class == SECONDARY", "multiply_by": "0.40"},
+    {"else_if": "road_class == TERTIARY", "multiply_by": "0.80"},
+    {"if": "max_speed >= 70", "multiply_by": "0.50"},
+]
+
+
+def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
+          strict: bool = False) -> dict:
     """Route langs waypoints [(lat, lon), ...].
 
     avoid_polygons: GeoJSON-ringen ([[lon,lat],...]) die sterk ontmoedigd worden
     (voor de geen-zelfde-weg-terug-lus).
+    strict: extra straf op steenwegen/drukke wegen bovenop het quiet-profiel.
     """
     body = {
         "points": [[lon, lat] for lat, lon in points_latlon],
@@ -54,7 +67,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.15) -> 
         "locale": "nl",
         "ch.disable": True,
     }
-    custom = {"priority": []}
+    custom = {"priority": list(STRICT_PRIORITY) if strict else []}
     if avoid_polygons:
         features = []
         for k, ring in enumerate(avoid_polygons):

@@ -29,7 +29,7 @@ def save(d: dict) -> None:
         json.dump(d, f, ensure_ascii=False)
 
 
-def new(start: dict, name: str | None, loop: bool, end: dict | None) -> dict:
+def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False) -> dict:
     d = {
         "id": uuid.uuid4().hex[:6],
         "name": name or "lus",
@@ -37,6 +37,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None) -> dict:
         "start": start,  # {lat, lon, label}
         "end": end,      # None => zelfde als start bij loop
         "loop": loop,
+        "strict": strict,
         "climbs": [],    # geordende lijst klim-ids
         "computed": None,
     }
@@ -100,7 +101,8 @@ def route(d: dict, climb_db: dict) -> dict:
     for leg in legs:
         is_climb = "climb" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
-        res = gh.route(leg["points"], avoid_polygons=None if is_climb else avoid)
+        res = gh.route(leg["points"], avoid_polygons=None if is_climb else avoid,
+                       strict=d.get("strict", False))
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
@@ -140,6 +142,7 @@ def summary(d: dict) -> dict:
         "name": d["name"],
         "start": d["start"].get("label"),
         "loop": d["loop"],
+        "strict": d.get("strict", False),
         "climbs": d["climbs"],
         "computed": d.get("computed"),
     }
@@ -160,7 +163,7 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
             continue
         foot = tuple(c["foot"])
         top = tuple(c["top"])
-        best = None
+        ests = []
         for i, (meta, coords) in enumerate(zip(legs_meta, legs_geo)):
             if meta.get("climb"):
                 continue  # niet invoegen midden in een andere klim
@@ -172,37 +175,42 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
                 + geo.haversine(top[0], top[1], b[0], b[1])
                 - meta["km"] * 1000
             )
-            if best is None or est < best[0]:
-                best = (est, i, a, b)
-        if best and best[0] / 1000 <= max_detour_km * 1.5:
-            candidates.append((best[0], cid, c, best[1], best[2], best[3]))
+            ests.append((est, i, a, b))
+        ests.sort()
+        # de ruwe schatting wijst soms de duurdere leg aan: hou de top-2 en
+        # reken beide exact door
+        for est, i, a, b in ests[:2]:
+            if est / 1000 <= max_detour_km * 1.5:
+                candidates.append((est, cid, c, i, a, b))
 
     candidates.sort()
-    out = []
-    for _est, cid, c, leg_i, a, b in candidates[:8]:
+    strict = d.get("strict", False)
+    per_climb: dict[str, dict] = {}
+    for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
         try:
-            r1 = gh.route([a, tuple(c["foot"])])
-            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])])
-            r3 = gh.route([tuple(c["top"]), b])
+            r1 = gh.route([a, tuple(c["foot"])], strict=strict)
+            r2 = gh.route([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict)
+            r3 = gh.route([tuple(c["top"]), b], strict=strict)
+            # eerlijke baseline: zelfde leg zonder corridor-constraint, anders
+            # vertekent een omweg-leg de vergelijking (negatieve extra's)
+            base_r = gh.route([a, b], strict=strict)
         except gh.GhError:
             continue
-        base = legs_meta[leg_i]["km"] * 1000
-        extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base
-        extra_up = r1["ascend_m"] + r2["ascend_m"] + r3["ascend_m"] - legs_meta[leg_i]["ascend_m"]
+        extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base_r["distance_m"]
+        extra_up = r1["ascend_m"] + r2["ascend_m"] + r3["ascend_m"] - base_r["ascend_m"]
         if extra_m / 1000 > max_detour_km:
+            continue
+        prev = per_climb.get(cid)
+        if prev and prev["extra_km"] <= extra_m / 1000:
             continue
         # positie in de klim-volgorde: aantal klimmen vóór deze leg
         pos = sum(1 for m in legs_meta[:leg_i] if m.get("climb"))
-        out.append(
-            {
-                "climb": climbs_mod.summary(c),
-                "extra_km": round(extra_m / 1000, 1),
-                "extra_hoogtemeters": round(extra_up),
-                "invoegen_op_positie": pos,
-                "voorstel": f"lus draft add-climb {d['id']} {cid} --at {pos}",
-            }
-        )
-        if len(out) >= limit:
-            break
-    out.sort(key=lambda s: s["extra_km"])
+        per_climb[cid] = {
+            "climb": climbs_mod.summary(c),
+            "extra_km": round(extra_m / 1000, 1),
+            "extra_hoogtemeters": round(extra_up),
+            "invoegen_op_positie": pos,
+            "voorstel": f"lus draft add-climb {d['id']} {cid} --at {pos}",
+        }
+    out = sorted(per_climb.values(), key=lambda s: s["extra_km"])[:limit]
     return out
