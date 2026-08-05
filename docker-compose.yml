@@ -9,4 +9,8 @@ services:
       - "8989:8989"
     volumes:
       - ${LUSMAKER_HOME:-~/.lusmaker}:/lus
+      # het image-entrypoint negeert graph.location en schrijft naar
+      # /data/default-gh; mount die naar onze cache-map zodat een wipe
+      # (rm -rf ~/.lusmaker/gh/graph-cache/*) echt een herimport triggert
+      - ${LUSMAKER_HOME:-~/.lusmaker}/gh/graph-cache:/data/default-gh
     restart: unless-stopped
