@@ -28,6 +28,7 @@ EXPECTED_TOOLS = {
     "avoid_place",
     "unavoid_place",
     "route_draft",
+    "route_readiness",
     "suggest_climbs",
     "plan_route",
     "adjust_route",
@@ -41,6 +42,9 @@ EXPECTED_LITE_TOOLS = {
     "adjust_route",
     "suggest_climbs",
     "route_details",
+    "route_readiness",
+    "get_profile",
+    "update_profile",
     "ensure_region",
     "region_status",
     "list_drafts",
@@ -111,7 +115,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 23
+assert len(actual) == 24
 """,
             Path(temp_dir),
         )
@@ -139,7 +143,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 7
+assert len(actual) == 10
 """,
             Path(temp_dir),
         )
@@ -174,7 +178,7 @@ else:
         )
 
 
-def test_profile_tools_persist_history_outside_lite_toolset():
+def test_profile_tools_persist_history_and_are_available_in_lite_toolset():
     _require_mcp()
     with tempfile.TemporaryDirectory() as temp_dir:
         _run_isolated(
@@ -193,4 +197,42 @@ assert updated["historiek"][-1]["bron"] == "mcp"
 assert mcp_server.list_profiles()["profielen"][0]["naam"] == "standaard"
 """,
             Path(temp_dir),
+        )
+
+
+def test_route_readiness_uses_cached_probe_without_routing():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        home = Path(temp_dir)
+        _write_climbs(home)
+        _run_isolated(
+            """
+from lusmaker import draft, mcp_server
+
+d = draft.new(
+    start={"lat": 50.8, "lon": 3.7, "label": "Start"},
+    name="readiness",
+    loop=True,
+    end=None,
+)
+d["_probe"] = {
+    "km": 12,
+    "hm": 100,
+    "kwaliteit": {"kassei_m": 600},
+    "terrein": {
+        "kassei_aanwezig_m": 600,
+        "beton_m": 0,
+        "offroad_beschikbaar_pct": 0,
+        "heat_dekking_pct": None,
+        "plaatskernen": [],
+    },
+}
+draft.save(d)
+
+result = mcp_server.route_readiness(d["id"])
+assert result["profiel"] == "standaard"
+assert result["vragen"][0]["id"] == "kasseien"
+assert result["klaar"] is False
+""",
+            home,
         )

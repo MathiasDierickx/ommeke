@@ -319,6 +319,16 @@ def cmd_draft_route(args):
         return draft.route(d, climbs.all_climbs())
 
 
+def cmd_draft_readiness(args):
+    from . import climbs, draft, profiles, readiness
+
+    d = draft.load(args.id)
+    with draft.region_scope(d):
+        climb_db = climbs.all_climbs()
+        draft.probe(d, climb_db)
+        return readiness.assess(d, profiles.load(args.profiel_naam), climb_db)
+
+
 def cmd_draft_suggest(args):
     from . import climbs, draft
 
@@ -612,6 +622,14 @@ def main(argv=None):
     _region_arg(s)
     s.add_argument("id")
     s.set_defaults(func=cmd_draft_route)
+    s = dsub.add_parser(
+        "readiness",
+        help="verken de route en bepaal welke voorkeuren nog bevraagd moeten worden",
+    )
+    _region_arg(s)
+    s.add_argument("id")
+    s.add_argument("--profiel-naam", default="standaard")
+    s.set_defaults(func=cmd_draft_readiness)
     s = dsub.add_parser("suggest", help="klimmen die weinig omweg vragen")
     _region_arg(s)
     s.add_argument("id")

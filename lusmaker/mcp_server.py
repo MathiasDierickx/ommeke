@@ -17,6 +17,7 @@ from . import (
     intents,
     preview,
     profiles,
+    readiness,
     regions,
 )
 
@@ -195,6 +196,21 @@ def route_draft(draft_id: str) -> dict:
 
 
 @mcp.tool()
+def route_readiness(
+    draft_id: str, profiel_naam: str = "standaard"
+) -> dict:
+    """Verken en beoordeel de routevoorkeuren. Stel de vragen aan de gebruiker,
+    pas antwoorden toe via update_profile (of avoid_place bij doel=draft), en
+    vraag daarna opnieuw readiness op tot klaar=true; routeer dan met optimize.
+    """
+    d = draft.load(draft_id)
+    with draft.region_scope(d):
+        climb_db = climbs.all_climbs()
+        draft.probe(d, climb_db)
+        return readiness.assess(d, profiles.load(profiel_naam), climb_db)
+
+
+@mcp.tool()
 def suggest_climbs(
     draft_id: str, max_detour_km: float = 8, limit: int = 6
 ) -> dict:
@@ -322,6 +338,9 @@ for _lite_tool in (
     adjust_route,
     suggest_climbs,
     route_details,
+    route_readiness,
+    get_profile,
+    update_profile,
     ensure_region,
     region_status,
     list_drafts,
@@ -335,7 +354,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--lite",
         action="store_true",
-        help="exposeer alleen de zeven token-zuinige tools",
+        help="exposeer alleen de tien token-zuinige tools",
     )
     args = parser.parse_args(argv)
     (lite_mcp if args.lite else mcp).run(transport="stdio")
