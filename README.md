@@ -54,7 +54,7 @@ lus draft new --start "Wetteren" --name berendries-lus
 lus climbs near Wetteren --radius-km 25
 lus draft add-climb <id> berendries
 lus draft route <id>                      # lus, vermijdt eigen heenweg
-lus draft optimize <id> --max-km 45       # vul automatisch aan binnen budget
+lus draft optimize <id> --max-km 45       # klimmen + mooie rondrit binnen budget
 lus draft suggest <id> --max-detour-km 10 # "Molenberg erbij voor +9.2 km?"
 lus draft preview <id> -o route.html      # kaart + hoogteprofiel bekijken
 lus draft export <id> -o route.gpx
@@ -76,7 +76,14 @@ routeren, suggesties en optimalisatie.
 (`--objective hm`, standaard) of de beste verhouding hoogtemeters per extra
 kilometer (`--objective hm-per-km`). Het commando gebruikt een veiligheidsmarge
 voor schattingsdrift en draait een toevoeging terug zodra de herrouteerde lus
-het harde `--max-km`-budget overschrijdt.
+het harde `--max-km`-budget overschrijdt. Blijft daarna minstens 1,5 km over,
+dan probeert de optimizer vijf deterministische GraphHopper-rondritten vanaf
+het verste waypoint. Hij kiest binnen het budget de variant met de meeste
+hoogtemeters die de bestaande route niet overlapt. De rondrit blijft als
+`opvulling: true`-leg met via-punten in de draft bewaard, zodat herrouteren
+deterministisch blijft. Gebruik `--geen-opvulling` om exact de vroegere,
+uitsluitend op klimmen gebaseerde optimalisatie te behouden; dezelfde optie is
+beschikbaar op `plan-route` en als `geen_opvulling=true` via MCP.
 
 `draft preview` schrijft één HTML-bestand met een interactieve routekaart,
 klimmarkers, kwaliteitsmetrieken en een hoogteprofiel. Zonder `-o` wordt

@@ -58,7 +58,11 @@ voor CLI-gebruik.
    automatisch aan met klimmen en bewaakt het harde budget na elke herroutering.
    Gebruik `--objective hm-per-km` als efficiënt klimmen belangrijker is dan
    het absolute aantal hoogtemeters. Zonder initiële klim kiest de optimizer
-   zelf een bereikbaar anker voor een lus.
+   zelf een bereikbaar anker voor een lus. Vanaf 1,5 km restbudget probeert hij
+   standaard ook vijf `round_trip`-varianten vanaf het verste waypoint en kiest
+   de niet-overlappende variant met de meeste hoogtemeters. Gebruik
+   `--geen-opvulling` (MCP: `geen_opvulling=true`) als alleen klimmen gewenst
+   zijn.
    Bied na `optimize` opnieuw een preview aan van het definitieve resultaat.
 7. Voor handmatige keuze: `lus draft suggest <id> --max-detour-km 10` — extra
    klimmen die weinig omweg vragen. **Stel deze voor aan de gebruiker** ("wil je
@@ -78,6 +82,7 @@ voor CLI-gebruik.
 | "rij graag waar veel gefietst wordt" | `lus heat build` na GPX-drop (zie hieronder) |
 | "maximaal 45 km, zoveel mogelijk klimmen" | `lus draft optimize <id> --max-km 45 --objective hm` |
 | "efficiënt klimmen binnen 45 km" | `lus draft optimize <id> --max-km 45 --objective hm-per-km` |
+| "alleen klimmen, geen extra rondrit" | `lus draft optimize <id> --max-km 45 --geen-opvulling` |
 | "maak een trail" / "trail-lopen" | `--profiel trail` bij `draft new`, of `--activiteit trail` bij `plan-route` |
 
 Dit zijn zachte voorkeuren (penalties, geen verboden) — kort meerijden op een
