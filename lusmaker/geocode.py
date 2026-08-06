@@ -57,6 +57,41 @@ def _nearest_place(places, lat, lon):
     return best[1] if best else None
 
 
+def places_near_route(route_coords, radius_m: float = 400.0, gazetteer=None) -> list[dict]:
+    """Geef plaatsnodes die binnen ``radius_m`` van een route liggen.
+
+    ``gazetteer`` is injecteerbaar zodat readiness-detectie volledig offline
+    met synthetische data getest kan worden.
+    """
+    if radius_m < 0:
+        raise ValueError("radius_m mag niet negatief zijn")
+    gaz = _load() if gazetteer is None else gazetteer
+    route = [(point[0], point[1]) for point in route_coords]
+    if not route:
+        return []
+    sampled = geo.resample(route, 50.0)
+    nearby = []
+    for name, ptype, lat, lon in gaz.get("places", []):
+        distance_m = min(
+            geo.haversine(lat, lon, route_lat, route_lon)
+            for route_lat, route_lon in sampled
+        )
+        if distance_m <= radius_m:
+            nearby.append(
+                {
+                    "label": name,
+                    "type": ptype,
+                    "lat": lat,
+                    "lon": lon,
+                    "afstand_m": round(distance_m),
+                }
+            )
+    return sorted(
+        nearby,
+        key=lambda place: (place["afstand_m"], place["label"].casefold(), place["type"]),
+    )
+
+
 def geocode(query: str, limit: int = 5) -> list[dict]:
     gaz = _load()
     parts = [p.strip() for p in query.split(",") if p.strip()]
