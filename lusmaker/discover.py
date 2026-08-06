@@ -50,12 +50,31 @@ def _fetch_json(url: str, headers: dict[str, str] | None = None):
 
 
 def _fetch_size(url: str) -> int | None:
+    """Bestandsgrootte opvragen; Geofabriks squid weigert soms HEAD, dus val
+    terug op een Range-GET en desnoods op 'onbekend' (None)."""
     request = urllib.request.Request(
         url, method="HEAD", headers={"User-Agent": USER_AGENT}
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        value = response.headers.get("Content-Length")
-    return int(value) if value else None
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            value = response.headers.get("Content-Length")
+        if value:
+            return int(value)
+    except OSError:
+        pass
+    request = urllib.request.Request(
+        url, headers={"User-Agent": USER_AGENT, "Range": "bytes=0-0"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            content_range = response.headers.get("Content-Range", "")
+        if "/" in content_range:
+            total = content_range.rsplit("/", 1)[1]
+            if total.isdigit():
+                return int(total)
+    except OSError:
+        pass
+    return None
 
 
 def _call_fetch(fetch: Callable, url: str):
