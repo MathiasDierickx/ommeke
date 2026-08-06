@@ -348,6 +348,13 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
         }
 
     out = {"climbs": resolved, "failed": failed}
+    # behoud eerder gedetecteerde auto-klimmen (resolve mag ze niet wissen)
+    if config.CLIMBS_JSON.exists():
+        try:
+            with open(config.CLIMBS_JSON) as f:
+                out["auto"] = json.load(f).get("auto", {})
+        except (OSError, json.JSONDecodeError):
+            pass
     config.ensure_dirs()
     with open(config.CLIMBS_JSON, "w") as f:
         json.dump(out, f, ensure_ascii=False)
