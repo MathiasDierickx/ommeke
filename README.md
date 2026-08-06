@@ -150,8 +150,55 @@ als de default later verandert. MCP biedt dezelfde keuze via de optionele
 register.
 
 Regiopacks ondersteunen nog geen route over twee packs heen. Maak daarvoor
-voorlopig één regio met één passend Geofabrik-extract. Lusmaker leidt een bbox
-ook niet automatisch af uit de Geofabrik-polygon; `--bbox` blijft verplicht.
+voorlopig één regio met één passend Geofabrik-extract.
+
+### Ad-hoc regio's en packs
+
+Een onbekende plaats kan zonder handmatig opzoeken van een slug of bbox worden
+klaargezet:
+
+```bash
+lus region ensure "Renesse"
+lus region status zeeland
+```
+
+`region ensure` zoekt de plaats wereldwijd via Nominatim, kiest de kleinste
+passende regio uit de Geofabrik-index en start een apart achtergrondproces.
+De voortgang doorloopt `downloaden`, `bouwen`, `gh-import` en `klaar` en staat
+in `~/.lusmaker/regions/<slug>/provision.json`. Nominatim-resultaten en de
+Geofabrik-index worden onder `~/.lusmaker/cache/` bewaard. Een exacte
+Geofabrik-slug kan ook rechtstreeks aan `region ensure` worden gegeven.
+
+Om onverwacht grote imports te voorkomen worden PBF's boven 700 MB geweigerd.
+Pas die grens alleen bewust aan, bijvoorbeeld
+`LUSMAKER_MAX_PBF_MB=1200 lus region ensure ...`. Publieke OSM-GPS-traces
+worden nooit automatisch opgehaald; de persoonlijke heatmap blijft een
+handmatige stap.
+
+Een eenmaal gebouwde regio kan zonder bron-PBF worden verpakt:
+
+```bash
+lus region pack zeeland
+lus region pack zeeland -o /srv/lusmaker-packs/zeeland.tar.gz
+```
+
+Het pack bevat de Lusmaker-caches, DEM-tegels, GraphHopper-graaf en
+configuratie plus `pack.json`. Zet voor provisioning een kommagescheiden
+zoeklijst van lokale mappen of basis-URL's:
+
+```bash
+export LUSMAKER_PACK_CACHE="/srv/lusmaker-packs,https://packs.example/lusmaker"
+export LUSMAKER_PACK_UPLOAD="/srv/lusmaker-packs"
+```
+
+Lusmaker zoekt daar naar `<slug>.tar.gz` (slashes worden `__`). Een cache-hit
+wordt uitgepakt en geregistreerd, waarna alleen de GraphHopper-service nog
+wordt gestart. Met `LUSMAKER_PACK_UPLOAD=s3://bucket/prefix` gebruikt Lusmaker
+`aws s3 cp`; een mislukte upload wordt als waarschuwing gemeld en maakt de
+lokale provisioning niet ongedaan.
+
+De MCP-server biedt dezelfde asynchrone flow met `ensure_region(place)` en
+`region_status(slug)`, naast de bestaande `list_regions`.
 
 ## Status / roadmap
 

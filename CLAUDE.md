@@ -17,6 +17,13 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 
 ## Typische flow
 
+0. Als de plaats niet lokaal geocodet kan worden of geen passende regio
+   beschikbaar is: roep `ensure_region(place)` aan (CLI:
+   `lus region ensure "<plaats>"`). **Meld de gebruiker meteen dat het
+   klaarzetten bij een cache-miss minuten kan duren en blokkeer het gesprek
+   niet.** Poll later `region_status(slug)` / `lus region status <slug>`.
+   Ga pas bij fase `klaar` verder met `new_draft(..., region=slug)`. Bij
+   `status: fout` toon je `melding` en probeer je niet blind verder.
 1. `lus draft new --start "Wetteren" --name berendries-lus` — start een lus-draft.
    Check `start_geocoded_als` in de output; bij twijfel de kandidaten aan de
    gebruiker voorleggen. Adres kan ook: `--start "Stationsstraat, Wetteren"`.
@@ -87,6 +94,10 @@ legale variant met eigen data.
   `lus region list`; nieuwe drafts kunnen `--region <slug>` krijgen en bewaren
   die regio voor alle vervolgstappen. Zonder register blijft Vlaanderen
   legacy-default.
+- Voor een onbekende plaats: `ensure_region` → wachttijd melden →
+  `region_status` pollen → pas na `klaar` `new_draft` met de teruggegeven regio.
+  Provisioning draait in een apart proces; houd geen tool-call open terwijl
+  GraphHopper importeert.
 - Nieuwe klimmen toevoegen: kopieer `lusmaker/climbs.yaml` naar
   `~/.lusmaker/climbs.yaml`, vul aan, en draai `lus climbs resolve`.
 

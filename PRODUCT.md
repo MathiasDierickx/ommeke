@@ -50,6 +50,11 @@ zijn custom-model-regels. Vlaanderen is launch-regio, geen beperking.
 | M6 | Strava/Garmin OAuth-sync voor eigen-ritten-heat | Frictie weg bij de saus |
 | M7 | Hosted multi-tenant + betaald plan | Pas na pilotvalidatie |
 
+**Noot bij M4:** ad-hoc provisioning is toegevoegd: een plaatsnaam wordt via
+Nominatim en de Geofabrik-index naar de kleinste regio vertaald. Provisioning
+draait pollbaar op de achtergrond en kan vooraf gebouwde packs uit lokale,
+HTTP(S)- of S3-caches hergebruiken.
+
 ## Go-to-market (klein en toetsbaar)
 
 - **Pilot**: 5-10 wielervrienden, self-host of op Mathias' VPS. Meetlat:
