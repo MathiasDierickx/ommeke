@@ -345,8 +345,16 @@ def provision(
         except RuntimeError:
             status = None
         # alleen kortsluiten als de vorige provisioning niet mislukt is;
-        # een 'fout'-status (bv. transiente 502 upstream) mag opnieuw
-        if status is not None and status.get("status") != "fout":
+        # een 'fout'-status (bv. transiente 502 upstream) mag opnieuw, en een
+        # 'bezig' die al lang niet meer bijgewerkt is (gecrashte worker) ook
+        stale = False
+        if status is not None and status.get("status") == "bezig":
+            try:
+                updated = datetime.fromisoformat(status.get("bijgewerkt", ""))
+                stale = (datetime.now(timezone.utc) - updated).total_seconds() > 900
+            except ValueError:
+                stale = True
+        if status is not None and status.get("status") != "fout" and not stale:
             return {
                 "region": existing.as_dict(),
                 "bestaand": True,
