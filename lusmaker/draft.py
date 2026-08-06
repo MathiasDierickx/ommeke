@@ -6,7 +6,7 @@ import uuid
 from contextlib import contextmanager
 
 from . import climbs as climbs_mod
-from . import config, geo, gh
+from . import config, geo, gh, profiles
 
 
 class DraftError(RuntimeError):
@@ -14,6 +14,8 @@ class DraftError(RuntimeError):
 
 
 PROFILES = ("quiet", "trail")
+_LEGACY_HM = "__legacy_hm__"
+_LOAD_HEAT = object()
 
 
 def _path(draft_id: str):
@@ -49,7 +51,13 @@ def region_scope(d: dict):
 
 def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False,
         avoid_cobbles: bool = False, avoid_concrete: bool = False,
-        profile: str = config.GH_PROFILE) -> dict:
+        profile: str = config.GH_PROFILE, profile_doc: str | None = None) -> dict:
+    profile_override = profile_doc is None or profile != config.GH_PROFILE
+    if profile_doc is not None:
+        document = profiles.load(profile_doc)
+        document_prefs = profiles.routing_prefs(document)
+        if profile == config.GH_PROFILE:
+            profile = document_prefs["profile"]
     if profile not in PROFILES:
         raise DraftError("profiel moet 'quiet' of 'trail' zijn")
     d = {
@@ -61,6 +69,8 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "end": end,      # None => zelfde als start bij loop
         "loop": loop,
         "profile": profile,
+        "profile_doc": profile_doc,
+        "profile_override": profile_override,
         "strict": strict,
         "avoid_cobbles": avoid_cobbles,
         "avoid_concrete": avoid_concrete,
@@ -76,7 +86,8 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
 def create(start: str, name: str | None = None, loop: bool = True,
            end: str | None = None, strict: bool = False,
            avoid_cobbles: bool = False, avoid_concrete: bool = False,
-           region: str | None = None, profile: str = config.GH_PROFILE) -> dict:
+           region: str | None = None, profile: str = config.GH_PROFILE,
+           profile_doc: str | None = None) -> dict:
     """Maak een draft vanuit gebruikersgerichte plaatsnamen of coördinaten."""
     from . import geocode
 
@@ -92,7 +103,23 @@ def create(start: str, name: str | None = None, loop: bool = True,
             avoid_cobbles=avoid_cobbles,
             avoid_concrete=avoid_concrete,
             profile=profile,
+            profile_doc=profile_doc,
         )
+        if profile_doc is not None:
+            document = profiles.load(profile_doc)
+            for place in document["voorkeuren"]["vermijd_plaatsen"]:
+                point, _ = geocode.resolve(place)
+                d["avoid_places"].append(
+                    {
+                        "label": point["label"],
+                        "lat": point["lat"],
+                        "lon": point["lon"],
+                        "radius_km": 2.5,
+                        "factor": 0.35,
+                    }
+                )
+            if document["voorkeuren"]["vermijd_plaatsen"]:
+                save(d)
     out = summary(d)
     out["start_geocoded_als"] = start_point["label"]
     if alternatives:
@@ -312,6 +339,35 @@ def place_areas(d: dict) -> list[dict]:
     ]
 
 
+def routing_preferences(d: dict) -> dict:
+    """Combineer profielvoorkeuren met expliciete draft-knoppen."""
+    effective = {
+        "profile": d.get("profile", config.GH_PROFILE),
+        "strict": False,
+        "avoid_cobbles": False,
+        "avoid_concrete": False,
+    }
+    if d.get("profile_doc"):
+        effective.update(profiles.routing_prefs(profiles.load(d["profile_doc"])))
+        # Het opgeslagen sportprofiel is bij creatie al van het document
+        # afgeleid; een expliciet afwijkend draftprofiel blijft leidend.
+        if d.get("profile_override", False):
+            effective["profile"] = d.get("profile", effective["profile"])
+    for key in ("strict", "avoid_cobbles", "avoid_concrete"):
+        if d.get(key, False):
+            effective[key] = True
+    return effective
+
+
+def objective_for_draft(d: dict, objective):
+    """Gebruik profielgewichten tenzij de aanroep een objective overschrijft."""
+    if objective is not None:
+        return objective
+    if d.get("profile_doc"):
+        return profiles.load(d["profile_doc"])["gewichten"]
+    return _LEGACY_HM
+
+
 def _bearing(a, b) -> float:
     """Kompaskoers (graden, noord=0) van punt a naar punt b."""
     import math
@@ -340,18 +396,18 @@ def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
     leg_details = []
     computed_legs = []
     total_m = ascend = descend = 0.0
-    profile = d.get("profile", config.GH_PROFILE)
+    preferences = routing_preferences(d)
 
     for leg in legs:
         is_climb = "climb" in leg or "climb_segment" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
         route_kwargs = {
             "avoid_polygons": place_areas(d) if is_climb else avoid,
-            "strict": d.get("strict", False),
-            "avoid_cobbles": d.get("avoid_cobbles", False),
-            "avoid_concrete": d.get("avoid_concrete", False),
+            "strict": preferences["strict"],
+            "avoid_cobbles": preferences["avoid_cobbles"],
+            "avoid_concrete": preferences["avoid_concrete"],
             "details": True,
-            "profile": profile,
+            "profile": preferences["profile"],
         }
         if post_fn is not None:
             route_kwargs["post_fn"] = post_fn
@@ -407,26 +463,72 @@ def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
 
 
 def summary(d: dict) -> dict:
+    effective = routing_preferences(d)
     out = {
         "id": d["id"],
         "name": d["name"],
         "start": d["start"].get("label"),
         "loop": d["loop"],
-        "profile": d.get("profile", config.GH_PROFILE),
-        "strict": d.get("strict", False),
-        "avoid_cobbles": d.get("avoid_cobbles", False),
-        "avoid_concrete": d.get("avoid_concrete", False),
+        "profile": effective["profile"],
+        "strict": effective["strict"],
+        "avoid_cobbles": effective["avoid_cobbles"],
+        "avoid_concrete": effective["avoid_concrete"],
         "avoid_places": d.get("avoid_places", []),
         "climbs": d["climbs"],
         "computed": d.get("computed"),
     }
+    if d.get("profile_doc") is not None:
+        out["profile_doc"] = d["profile_doc"]
     if config.load_registry() is not None:
         out["region"] = region_slug(d)
     return out
 
 
+def _route_share(routes: list[dict], detail_name: str, wanted: set) -> float:
+    """Aandeel meters met een GH-detail over meerdere routedelen."""
+    from . import analysis
+
+    matched = total = 0.0
+    for routed in routes:
+        coords = [(point[0], point[1]) for point in routed.get("coords", [])]
+        total += routed.get("distance_m", geo.path_length(coords))
+        matched += analysis.detail_meters(
+            coords,
+            routed.get("details", {}).get(detail_name, []),
+            wanted,
+        )
+    return min(1.0, matched / max(total, 1.0))
+
+
+def _popular_share(routes: list[dict], cells=_LOAD_HEAT) -> float:
+    if cells is _LOAD_HEAT:
+        from . import heat
+
+        cells = heat.popular_cells()
+    if not cells:
+        return 0.0
+    points = []
+    for routed in routes:
+        coords = [(point[0], point[1]) for point in routed.get("coords", [])]
+        if coords:
+            points.extend(geo.resample(coords, 60.0))
+    hits = sum(1 for point in points if geo.cell(*point) in cells)
+    return hits / max(len(points), 1)
+
+
+def _candidate_surface_components(routes: list[dict], popular_cells=_LOAD_HEAT) -> dict:
+    from . import analysis
+
+    return {
+        "offroad": _route_share(routes, "road_class", analysis.OFFROAD_CLASSES),
+        "populair": _popular_share(routes, popular_cells),
+        "kassei": _route_share(routes, "surface", analysis.COBBLE_SURFACES),
+    }
+
+
 def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
-                banned=frozenset(), router=gh.route) -> list[dict]:
+                banned=frozenset(), router=gh.route, weighted: bool = False,
+                popular_cells=_LOAD_HEAT) -> list[dict]:
     """Bereken kandidaat-klimmen dicht bij de huidige route."""
     if not d.get("computed") or not d.get("_geometry"):
         raise DraftError("routeer eerst: `lus draft route <id>`")
@@ -461,20 +563,16 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
                 candidates.append((est, cid, c, i, a, b))
 
     candidates.sort()
-    strict = d.get("strict", False)
-    cobb = d.get("avoid_cobbles", False)
-    conc = d.get("avoid_concrete", False)
-    profile = d.get("profile", config.GH_PROFILE)
+    routing = routing_preferences(d)
     zones = place_areas(d)
     per_climb: dict[str, dict] = {}
     for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
         try:
             preferences = {
-                "strict": strict,
-                "avoid_cobbles": cobb,
-                "avoid_concrete": conc,
-                "profile": profile,
+                **routing,
             }
+            if weighted:
+                preferences["details"] = True
             r1 = router(
                 [a, tuple(c["foot"])],
                 avoid_polygons=zones,
@@ -511,7 +609,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             continue
         # positie in de klim-volgorde: aantal klimmen vóór deze leg
         pos = sum(1 for m in legs_meta[:leg_i] if m.get("climb"))
-        per_climb[cid] = {
+        suggestion = {
             "climb": climbs_mod.summary(c),
             "id": cid,
             "label": (
@@ -525,6 +623,11 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             "pos": pos,
             "voorstel": f"lus draft add-climb {d['id']} {cid} --at {pos}",
         }
+        if weighted:
+            suggestion["score_componenten"] = _candidate_surface_components(
+                [r1, r2, r3], popular_cells
+            )
+        per_climb[cid] = suggestion
     out = sorted(per_climb.values(), key=lambda s: s["extra_km"])[:limit]
     return out
 
@@ -533,7 +636,35 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
             router=gh.route) -> list[dict]:
     """Klimmen dicht bij de huidige route, gerangschikt op extra kilometers."""
     with region_scope(d):
-        return _candidates(d, climb_db, max_detour_km, limit, router=router)
+        if not d.get("profile_doc"):
+            return _candidates(d, climb_db, max_detour_km, limit, router=router)
+        profile_document = profiles.load(d["profile_doc"])
+        candidates = _candidates(
+            d,
+            climb_db,
+            max_detour_km,
+            max(10, limit),
+            router=router,
+            weighted=True,
+        )
+        weights = profile_document["gewichten"]
+        prefer_cobbles = profile_document["voorkeuren"]["kasseien"] == "graag"
+        for candidate in candidates:
+            components = _score_components(candidate, max_detour_km)
+            score = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
+            if prefer_cobbles:
+                score += 0.15 * components["kassei"]
+            candidate["score"] = round(score, 6)
+            candidate["score_componenten"] = components
+        return sorted(
+            candidates,
+            key=lambda candidate: (
+                -candidate["score"],
+                -candidate["extra_hoogtemeters"],
+                candidate["extra_km"],
+                candidate["climb"]["id"],
+            ),
+        )[:limit]
 
 
 def _pick_anchor(start: dict, climb_db: dict, max_km: float) -> dict | None:
@@ -564,18 +695,59 @@ def _eligible_candidates(candidates: list[dict], budget_km: float,
     ]
 
 
-def _select_candidate(candidates: list[dict], objective: str) -> dict | None:
+def _objective_weights(objective) -> dict | None:
+    if objective in ("hm-per-km", _LEGACY_HM):
+        return None
+    if objective == "hm":
+        objective = {"hoogtemeters": 1.0}
+    elif objective == "offroad":
+        objective = {"offroad": 1.0}
+    if not isinstance(objective, dict):
+        raise DraftError(
+            "objective moet 'hm', 'hm-per-km', 'offroad' of een gewichten-dict zijn"
+        )
+    try:
+        return profiles.normalize_weights(objective)
+    except profiles.ProfileError as exc:
+        raise DraftError(str(exc)) from exc
+
+
+def _score_components(candidate: dict, budget_km: float) -> dict:
+    extra_km = candidate["extra_km"]
+    gain = candidate["extra_hoogtemeters"]
+    surface = candidate.get("score_componenten", {})
+    return {
+        "hoogtemeters": min(1.0, max(0.0, gain / max(extra_km, 0.3) / 20.0)),
+        "offroad": min(1.0, max(0.0, surface.get("offroad", 0.0))),
+        "populair": min(1.0, max(0.0, surface.get("populair", 0.0))),
+        "kort": min(1.0, max(0.0, 1.0 - extra_km / max(budget_km, 0.001))),
+        "kassei": min(1.0, max(0.0, surface.get("kassei", 0.0))),
+    }
+
+
+def _select_candidate(candidates: list[dict], objective, budget_km: float | None = None,
+                      prefer_cobbles: bool = False) -> dict | None:
     """Kies deterministisch de beste kandidaat voor het gevraagde doel."""
-    if objective not in ("hm", "hm-per-km", "offroad"):
-        raise DraftError("objective moet 'hm', 'hm-per-km' of 'offroad' zijn")
+    weights = _objective_weights(objective)
     if not candidates:
         return None
+    budget_km = budget_km if budget_km is not None else max(
+        candidate["extra_km"] for candidate in candidates
+    )
 
     def key(candidate):
         extra_km = candidate["extra_km"]
         gain = candidate["extra_hoogtemeters"]
         ratio = gain / max(extra_km, 0.3)
-        primary = gain if objective == "hm" else ratio
+        if weights is None:
+            primary = gain if objective == _LEGACY_HM else ratio
+        else:
+            components = _score_components(candidate, budget_km)
+            primary = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
+            if prefer_cobbles:
+                primary += 0.15 * components["kassei"]
+            candidate["score"] = round(primary, 6)
+            candidate["score_componenten"] = components
         return (-primary, -gain, extra_km, candidate["climb"]["id"])
 
     return sorted(candidates, key=key)[0]
@@ -606,18 +778,10 @@ def _round_trip_anchor(d: dict, climb_db: dict) -> tuple[tuple[float, float], st
     return (lat, lon), label
 
 
-def _offroad_m(candidate) -> float:
-    """Offroad-meters van een rondrit-kandidaat uit de road_class-details."""
-    from . import analysis
-
-    coords = [(p[0], p[1]) for p in candidate.get("coords", [])]
-    det = candidate.get("details", {})
-    return analysis.detail_meters(coords, det.get("road_class", []), analysis.OFFROAD_CLASSES)
-
-
 def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                           router=route, round_trip_fn=gh.round_trip,
-                          objective: str = "hm") -> dict:
+                          objective="hm", prefer_cobbles: bool = False,
+                          popular_cells=_LOAD_HEAT) -> dict:
     """Vul restbudget met de beste van vijf niet-overlappende GH-rondritten."""
     if not d.get("loop"):
         return {"filled": False, "reason": "draft is geen lus"}
@@ -636,18 +800,21 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         if not meta.get("opvulling")
         for point in leg
     ]
+    weights = _objective_weights(objective)
     preferences = {
-        "profile": d.get("profile", config.GH_PROFILE),
-        "strict": d.get("strict", False),
-        "avoid_cobbles": d.get("avoid_cobbles", False),
-        "avoid_concrete": d.get("avoid_concrete", False),
+        **routing_preferences(d),
         "avoid_polygons": place_areas(d),
     }
     candidates = []
     for seed in range(5):
         try:
-            candidate = round_trip_fn(anchor, remaining_m * 0.9, seed,
-                                      details=(objective == "offroad"), **preferences)
+            candidate = round_trip_fn(
+                anchor,
+                remaining_m * 0.9,
+                seed,
+                details=(weights is not None),
+                **preferences,
+            )
         except gh.GhError:
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
@@ -660,7 +827,20 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             geo.retrace_m(list(reversed(coords)), existing),
         ) > 300.0:
             continue
-        score = _offroad_m(candidate) if objective == "offroad" else candidate.get("ascend_m", 0)
+        if weights is None:
+            # Ook hm-per-km koos vóór T11 de rondritlob op absolute stijging.
+            score = candidate.get("ascend_m", 0)
+        else:
+            surface = _candidate_surface_components([candidate], popular_cells)
+            pseudo_candidate = {
+                "extra_km": candidate["distance_m"] / 1000.0,
+                "extra_hoogtemeters": candidate.get("ascend_m", 0),
+                "score_componenten": surface,
+            }
+            components = _score_components(pseudo_candidate, remaining_m / 1000.0)
+            score = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
+            if prefer_cobbles:
+                score += 0.15 * components["kassei"]
         candidates.append((score, -seed, seed, candidate, coords))
 
     if not candidates:
@@ -708,7 +888,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     }
 
 
-def optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
+def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
              min_ratio: float = 8.0, max_rounds: int = 12,
              route_fn=route, candidates_fn=_candidates, fill: bool = True,
              round_trip_fn=gh.round_trip) -> dict:
@@ -722,7 +902,7 @@ def optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
         )
 
 
-def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
+def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
               min_ratio: float = 8.0, max_rounds: int = 12,
               route_fn=route, candidates_fn=_candidates, fill: bool = True,
               round_trip_fn=gh.round_trip) -> dict:
@@ -733,12 +913,20 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
         raise DraftError("min-ratio mag niet negatief zijn")
     if max_rounds < 0:
         raise DraftError("max-rounds mag niet negatief zijn")
+    objective = objective_for_draft(d, objective)
     # Valideer ook als er door max_rounds=0 geen kandidaat gekozen wordt.
-    _select_candidate([], objective)
+    weights = _objective_weights(objective)
+    profile_document = profiles.load(d["profile_doc"]) if d.get("profile_doc") else None
+    prefer_cobbles = bool(
+        profile_document
+        and profile_document["voorkeuren"]["kasseien"] == "graag"
+    )
+    _select_candidate([], objective, prefer_cobbles=prefer_cobbles)
+    pure_offroad = weights is not None and weights["offroad"] == 1.0
 
     if not d["climbs"] and d.get("loop"):
         # offroad-doel jaagt niet op klimmen: direct naar de rondrit-opvulling
-        anchor = None if objective == "offroad" else _pick_anchor(d["start"], climb_db, max_km)
+        anchor = None if pure_offroad else _pick_anchor(d["start"], climb_db, max_km)
         if anchor is None:
             if not fill:
                 raise DraftError("geen klim bereikbaar binnen het budget")
@@ -767,7 +955,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
     rounds = []
     banned = set()
     stopped_because = "maximum aantal rondes bereikt"
-    if objective == "offroad":
+    if pure_offroad:
         max_rounds = 0
         stopped_because = "offroad-doel: alleen rondrit-opvulling"
     for round_number in range(1, max_rounds + 1):
@@ -779,12 +967,24 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
             stopped_because = "geen klim bereikbaar; round_trip vanaf start"
             break
 
-        candidates = candidates_fn(
-            d, climb_db, max_detour_km=budget_km * 0.85, limit=10,
-            banned=frozenset(banned),
-        )
+        candidate_kwargs = {
+            "max_detour_km": budget_km * 0.85,
+            "limit": 10,
+            "banned": frozenset(banned),
+        }
+        if weights is not None:
+            import inspect
+
+            if "weighted" in inspect.signature(candidates_fn).parameters:
+                candidate_kwargs["weighted"] = True
+        candidates = candidates_fn(d, climb_db, **candidate_kwargs)
         eligible = _eligible_candidates(candidates, budget_km, min_ratio, banned)
-        selected = _select_candidate(eligible, objective)
+        selected = _select_candidate(
+            eligible,
+            objective,
+            budget_km=budget_km,
+            prefer_cobbles=prefer_cobbles,
+        )
         if selected is None:
             stopped_because = "geen kandidaten boven min-ratio binnen budget"
             break
@@ -836,6 +1036,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
             router=route_fn,
             round_trip_fn=round_trip_fn,
             objective=objective,
+            prefer_cobbles=prefer_cobbles,
         )
         if fill_result["filled"]:
             rounds.append(
@@ -854,7 +1055,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
 
     return {
         "id": d["id"],
-        "objective": objective,
+        "objective": "hm" if objective == _LEGACY_HM else objective,
         "max_km": float(max_km),
         "resultaat": summary(d),
         "rondes": rounds,

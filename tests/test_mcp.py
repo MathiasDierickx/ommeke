@@ -12,6 +12,9 @@ from unittest import SkipTest
 
 EXPECTED_TOOLS = {
     "status",
+    "get_profile",
+    "update_profile",
+    "list_profiles",
     "list_regions",
     "ensure_region",
     "region_status",
@@ -108,7 +111,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 20
+assert len(actual) == 23
 """,
             Path(temp_dir),
         )
@@ -168,4 +171,26 @@ else:
     raise AssertionError("onbekende klim werd aanvaard")
 """,
             home,
+        )
+
+
+def test_profile_tools_persist_history_outside_lite_toolset():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+from lusmaker import mcp_server
+
+default = mcp_server.get_profile()
+assert default["naam"] == "standaard"
+assert default["voorkeuren"]["kasseien"] is None
+
+updated = mcp_server.update_profile(
+    "standaard",
+    {"voorkeuren": {"kasseien": "graag"}},
+)
+assert updated["historiek"][-1]["bron"] == "mcp"
+assert mcp_server.list_profiles()["profielen"][0]["naam"] == "standaard"
+""",
+            Path(temp_dir),
         )

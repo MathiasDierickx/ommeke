@@ -185,6 +185,37 @@ def test_plan_route_passes_no_fill_to_optimizer():
     assert optimize_calls == [{"max_km": 10, "fill": False}]
 
 
+def test_plan_route_passes_named_preference_profile_to_draft():
+    state = _routed_draft()
+    captured = {}
+
+    def create_fn(**kwargs):
+        captured.update(kwargs)
+        return {"id": state["id"]}
+
+    def route_fn(d, _db):
+        d["computed"] = _routed_draft()["computed"]
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "Wetteren",
+            doel="kort",
+            profiel_naam="gravel",
+            create_fn=create_fn,
+            load_fn=lambda _draft_id: state,
+            route_fn=route_fn,
+            climbs_fn=_climbs,
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            exports_root=Path(temp_dir),
+        )
+
+    assert captured["profile_doc"] == "gravel"
+
+
 def test_adjust_route_batches_edits_before_one_reroute():
     state = _routed_draft()
     state["climbs"] = ["diepestraat"]

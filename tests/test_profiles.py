@@ -6,7 +6,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from lusmaker import config, draft, gh, gh_config
+from lusmaker import cli, config, draft, gh, gh_config, profiles
 
 
 @contextmanager
@@ -146,3 +146,115 @@ def test_write_gh_files_adds_trail_profile_and_model():
         "in_popular" not in rule.get("if", rule.get("else_if", ""))
         for rule in trail["priority"]
     )
+
+
+def test_preference_profile_load_default_and_list_only_saved_documents():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            default = profiles.load("toerist")
+            before = profiles.list_all()
+            profiles.save(default)
+            after = profiles.list_all()
+
+    assert default["naam"] == "toerist"
+    assert default["gewichten"] == {
+        "hoogtemeters": 1.0,
+        "offroad": 0.0,
+        "populair": 0.0,
+        "kort": 0.0,
+    }
+    assert default["voorkeuren"]["kasseien"] is None
+    assert before == []
+    assert [profile["naam"] for profile in after] == ["toerist"]
+
+
+def test_preference_profile_patch_records_history_and_normalizes_weights():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            updated = profiles.apply_patch(
+                "gravel",
+                {
+                    "gewichten": {"hoogtemeters": 2, "offroad": 2},
+                    "voorkeuren": {"kasseien": "graag"},
+                },
+                bron="test",
+            )
+            stored = profiles.load("gravel")
+
+    assert updated == stored
+    assert stored["gewichten"]["hoogtemeters"] == 0.5
+    assert stored["gewichten"]["offroad"] == 0.5
+    assert len(stored["historiek"]) == 1
+    assert stored["historiek"][0]["bron"] == "test"
+    assert stored["historiek"][0]["patch"]["voorkeuren"]["kasseien"] == "graag"
+    assert stored["historiek"][0]["timestamp"]
+
+
+def test_preference_validation_and_routing_mapping_keep_graag_scoring_only():
+    profile = profiles.default_document("trailfan")
+    profile["activiteit"] = "trail"
+    profile["voorkeuren"].update(
+        {"kasseien": "graag", "beton": "vermijd", "steenwegen": "vermijd"}
+    )
+
+    assert profiles.routing_prefs(profile) == {
+        "avoid_cobbles": False,
+        "avoid_concrete": True,
+        "strict": True,
+        "profile": "trail",
+    }
+
+    profile["voorkeuren"]["steenwegen"] = "graag"
+    try:
+        profiles.routing_prefs(profile)
+    except profiles.ProfileError as exc:
+        assert "steenwegen ondersteunt 'graag' niet" in str(exc)
+    else:
+        raise AssertionError("ongeldige steenwegvoorkeur werd aanvaard")
+
+
+def test_draft_profile_preferences_apply_and_explicit_true_flags_override():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            profiles.apply_patch(
+                "trailfan",
+                {
+                    "activiteit": "trail",
+                    "voorkeuren": {"beton": "vermijd"},
+                },
+                bron="test",
+            )
+            d = draft.new(
+                start={"lat": 50.98, "lon": 3.87, "label": "Wetteren"},
+                name="profieltest",
+                loop=True,
+                end=None,
+                strict=True,
+                profile_doc="trailfan",
+            )
+            effective = draft.routing_preferences(d)
+
+    assert d["profile_doc"] == "trailfan"
+    assert d["profile"] == "trail"
+    assert effective == {
+        "profile": "trail",
+        "strict": True,
+        "avoid_cobbles": False,
+        "avoid_concrete": True,
+    }
+
+
+def test_cli_weight_parser_accepts_ratios_and_rejects_bad_input():
+    assert cli.parse_weights("hoogtemeters=0.5, offroad=1.5") == {
+        "hoogtemeters": 0.5,
+        "offroad": 1.5,
+        "populair": 0.0,
+        "kort": 0.0,
+    }
+    for value in ("hoogtemeters", "onbekend=1", "offroad=veel"):
+        try:
+            cli.parse_weights(value)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"ongeldige gewichten werden aanvaard: {value}")

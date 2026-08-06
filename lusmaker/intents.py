@@ -190,6 +190,7 @@ def plan_route(
     naam: str | None = None,
     activiteit: str = "fietsen",
     geen_opvulling: bool = False,
+    profiel_naam: str | None = None,
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -207,7 +208,7 @@ def plan_route(
         raise IntentError("doel moet 'hoogtemeters', 'kort' of 'toeren' zijn")
     if activiteit not in ACTIVITY_PROFILES:
         raise IntentError("activiteit moet 'fietsen' of 'trail' zijn")
-    created = create_fn(
+    create_kwargs = dict(
         start=start,
         name=naam,
         strict=strict,
@@ -216,6 +217,9 @@ def plan_route(
         region=region,
         profile=ACTIVITY_PROFILES[activiteit],
     )
+    if profiel_naam is not None:
+        create_kwargs["profile_doc"] = profiel_naam
+    created = create_fn(**create_kwargs)
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)
     with draft.region_scope(d):

@@ -25,6 +25,31 @@ def _parse_point(s: str, limit: int = 1):
     return geocode.resolve(s)
 
 
+def parse_weights(value: str) -> dict:
+    """Parseer ``naam=getal``-paren en vul ontbrekende objectives met nul."""
+    from . import profiles
+
+    parsed = {}
+    for part in value.split(","):
+        if "=" not in part:
+            raise ValueError("gewichten zijn komma-gescheiden naam=getal-paren")
+        name, raw = (piece.strip() for piece in part.split("=", 1))
+        if not name or name in parsed:
+            raise ValueError("elk gewicht moet precies één geldige naam hebben")
+        try:
+            parsed[name] = float(raw)
+        except ValueError as exc:
+            raise ValueError(f"gewicht '{name}' moet een getal zijn") from exc
+    # Validatie + normalisatie gebeurt in de optimizer/profielmodule; de CLI
+    # bewaart de door de gebruiker opgegeven verhouding.
+    unknown = set(parsed) - set(profiles.WEIGHT_KEYS)
+    if unknown:
+        raise ValueError(f"onbekend gewicht: {sorted(unknown)[0]}")
+    if not parsed:
+        raise ValueError("geef minstens één gewicht op")
+    return {key: parsed.get(key, 0.0) for key in profiles.WEIGHT_KEYS}
+
+
 # ---------- commands ----------
 
 def cmd_setup(args):
@@ -61,6 +86,44 @@ def cmd_build(args):
 
 def cmd_status(args):
     return config.status(args.region)
+
+
+def cmd_profile_show(args):
+    from . import profiles
+
+    return profiles.load(args.naam)
+
+
+def cmd_profile_list(args):
+    from . import profiles
+
+    return {"profielen": profiles.list_all()}
+
+
+def cmd_profile_set(args):
+    from . import profiles
+
+    patch = {}
+    if args.activiteit is not None:
+        patch["activiteit"] = args.activiteit
+    if args.gewichten is not None:
+        patch["gewichten"] = parse_weights(args.gewichten)
+    preferences = {
+        key: value
+        for key, value in {
+            "kasseien": args.kasseien,
+            "beton": args.beton,
+            "steenwegen": args.steenwegen,
+        }.items()
+        if value is not None
+    }
+    if args.vermijd_plaats is not None:
+        preferences["vermijd_plaatsen"] = args.vermijd_plaats
+    if preferences:
+        patch["voorkeuren"] = preferences
+    if not patch:
+        raise ValueError("geef minstens één profielwijziging op")
+    return profiles.apply_patch(args.naam, patch, bron="cli")
 
 
 def cmd_region_add(args):
@@ -162,6 +225,7 @@ def cmd_draft_new(args):
         strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
         avoid_concrete=args.vermijd_beton, region=args.region,
         profile=args.profiel,
+        profile_doc=args.profiel_naam,
     )
 
 
@@ -279,7 +343,8 @@ def cmd_draft_optimize(args):
     with draft.region_scope(d):
         return draft.optimize(
             d, climbs.all_climbs(), max_km=args.max_km,
-            objective=args.objective, min_ratio=args.min_ratio,
+            objective=(parse_weights(args.gewichten) if args.gewichten else args.objective),
+            min_ratio=args.min_ratio,
             max_rounds=args.max_rounds, fill=not args.geen_opvulling,
         )
 
@@ -318,6 +383,7 @@ def cmd_plan_route(args):
         naam=args.naam,
         activiteit=args.activiteit,
         geen_opvulling=args.geen_opvulling,
+        profiel_naam=args.profiel_naam,
     )
 
 
@@ -358,6 +424,23 @@ def main(argv=None):
     _region_arg(s)
     s.set_defaults(func=cmd_status)
 
+    r = sub.add_parser("profile", help="persistente gebruikersvoorkeuren beheren")
+    rsub = r.add_subparsers(dest="subcmd", required=True)
+    s = rsub.add_parser("show", help="toon een profiel (ontbrekend geeft defaults)")
+    s.add_argument("naam", nargs="?", default="standaard")
+    s.set_defaults(func=cmd_profile_show)
+    s = rsub.add_parser("list", help="toon opgeslagen profielen")
+    s.set_defaults(func=cmd_profile_list)
+    s = rsub.add_parser("set", help="wijzig voorkeuren en bewaar historiek")
+    s.add_argument("naam")
+    s.add_argument("--activiteit", choices=("fietsen", "trail"))
+    s.add_argument("--gewichten", help="bv. hoogtemeters=0.5,offroad=0.5")
+    s.add_argument("--kasseien", choices=("vermijd", "ok", "graag"))
+    s.add_argument("--beton", choices=("vermijd", "ok", "graag"))
+    s.add_argument("--steenwegen", choices=("vermijd", "ok"))
+    s.add_argument("--vermijd-plaats", action="append")
+    s.set_defaults(func=cmd_profile_set)
+
     r = sub.add_parser("region", help="regiopacks beheren")
     rsub = r.add_subparsers(dest="subcmd", required=True)
     s = rsub.add_parser("add", help="download en bouw een nieuw regiopack")
@@ -397,6 +480,7 @@ def main(argv=None):
     )
     _region_arg(s)
     s.add_argument("--start", required=True)
+    s.add_argument("--profiel-naam", help="persistent voorkeurenprofiel")
     s.add_argument(
         "--activiteit",
         choices=("fietsen", "trail"),
@@ -484,6 +568,7 @@ def main(argv=None):
         choices=("quiet", "trail"),
         default="quiet",
     )
+    s.add_argument("--profiel-naam", help="persistent voorkeurenprofiel")
     s.add_argument("--strict", action="store_true", help="steenwegen maximaal vermijden")
     s.add_argument("--vermijd-kasseien", action="store_true", help="zachte straf op kasseistroken")
     s.add_argument("--vermijd-beton", action="store_true", help="zachte straf op betonbanen")
@@ -537,7 +622,12 @@ def main(argv=None):
     _region_arg(s)
     s.add_argument("id")
     s.add_argument("--max-km", type=float, required=True, help="hard afstandsbudget")
-    s.add_argument("--objective", choices=("hm", "hm-per-km", "offroad"), default="hm")
+    objective_group = s.add_mutually_exclusive_group()
+    objective_group.add_argument("--objective", choices=("hm", "hm-per-km", "offroad"))
+    objective_group.add_argument(
+        "--gewichten",
+        help="eenmalige mix, bv. hoogtemeters=0.5,offroad=0.5",
+    )
     s.add_argument("--min-ratio", type=float, default=8.0, help="minimaal aantal hoogtemeters per extra km")
     s.add_argument("--max-rounds", type=int, default=12, help="maximum aantal greedy-rondes")
     s.add_argument(
@@ -559,7 +649,7 @@ def main(argv=None):
 
     args = p.parse_args(argv)
     try:
-        if args.cmd == "region":
+        if args.cmd in {"region", "profile"}:
             result = args.func(args)
         else:
             with config.use_region(getattr(args, "region", None)):

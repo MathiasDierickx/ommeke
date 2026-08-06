@@ -61,8 +61,19 @@ def test_select_candidate_uses_objective():
         _candidate("best-ratio", 2.0, 50),
     ]
 
-    assert draft._select_candidate(candidates, "hm")["climb"]["id"] == "most-gain"
+    # `hm` is sugar voor de genormaliseerde hoogtemetercomponent (hm/km).
+    assert draft._select_candidate(candidates, "hm")["climb"]["id"] == "best-ratio"
     assert draft._select_candidate(candidates, "hm-per-km")["climb"]["id"] == "best-ratio"
+
+
+def test_missing_profile_and_override_preserve_legacy_default_hm_selection():
+    candidates = [
+        _candidate("most-gain", 5.0, 80),
+        _candidate("best-ratio", 2.0, 50),
+    ]
+    default_objective = draft.objective_for_draft({}, None)
+
+    assert draft._select_candidate(candidates, default_objective)["climb"]["id"] == "most-gain"
 
 
 def test_select_candidate_breaks_ties_deterministically():
@@ -72,6 +83,62 @@ def test_select_candidate_breaks_ties_deterministically():
     ]
 
     assert draft._select_candidate(candidates, "hm")["climb"]["id"] == "alpha"
+
+
+def test_weighted_mix_normalizes_and_can_choose_differently():
+    climbing = _candidate("climbing", 2.0, 40)
+    climbing["score_componenten"] = {"offroad": 0.0, "populair": 0.0, "kassei": 0.0}
+    gravel = _candidate("gravel", 4.0, 40)
+    gravel["score_componenten"] = {"offroad": 1.0, "populair": 0.0, "kassei": 0.0}
+    candidates = [climbing, gravel]
+
+    assert draft._select_candidate(candidates, {"hoogtemeters": 1})["climb"]["id"] == "climbing"
+    mixed = draft._select_candidate(
+        candidates,
+        {"hoogtemeters": 3, "offroad": 7},
+        budget_km=10,
+    )
+    scaled = draft._select_candidate(
+        candidates,
+        {"hoogtemeters": 30, "offroad": 70},
+        budget_km=10,
+    )
+
+    assert mixed["climb"]["id"] == "gravel"
+    assert scaled["climb"]["id"] == "gravel"
+    assert mixed["score_componenten"]["kort"] == 0.6
+
+
+def test_weighted_objective_rejects_negative_unknown_and_zero_sum():
+    invalid = (
+        {"hoogtemeters": -1},
+        {"landschap": 1},
+        {"hoogtemeters": 0, "offroad": 0},
+    )
+    for objective in invalid:
+        try:
+            draft._select_candidate([], objective)
+        except draft.DraftError:
+            pass
+        else:
+            raise AssertionError(f"ongeldige objective werd aanvaard: {objective}")
+
+
+def test_kasseien_graag_adds_point_fifteen_bonus_above_mix():
+    smooth = _candidate("smooth", 2.0, 20)
+    smooth["score_componenten"] = {"offroad": 0, "populair": 0, "kassei": 0}
+    cobbles = _candidate("cobbles", 2.0, 20)
+    cobbles["score_componenten"] = {"offroad": 0, "populair": 0, "kassei": 1}
+
+    selected = draft._select_candidate(
+        [smooth, cobbles],
+        {"hoogtemeters": 1},
+        budget_km=5,
+        prefer_cobbles=True,
+    )
+
+    assert selected["climb"]["id"] == "cobbles"
+    assert selected["score"] == 0.65
 
 
 def _synthetic_routed_draft():
@@ -208,6 +275,7 @@ def test_fill_rejects_overlap_and_selects_most_ascend():
         budget_m=10000,
         router=router,
         round_trip_fn=round_trip_fn,
+        popular_cells=set(),
     )
 
     assert seen_seeds == [0, 1, 2, 3, 4]

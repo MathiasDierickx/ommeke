@@ -16,6 +16,7 @@ from . import (
     gpx,
     intents,
     preview,
+    profiles,
     regions,
 )
 
@@ -27,6 +28,24 @@ mcp = FastMCP("lusmaker")
 def status() -> dict:
     """Controleer of de lokale data en GraphHopper beschikbaar zijn."""
     return config.status()
+
+
+@mcp.tool()
+def get_profile(naam: str = "standaard") -> dict:
+    """Toon een persistent voorkeurenprofiel; ontbrekend geeft defaults."""
+    return profiles.load(naam)
+
+
+@mcp.tool()
+def update_profile(naam: str, patch: dict) -> dict:
+    """Pas profielvelden toe en voeg de wijziging toe aan de historiek."""
+    return profiles.apply_patch(naam, patch, bron="mcp")
+
+
+@mcp.tool()
+def list_profiles() -> dict:
+    """Toon alle opgeslagen voorkeurenprofielen."""
+    return {"profielen": profiles.list_all()}
 
 
 @mcp.tool()
@@ -105,6 +124,7 @@ def new_draft(
     vermijd_kasseien: bool = False,
     vermijd_beton: bool = False,
     region: str | None = None,
+    profiel_naam: str | None = None,
 ) -> dict:
     """Maak een quiet-fiets- of traildraft vanaf een plaats of ``lat,lon``."""
     return draft.create(
@@ -117,6 +137,7 @@ def new_draft(
         avoid_cobbles=vermijd_kasseien,
         avoid_concrete=vermijd_beton,
         region=region,
+        profile_doc=profiel_naam,
     )
 
 
@@ -211,6 +232,7 @@ def plan_route(
     naam: str | None = None,
     activiteit: str = "fietsen",
     geen_opvulling: bool = False,
+    profiel_naam: str | None = None,
 ) -> dict:
     """Maak en exporteer een fiets- of traillus vanuit één routewens."""
     return intents.plan_route(
@@ -226,6 +248,7 @@ def plan_route(
         naam=naam,
         activiteit=activiteit,
         geen_opvulling=geen_opvulling,
+        profiel_naam=profiel_naam,
     )
 
 
@@ -253,7 +276,7 @@ def adjust_route(
 def optimize_draft(
     draft_id: str,
     max_km: float,
-    objective: str = "hm",
+    objective: str | None = None,
     min_ratio: float = 8.0,
     geen_opvulling: bool = False,
 ) -> dict:
