@@ -162,10 +162,10 @@ def test_fill_rejects_overlap_and_selects_most_ascend():
     def round_trip_fn(anchor, distance_m, seed, **preferences):
         seen_seeds.append(seed)
         assert anchor == (50.0, 4.02)
-        assert distance_m == 5000
+        assert distance_m == 4500  # 90% van het restbudget (GH schiet vaak over)
         assert preferences["profile"] == "quiet"
         if seed == 0:
-            # Meer dan 120 m terug over de bestaande heenweg.
+            # Ruim meer dan 300 m terug over de bestaande heenweg.
             coords = [anchor, (50.0, 4.0), anchor]
         else:
             offset = 0.01 + seed * 0.001

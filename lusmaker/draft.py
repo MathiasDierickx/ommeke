@@ -629,7 +629,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     candidates = []
     for seed in range(5):
         try:
-            candidate = round_trip_fn(anchor, remaining_m, seed, **preferences)
+            candidate = round_trip_fn(anchor, remaining_m * 0.9, seed, **preferences)
         except gh.GhError:
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
@@ -640,7 +640,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             geo.retrace_m(existing, list(reversed(coords))),
             geo.retrace_m(coords, existing),
             geo.retrace_m(list(reversed(coords)), existing),
-        ) > 120.0:
+        ) > 300.0:
             continue
         candidates.append((candidate.get("ascend_m", 0), -seed, seed, candidate, coords))
 
