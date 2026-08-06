@@ -333,8 +333,13 @@ def provision(
     health_check: Callable[[str], bool] | None = None,
     compose_path: Path | None = None,
     port_available: Callable[[int], bool] | None = None,
+    force: bool = False,
 ) -> dict:
-    """Provision a region in a child process, or synchronously for the worker."""
+    """Provision a region in a child process, or synchronously for the worker.
+
+    force=True (de worker zelf) slaat de status-kortsluiting over — de parent
+    heeft net 'bezig' geschreven vóór het spawnen.
+    """
     from . import regions
 
     home = home or config.home_path()
@@ -354,7 +359,7 @@ def provision(
                 stale = (datetime.now(timezone.utc) - updated).total_seconds() > 900
             except ValueError:
                 stale = True
-        if status is not None and status.get("status") != "fout" and not stale:
+        if not force and status is not None and status.get("status") != "fout" and not stale:
             return {
                 "region": existing.as_dict(),
                 "bestaand": True,
@@ -575,7 +580,7 @@ def _main(argv=None) -> None:
     bbox = config._validate_bbox(args.bbox.split(","))
     try:
         result = provision(
-            args.slug, args.pbf_url, bbox, background=False
+            args.slug, args.pbf_url, bbox, background=False, force=True
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
     except Exception as exc:
