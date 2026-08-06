@@ -53,6 +53,46 @@ def test_gh_route_posts_selected_profile():
     assert result["distance_m"] == 1234
 
 
+def test_gh_round_trip_posts_algorithm_distance_seed_and_preferences():
+    captured = {}
+
+    def post(path, body):
+        captured["path"] = path
+        captured["body"] = body
+        return {
+            "paths": [
+                {
+                    "distance": 4800,
+                    "time": 900000,
+                    "ascend": 35,
+                    "descend": 35,
+                    "points": {
+                        "coordinates": [[3.87, 50.98, 10], [3.87, 50.98, 10]]
+                    },
+                }
+            ]
+        }
+
+    gh.round_trip(
+        (50.98, 3.87),
+        5000,
+        3,
+        profile="trail",
+        strict=True,
+        avoid_cobbles=True,
+        post_fn=post,
+    )
+
+    body = captured["body"]
+    assert captured["path"] == "/route"
+    assert body["points"] == [[3.87, 50.98]]
+    assert body["profile"] == "trail"
+    assert body["algorithm"] == "round_trip"
+    assert body["round_trip.distance"] == 5000
+    assert body["round_trip.seed"] == 3
+    assert len(body["custom_model"]["priority"]) == 5
+
+
 def test_new_draft_stores_and_routes_with_profile():
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):

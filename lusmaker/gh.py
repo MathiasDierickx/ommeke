@@ -62,6 +62,56 @@ AVOID_CONCRETE_PRIORITY = [
 ]
 
 
+def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
+                  strict: bool = False, avoid_cobbles: bool = False,
+                  avoid_concrete: bool = False) -> dict:
+    """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes."""
+    custom = {"priority": list(STRICT_PRIORITY) if strict else []}
+    if avoid_cobbles:
+        custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
+    if avoid_concrete:
+        custom["priority"] = custom["priority"] + list(AVOID_CONCRETE_PRIORITY)
+    if avoid_polygons:
+        features = []
+        for k, item in enumerate(avoid_polygons):
+            ring = item["ring"] if isinstance(item, dict) else item
+            factor = item.get("factor", priority_factor) if isinstance(item, dict) else priority_factor
+            features.append(
+                {
+                    "type": "Feature",
+                    "id": f"corridor{k}",
+                    "properties": {},
+                    "geometry": {"type": "Polygon", "coordinates": [ring]},
+                }
+            )
+            custom["priority"].append(
+                {"if": f"in_corridor{k}", "multiply_by": str(factor)}
+            )
+        custom["areas"] = {"type": "FeatureCollection", "features": features}
+    return custom
+
+
+def _path_result(data: dict, details: bool = False) -> dict:
+    if not data.get("paths"):
+        raise GhError("geen route gevonden")
+    p = data["paths"][0]
+    coords = [
+        (lat, lon, (c[2] if len(c) > 2 else None))
+        for c in p["points"]["coordinates"]
+        for lon, lat in [(c[0], c[1])]
+    ]
+    out = {
+        "distance_m": p["distance"],
+        "time_s": p["time"] / 1000.0,
+        "ascend_m": round(p.get("ascend", 0.0), 1),
+        "descend_m": round(p.get("descend", 0.0), 1),
+        "coords": coords,
+    }
+    if details:
+        out["details"] = p.get("details", {})
+    return out
+
+
 def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           strict: bool = False, avoid_cobbles: bool = False,
           avoid_concrete: bool = False, details: bool = False,
@@ -95,42 +145,34 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         body["headings"] = [round(start_heading, 1)]
     if details:
         body["details"] = ["surface", "road_class"]
-    custom = {"priority": list(STRICT_PRIORITY) if strict else []}
-    if avoid_cobbles:
-        custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
-    if avoid_concrete:
-        custom["priority"] = custom["priority"] + list(AVOID_CONCRETE_PRIORITY)
-    if avoid_polygons:
-        features = []
-        for k, item in enumerate(avoid_polygons):
-            ring = item["ring"] if isinstance(item, dict) else item
-            factor = item.get("factor", priority_factor) if isinstance(item, dict) else priority_factor
-            features.append(
-                {
-                    "type": "Feature",
-                    "id": f"corridor{k}",
-                    "properties": {},
-                    "geometry": {"type": "Polygon", "coordinates": [ring]},
-                }
-            )
-            custom["priority"].append(
-                {"if": f"in_corridor{k}", "multiply_by": str(factor)}
-            )
-        custom["areas"] = {"type": "FeatureCollection", "features": features}
-    body["custom_model"] = custom
+    body["custom_model"] = _custom_model(
+        avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete
+    )
 
     data = post_fn("/route", body)
-    if not data.get("paths"):
-        raise GhError("geen route gevonden")
-    p = data["paths"][0]
-    coords = [(lat, lon, (c[2] if len(c) > 2 else None)) for c in p["points"]["coordinates"] for lon, lat in [(c[0], c[1])]]
-    out = {
-        "distance_m": p["distance"],
-        "time_s": p["time"] / 1000.0,
-        "ascend_m": round(p.get("ascend", 0.0), 1),
-        "descend_m": round(p.get("descend", 0.0), 1),
-        "coords": coords,
+    return _path_result(data, details)
+
+
+def round_trip(point, distance_m: float, seed: int,
+               profile: str = config.GH_PROFILE, avoid_polygons=None,
+               priority_factor: float = 0.30, strict: bool = False,
+               avoid_cobbles: bool = False, avoid_concrete: bool = False,
+               *, post_fn=_post) -> dict:
+    """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
+    lat, lon = point
+    body = {
+        "points": [[lon, lat]],
+        "profile": profile,
+        "algorithm": "round_trip",
+        "round_trip.distance": distance_m,
+        "round_trip.seed": seed,
+        "elevation": True,
+        "points_encoded": False,
+        "instructions": False,
+        "locale": "nl",
+        "ch.disable": True,
+        "custom_model": _custom_model(
+            avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete
+        ),
     }
-    if details:
-        out["details"] = p.get("details", {})
-    return out
+    return _path_result(post_fn("/route", body))
