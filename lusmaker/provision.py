@@ -340,11 +340,18 @@ def provision(
     home = home or config.home_path()
     existing = _registered(slug, home)
     if existing is not None:
-        return {
-            "region": existing.as_dict(),
-            "bestaand": True,
-            "provisioning": region_status(slug, home=home),
-        }
+        try:
+            status = region_status(slug, home=home)
+        except RuntimeError:
+            status = None
+        # alleen kortsluiten als de vorige provisioning niet mislukt is;
+        # een 'fout'-status (bv. transiente 502 upstream) mag opnieuw
+        if status is not None and status.get("status") != "fout":
+            return {
+                "region": existing.as_dict(),
+                "bestaand": True,
+                "provisioning": status,
+            }
 
     bbox = config._validate_bbox(bbox)
     if background:
@@ -395,10 +402,14 @@ def provision(
             exec_func=exec_func,
         )
         geofabrik = geofabrik_path_from_url(pbf_url)
-        add_kwargs = {"home": home}
-        if port_available is not None:
-            add_kwargs["available"] = port_available
-        region = regions.add(slug, geofabrik, bbox, **add_kwargs)
+        if existing is not None:
+            # herprovisioning: registratie (incl. poort) hergebruiken
+            region = existing
+        else:
+            add_kwargs = {"home": home}
+            if port_available is not None:
+                add_kwargs["available"] = port_available
+            region = regions.add(slug, geofabrik, bbox, **add_kwargs)
         if cached is None:
             write_provision_state(slug, "bouwen", 30, home=home)
             build_result = build_func(region, pbf_url)
