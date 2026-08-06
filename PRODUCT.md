@@ -76,3 +76,17 @@ HTTP(S)- of S3-caches hergebruiken.
 - OSM-traces-API is een gunst, geen SLA → cachen, éénmalig per regio, nooit
   runtime-afhankelijk.
 - LLM-kosten per route → M1 drukt het aantal tool-calls fors.
+
+## Token-economie
+
+In de hosted versie betalen we voor drie dingen: elke tool-round-trip stuurt
+de gesprekscontext opnieuw mee, uitgebreide route-antwoorden kosten
+resultaattokens, en ieder aangeboden toolschema neemt ruimte in de
+systeemprompt. Daarom handelen `plan_route` en `adjust_route` het normale pad
+in één call af en geven ze een compact resultaat zonder legs, coördinaten of
+geneste berekeningen. Detailinformatie blijft opt-in via `route_details`.
+
+`lus-mcp --lite` beperkt bovendien de schema-overhead tot zeven tools:
+`plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
+`ensure_region`, `region_status` en `list_drafts`. Self-hosted en
+ontwikkelomgevingen houden zonder die vlag de volledige toolset.

@@ -100,6 +100,45 @@ De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.
 GraphHopper moet draaien wanneer MCP-tools routeren, suggesties berekenen of
 optimaliseren; controleer dit met `lus status`.
 
+Voor het normale gesprek volstaan meestal twee composiet-tools:
+`plan_route(...)` maakt en routeert een lus en schrijft meteen
+`<LUSMAKER_HOME>/exports/<draft>/route.gpx` plus `preview.html`;
+`adjust_route(...)` bundelt latere toevoegingen, verwijderingen,
+vermijdplaatsen en een nieuw afstandsbudget in één call. Beide antwoorden zijn
+compact en bevatten een direct bruikbare Nederlandse samenvattingszin.
+
+Start voor hosted gebruik de lite-modus om alleen de zeven token-zuinige tools
+aan te bieden:
+
+```bash
+.venv/bin/lus-mcp --lite
+```
+
+In een MCP-config voeg je `"--lite"` als argument toe:
+
+```json
+{
+  "mcpServers": {
+    "lusmaker": {
+      "command": "/absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp",
+      "args": ["--lite"]
+    }
+  }
+}
+```
+
+Lite bevat `plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
+`ensure_region`, `region_status` en `list_drafts`. `route_details` is de
+expliciete uitweg voor legs en volledige kwaliteitsmetrieken; zonder
+`--lite` blijft de volledige set van 20 tools beschikbaar.
+
+Dezelfde composiet-flow bestaat in de CLI:
+
+```bash
+lus plan-route --start Wetteren --max-km 45 --via-klim Berendries
+lus adjust-route <draft-id> --voeg-klim-toe Molenberg --max-km 45
+```
+
 ## Regiopacks
 
 Zonder `~/.lusmaker/regions.json` gebruikt Lusmaker exact de bestaande

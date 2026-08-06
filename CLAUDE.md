@@ -6,6 +6,20 @@ Berendries, rustige wegen, geen twee keer dezelfde baan") naar CLI-stappen, en
 speel vragen/suggesties van de tool terug naar de gebruiker.
 Dezelfde flow is ook beschikbaar via de stdio MCP-server `lus-mcp`.
 
+## Begin met de composiet-tools
+
+Gebruik via MCP eerst `plan_route`: die maakt de draft, verwerkt klimmen en
+vermijdplaatsen, routeert of optimaliseert, en levert meteen GPX plus preview.
+Gebruik daarna `adjust_route` om meerdere wijzigingen in één call toe te
+passen. Grijp alleen naar `new_draft`, `add_climb`, `avoid_place`,
+`route_draft`, `export_gpx` en de andere granulaire tools als de composiet-flow
+een uitzonderlijke handeling niet kan uitdrukken.
+
+Dit beperkt de drie hosted kostenposten tegelijk: minder round-trips die de
+gesprekscontext opnieuw meesturen, kleinere resultaten zonder geometrie en
+legs, en minder toolschema's in de systeemprompt. `route_details` geeft legs en
+de volledige kwaliteitsmetrieken alleen wanneer de gebruiker ernaar vraagt.
+
 ## Aanroepen
 
 ```bash
@@ -16,6 +30,11 @@ Alle output is JSON. Fouten komen als `{"error": "..."}` met exit code 1.
 GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 
 ## Typische flow
+
+Via MCP vervangt één `plan_route(...)` normaal stappen 1 t/m 6 en de export;
+een latere `adjust_route(...)` bundelt alle gevraagde wijzigingen. De
+onderstaande granulaire flow blijft beschikbaar als uitwijkmogelijkheid en
+voor CLI-gebruik.
 
 0. Als de plaats niet lokaal geocodet kan worden of geen passende regio
    beschikbaar is: roep `ensure_region(place)` aan (CLI:
