@@ -323,12 +323,12 @@ def _bearing(a, b) -> float:
     return (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
 
 
-def route(d: dict, climb_db: dict, router=gh.route) -> dict:
+def route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
     with region_scope(d):
-        return _route(d, climb_db, router)
+        return _route(d, climb_db, router, post_fn=post_fn)
 
 
-def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
+def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
     legs = _waypoints(d, climb_db)
     if not legs:
@@ -345,14 +345,19 @@ def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
     for leg in legs:
         is_climb = "climb" in leg or "climb_segment" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
+        route_kwargs = {
+            "avoid_polygons": place_areas(d) if is_climb else avoid,
+            "strict": d.get("strict", False),
+            "avoid_cobbles": d.get("avoid_cobbles", False),
+            "avoid_concrete": d.get("avoid_concrete", False),
+            "details": True,
+            "profile": profile,
+        }
+        if post_fn is not None:
+            route_kwargs["post_fn"] = post_fn
         res = router(
             leg["points"],
-            avoid_polygons=place_areas(d) if is_climb else avoid,
-            strict=d.get("strict", False),
-            avoid_cobbles=d.get("avoid_cobbles", False),
-            avoid_concrete=d.get("avoid_concrete", False),
-            details=True,
-            profile=profile,
+            **route_kwargs,
         )
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)

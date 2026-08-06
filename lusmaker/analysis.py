@@ -103,10 +103,15 @@ def route_stats(legs_geometry, legs_details) -> dict:
         kassei += detail_meters(leg, det.get("surface", []), COBBLE_SURFACES | {"cobblestone"})
         steenweg += detail_meters(leg, det.get("road_class", []), BIG_ROADS)
         offroad += detail_meters(leg, det.get("road_class", []), OFFROAD_CLASSES)
+    try:
+        crossings = count_crossings(all_coords)
+    except FileNotFoundError:
+        # Cassette-replay bevat alle GH-details maar bewust geen regiocache.
+        crossings = None
     out = {
         "kassei_m": round(kassei),
         "steenweg_m": round(steenweg),
-        "steenweg_kruisingen": count_crossings(all_coords),
+        "steenweg_kruisingen": crossings,
         "heen_en_weer_m": round(geo.self_retrace_m(legs_geometry)),
         "offroad_pct": round(offroad / max(geo.path_length([(c[0], c[1]) for leg in legs_geometry for c in leg]), 1) * 100, 1),
     }
