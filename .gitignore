@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 *.gpx
 .DS_Store
+*.html
