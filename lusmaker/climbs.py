@@ -41,7 +41,12 @@ def _components(ways):
 
 
 def _order_chain(ways, idxs):
-    """Langste doorlopende ketting binnen een component (DFS over alle bladeren)."""
+    """Langste doorlopende ketting binnen een component (begrensde DFS).
+
+    De exhaustieve zoektocht is exponentieel op grid-achtige componenten
+    (poldernetten met gelijknamige dijkwegen); een stappenbudget begrenst
+    dat, met de greedy-tot-dan-toe-beste ketting als resultaat.
+    """
     adj = defaultdict(list)  # endpoint-ref -> [(way_idx, begint_hier)]
     for k in idxs:
         _wid, refs, _coords, _tags = ways[k]
@@ -53,14 +58,21 @@ def _order_chain(ways, idxs):
 
     best_path = []
     best_len = -1.0
+    budget = [20000]  # max DFS-uitbreidingen voor de hele component
 
     def dfs(cur_ref, used, path, plen):
         nonlocal best_path, best_len
-        extended = False
+        if plen > best_len:
+            best_len = plen
+            best_path = list(path)
+        if budget[0] <= 0:
+            return
         for k, first in adj[cur_ref]:
             if k in used:
                 continue
-            extended = True
+            budget[0] -= 1
+            if budget[0] <= 0:
+                return
             refs = ways[k][1]
             nxt = refs[-1] if first else refs[0]
             used.add(k)
@@ -68,12 +80,11 @@ def _order_chain(ways, idxs):
             dfs(nxt, used, path, plen + way_len(k))
             path.pop()
             used.remove(k)
-        if not extended and plen > best_len:
-            best_len = plen
-            best_path = list(path)
 
     leaves = [r for r, lst in adj.items() if len(lst) == 1] or [ways[idxs[0]][1][0]]
     for leaf in leaves:
+        if budget[0] <= 0:
+            break
         dfs(leaf, set(), [], 0.0)
 
     merged, way_ids = [], []
