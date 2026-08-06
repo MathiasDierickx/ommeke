@@ -105,15 +105,28 @@ def fetch_osm(max_pages_per_tile: int = 150) -> dict:
     for t, (l, b, r, tp) in enumerate(tiles):
         if t in done_tiles:
             continue
+        tile_failed = False
         for page in range(max_pages_per_tile):
             url = (f"https://api.openstreetmap.org/api/0.6/trackpoints"
                    f"?bbox={l:.4f},{b:.4f},{r:.4f},{tp:.4f}&page={page}")
             req = urllib.request.Request(url, headers={"User-Agent": "lusmaker/0.1 (hobby routeplanner)"})
-            try:
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    data = resp.read()
-            except OSError as e:
-                print(f"[heat] tegel {t} pagina {page}: {e} — stop deze tegel", file=sys.stderr)
+            data = None
+            for attempt in range(3):
+                try:
+                    with urllib.request.urlopen(req, timeout=60) as resp:
+                        data = resp.read()
+                    break
+                except OSError as e:
+                    code = getattr(e, "code", None)
+                    if code in (429, 503) and attempt < 2:
+                        wait = 30 * (attempt + 1)
+                        print(f"[heat] tegel {t} pagina {page}: {code}, {wait}s backoff", file=sys.stderr)
+                        time.sleep(wait)
+                        continue
+                    print(f"[heat] tegel {t} pagina {page}: {e} — tegel later hervatten", file=sys.stderr)
+                    tile_failed = True
+                    break
+            if tile_failed:
                 break
             pts = []
             for _ev, el in ET.iterparse(__import__("io").BytesIO(data)):
@@ -138,7 +151,8 @@ def fetch_osm(max_pages_per_tile: int = 150) -> dict:
             if page % 20 == 0:
                 print(f"[heat] tegel {t + 1}/4 pagina {page}: {total} punten totaal", file=sys.stderr)
             time.sleep(0.25)
-        done_tiles.add(t)
+        if not tile_failed:
+            done_tiles.add(t)
         _save()
 
     _save()
