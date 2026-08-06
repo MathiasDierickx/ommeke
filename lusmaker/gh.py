@@ -172,7 +172,7 @@ def round_trip(point, distance_m: float, seed: int,
                profile: str = config.GH_PROFILE, avoid_polygons=None,
                priority_factor: float = 0.30, strict: bool = False,
                avoid_cobbles: bool = False, avoid_concrete: bool = False,
-               *, post_fn=_post) -> dict:
+               details: bool = False, *, post_fn=_post) -> dict:
     """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
     lat, lon = point
     body = {
@@ -191,4 +191,6 @@ def round_trip(point, distance_m: float, seed: int,
             profile=profile,
         ),
     }
-    return _path_result(post_fn("/route", body))
+    if details:
+        body["details"] = ["surface", "road_class"]
+    return _path_result(post_fn("/route", body), details)

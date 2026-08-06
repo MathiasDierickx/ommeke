@@ -566,8 +566,8 @@ def _eligible_candidates(candidates: list[dict], budget_km: float,
 
 def _select_candidate(candidates: list[dict], objective: str) -> dict | None:
     """Kies deterministisch de beste kandidaat voor het gevraagde doel."""
-    if objective not in ("hm", "hm-per-km"):
-        raise DraftError("objective moet 'hm' of 'hm-per-km' zijn")
+    if objective not in ("hm", "hm-per-km", "offroad"):
+        raise DraftError("objective moet 'hm', 'hm-per-km' of 'offroad' zijn")
     if not candidates:
         return None
 
@@ -606,8 +606,18 @@ def _round_trip_anchor(d: dict, climb_db: dict) -> tuple[tuple[float, float], st
     return (lat, lon), label
 
 
+def _offroad_m(candidate) -> float:
+    """Offroad-meters van een rondrit-kandidaat uit de road_class-details."""
+    from . import analysis
+
+    coords = [(p[0], p[1]) for p in candidate.get("coords", [])]
+    det = candidate.get("details", {})
+    return analysis.detail_meters(coords, det.get("road_class", []), analysis.OFFROAD_CLASSES)
+
+
 def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
-                          router=route, round_trip_fn=gh.round_trip) -> dict:
+                          router=route, round_trip_fn=gh.round_trip,
+                          objective: str = "hm") -> dict:
     """Vul restbudget met de beste van vijf niet-overlappende GH-rondritten."""
     if not d.get("loop"):
         return {"filled": False, "reason": "draft is geen lus"}
@@ -636,7 +646,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     candidates = []
     for seed in range(5):
         try:
-            candidate = round_trip_fn(anchor, remaining_m * 0.9, seed, **preferences)
+            candidate = round_trip_fn(anchor, remaining_m * 0.9, seed,
+                                      details=(objective == "offroad"), **preferences)
         except gh.GhError:
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
@@ -649,7 +660,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             geo.retrace_m(list(reversed(coords)), existing),
         ) > 300.0:
             continue
-        candidates.append((candidate.get("ascend_m", 0), -seed, seed, candidate, coords))
+        score = _offroad_m(candidate) if objective == "offroad" else candidate.get("ascend_m", 0)
+        candidates.append((score, -seed, seed, candidate, coords))
 
     if not candidates:
         return {
@@ -725,7 +737,8 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
     _select_candidate([], objective)
 
     if not d["climbs"] and d.get("loop"):
-        anchor = _pick_anchor(d["start"], climb_db, max_km)
+        # offroad-doel jaagt niet op klimmen: direct naar de rondrit-opvulling
+        anchor = None if objective == "offroad" else _pick_anchor(d["start"], climb_db, max_km)
         if anchor is None:
             if not fill:
                 raise DraftError("geen klim bereikbaar binnen het budget")
@@ -754,6 +767,9 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
     rounds = []
     banned = set()
     stopped_because = "maximum aantal rondes bereikt"
+    if objective == "offroad":
+        max_rounds = 0
+        stopped_because = "offroad-doel: alleen rondrit-opvulling"
     for round_number in range(1, max_rounds + 1):
         budget_km = max_km - d["computed"]["total_km"]
         if budget_km < 1.0:
@@ -819,6 +835,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
             max_km * 1000.0,
             router=route_fn,
             round_trip_fn=round_trip_fn,
+            objective=objective,
         )
         if fill_result["filled"]:
             rounds.append(

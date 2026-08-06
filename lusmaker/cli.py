@@ -537,7 +537,7 @@ def main(argv=None):
     _region_arg(s)
     s.add_argument("id")
     s.add_argument("--max-km", type=float, required=True, help="hard afstandsbudget")
-    s.add_argument("--objective", choices=("hm", "hm-per-km"), default="hm")
+    s.add_argument("--objective", choices=("hm", "hm-per-km", "offroad"), default="hm")
     s.add_argument("--min-ratio", type=float, default=8.0, help="minimaal aantal hoogtemeters per extra km")
     s.add_argument("--max-rounds", type=int, default=12, help="maximum aantal greedy-rondes")
     s.add_argument(
