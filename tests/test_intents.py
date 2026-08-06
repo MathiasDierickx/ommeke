@@ -156,6 +156,35 @@ def test_plan_route_injects_route_and_export_functions():
     assert result["draft"] == "abc123"
 
 
+def test_plan_route_passes_no_fill_to_optimizer():
+    state = _routed_draft()
+    state["climbs"] = []
+    optimize_calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        optimize_calls.append(kwargs)
+        d["computed"] = _routed_draft()["computed"]
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "Wetteren",
+            max_km=10,
+            geen_opvulling=True,
+            create_fn=lambda **_kwargs: {"id": state["id"]},
+            load_fn=lambda _draft_id: state,
+            optimize_fn=optimize_fn,
+            climbs_fn=_climbs,
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            exports_root=Path(temp_dir),
+        )
+
+    assert optimize_calls == [{"max_km": 10, "fill": False}]
+
+
 def test_adjust_route_batches_edits_before_one_reroute():
     state = _routed_draft()
     state["climbs"] = ["diepestraat"]

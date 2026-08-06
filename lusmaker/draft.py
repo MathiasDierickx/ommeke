@@ -1,4 +1,5 @@
 """Draft-routes: opbouwen, routeren (met lus-constraint), suggesties, opslag."""
+import copy
 import json
 import time
 import uuid
@@ -65,6 +66,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "avoid_concrete": avoid_concrete,
         "avoid_places": [],  # [{label, lat, lon, radius_km, factor}]
         "climbs": [],    # geordende lijst klim-ids
+        "opvullingen": [],  # persistente round_trip-legs met via-punten
         "computed": None,
     }
     save(d)
@@ -219,7 +221,74 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
     elif d.get("end"):
         end = (d["end"]["lat"], d["end"]["lon"])
         legs.append({"from": prev_label, "to": d["end"].get("label", "einde"), "points": [prev_pt, end]})
-    return legs
+    fills = list(d.get("opvullingen", []))
+    if not fills:
+        return legs
+
+    def at_same_point(a, b):
+        return geo.haversine(a[0], a[1], b[0], b[1]) < 10.0
+
+    integrated = []
+    remaining = list(fills)
+    for leg in legs:
+        matches = []
+        for fill in remaining:
+            for point_i, point in enumerate(leg["points"]):
+                if at_same_point(fill["anchor"], point):
+                    matches.append((point_i, fill))
+                    break
+        matches.sort(key=lambda item: item[0])
+        if not matches:
+            integrated.append(leg)
+            continue
+
+        cursor = 0
+        from_label = leg["from"]
+        for point_i, fill in matches:
+            label = fill.get("label", "opvulpunt")
+            if point_i > cursor:
+                before = {
+                    **leg,
+                    "from": from_label,
+                    "to": label,
+                    "points": leg["points"][cursor : point_i + 1],
+                }
+                if cursor > 0 and before.get("climb"):
+                    before["climb_segment"] = before.pop("climb")
+                integrated.append(before)
+            integrated.append(
+                {
+                    "from": label,
+                    "to": label,
+                    "points": [tuple(point) for point in fill["points"]],
+                    "opvulling": True,
+                }
+            )
+            remaining.remove(fill)
+            cursor = point_i
+            from_label = label
+        if cursor < len(leg["points"]) - 1:
+            after = {
+                **leg,
+                "from": from_label,
+                "points": leg["points"][cursor:],
+            }
+            if cursor > 0 and after.get("climb"):
+                after["climb_segment"] = after.pop("climb")
+            integrated.append(after)
+        elif cursor == 0 and len(leg["points"]) > 1:
+            integrated.append(leg)
+    for fill in remaining:
+        label = fill.get("label", "opvulpunt")
+        integrated.append(
+            {
+                "from": label,
+                "to": label,
+                "points": [tuple(point) for point in fill["points"]],
+                "opvulling": True,
+            }
+        )
+    return integrated
 
 
 def _circle_ring(lat, lon, radius_km, n=24):
@@ -272,7 +341,7 @@ def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
     profile = d.get("profile", config.GH_PROFILE)
 
     for leg in legs:
-        is_climb = "climb" in leg
+        is_climb = "climb" in leg or "climb_segment" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
         res = router(
             leg["points"],
@@ -296,8 +365,7 @@ def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
         total_m += res["distance_m"]
         ascend += res["ascend_m"]
         descend += res["descend_m"]
-        computed_legs.append(
-            {
+        computed_leg = {
                 "from": leg["from"],
                 "to": leg["to"],
                 "km": round(res["distance_m"] / 1000, 2),
@@ -305,7 +373,11 @@ def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
                 "climb": leg.get("climb"),
                 "coords": [[round(a, 6), round(b, 6), (round(e, 1) if e is not None else None)] for a, b, e in res["coords"]],
             }
-        )
+        if leg.get("opvulling"):
+            computed_leg["opvulling"] = True
+        if leg.get("climb_segment"):
+            computed_leg["climb_segment"] = leg["climb_segment"]
+        computed_legs.append(computed_leg)
 
     d["computed"] = {
         "routed_at": time.strftime("%Y-%m-%d %H:%M"),
@@ -363,7 +435,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
         top = tuple(c["top"])
         ests = []
         for i, (meta, coords) in enumerate(zip(legs_meta, legs_geo)):
-            if meta.get("climb"):
+            if meta.get("climb") or meta.get("climb_segment"):
                 continue  # niet invoegen midden in een andere klim
             a = tuple(coords[0][:2])
             b = tuple(coords[-1][:2])
@@ -502,19 +574,139 @@ def _select_candidate(candidates: list[dict], objective: str) -> dict | None:
     return sorted(candidates, key=key)[0]
 
 
+def _round_trip_anchor(d: dict, climb_db: dict) -> tuple[tuple[float, float], str]:
+    """Kies het route-waypoint dat hemelsbreed het verst van start ligt."""
+    start = (d["start"]["lat"], d["start"]["lon"])
+    if not d.get("climbs"):
+        return start, "start"
+
+    options = []
+    base = copy.deepcopy(d)
+    base["opvullingen"] = []
+    for leg in _waypoints(base, climb_db):
+        for point_i, point in enumerate(leg["points"]):
+            if point_i == 0:
+                label = leg["from"]
+            elif point_i == len(leg["points"]) - 1:
+                label = leg["to"]
+            else:
+                label = "opvulpunt"
+            distance = geo.haversine(start[0], start[1], point[0], point[1])
+            options.append((distance, point[0], point[1], label))
+    if not options:
+        return start, "start"
+    _distance, lat, lon, label = max(options)
+    return (lat, lon), label
+
+
+def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
+                          router=route, round_trip_fn=gh.round_trip) -> dict:
+    """Vul restbudget met de beste van vijf niet-overlappende GH-rondritten."""
+    if not d.get("loop"):
+        return {"filled": False, "reason": "draft is geen lus"}
+    if not d.get("computed"):
+        return {"filled": False, "reason": "draft is nog niet gerouteerd"}
+
+    current_m = d["computed"]["total_km"] * 1000.0
+    remaining_m = budget_m - current_m
+    if remaining_m < 1500.0:
+        return {"filled": False, "reason": "minder dan 1,5 km opvulbudget over"}
+
+    anchor, label = _round_trip_anchor(d, climb_db)
+    existing = [
+        (point[0], point[1])
+        for meta, leg in zip(d["computed"].get("legs", []), d.get("_geometry", []))
+        if not meta.get("opvulling")
+        for point in leg
+    ]
+    preferences = {
+        "profile": d.get("profile", config.GH_PROFILE),
+        "strict": d.get("strict", False),
+        "avoid_cobbles": d.get("avoid_cobbles", False),
+        "avoid_concrete": d.get("avoid_concrete", False),
+        "avoid_polygons": place_areas(d),
+    }
+    candidates = []
+    for seed in range(5):
+        try:
+            candidate = round_trip_fn(anchor, remaining_m, seed, **preferences)
+        except gh.GhError:
+            continue
+        coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
+        if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:
+            continue
+        if existing and max(
+            geo.retrace_m(existing, coords),
+            geo.retrace_m(existing, list(reversed(coords))),
+            geo.retrace_m(coords, existing),
+            geo.retrace_m(list(reversed(coords)), existing),
+        ) > 120.0:
+            continue
+        candidates.append((candidate.get("ascend_m", 0), -seed, seed, candidate, coords))
+
+    if not candidates:
+        return {
+            "filled": False,
+            "reason": "geen round_trip-kandidaat zonder overlap binnen budget",
+        }
+
+    before = copy.deepcopy(d)
+    for _ascend, _seed_order, seed, candidate, coords in sorted(candidates, reverse=True):
+        via = geo.resample(coords, 400.0)
+        via[0] = anchor
+        via[-1] = anchor
+        d.setdefault("opvullingen", []).append(
+            {
+                "anchor": [anchor[0], anchor[1]],
+                "label": label,
+                "points": [[point[0], point[1]] for point in via],
+                "seed": seed,
+            }
+        )
+        d["computed"] = None
+        d.pop("_geometry", None)
+        try:
+            router(d, climb_db)
+        except (DraftError, gh.GhError):
+            d.clear()
+            d.update(copy.deepcopy(before))
+            continue
+        if d["computed"]["total_km"] * 1000.0 <= budget_m:
+            return {
+                "filled": True,
+                "seed": seed,
+                "extra_km": round(d["computed"]["total_km"] - current_m / 1000.0, 1),
+                "extra_hoogtemeters": round(
+                    d["computed"]["ascend_m"] - before["computed"]["ascend_m"]
+                ),
+            }
+        d.clear()
+        d.update(copy.deepcopy(before))
+
+    return {
+        "filled": False,
+        "reason": "round_trip-kandidaten overschrijden budget na integratie",
+    }
+
+
 def optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
              min_ratio: float = 8.0, max_rounds: int = 12,
-             route_fn=route, candidates_fn=_candidates) -> dict:
+             route_fn=route, candidates_fn=_candidates, fill: bool = True,
+             round_trip_fn=gh.round_trip) -> dict:
     with region_scope(d):
         return _optimize(
             d, climb_db, max_km, objective, min_ratio, max_rounds,
-            route_fn, candidates_fn,
+            route_fn=route_fn,
+            candidates_fn=candidates_fn,
+            fill=fill,
+            round_trip_fn=round_trip_fn,
         )
 
 
 def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
               min_ratio: float = 8.0, max_rounds: int = 12,
-              route_fn=route, candidates_fn=_candidates) -> dict:
+              route_fn=route, candidates_fn=_candidates, fill: bool = True,
+              round_trip_fn=gh.round_trip) -> dict:
     """Vul een draft greedy met klimmen binnen een hard afstandsbudget."""
     if max_km <= 0:
         raise DraftError("max-km moet groter dan 0 zijn")
@@ -528,12 +720,23 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
     if not d["climbs"] and d.get("loop"):
         anchor = _pick_anchor(d["start"], climb_db, max_km)
         if anchor is None:
-            raise DraftError("geen klim bereikbaar binnen het budget")
-        d["climbs"].append(anchor["id"])
-        d["computed"] = None
-        d.pop("_geometry", None)
+            if not fill:
+                raise DraftError("geen klim bereikbaar binnen het budget")
+            d["computed"] = {
+                "routed_at": time.strftime("%Y-%m-%d %H:%M"),
+                "total_km": 0.0,
+                "ascend_m": 0,
+                "descend_m": 0,
+                "legs": [],
+                "kwaliteit": {"heen_en_weer_m": 0},
+            }
+            d["_geometry"] = []
+        else:
+            d["climbs"].append(anchor["id"])
+            d["computed"] = None
+            d.pop("_geometry", None)
 
-    if not d.get("computed") or not d.get("_geometry"):
+    if not d.get("computed") or (not d.get("_geometry") and d["climbs"]):
         route_fn(d, climb_db)
     if d["computed"]["total_km"] > max_km:
         raise DraftError(
@@ -548,6 +751,9 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
         budget_km = max_km - d["computed"]["total_km"]
         if budget_km < 1.0:
             stopped_because = "minder dan 1 km budget over"
+            break
+        if not d["climbs"] and not d.get("_geometry"):
+            stopped_because = "geen klim bereikbaar; round_trip vanaf start"
             break
 
         candidates = candidates_fn(
@@ -597,6 +803,30 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
             round_result["status"] = "geaccepteerd"
             save(d)
         rounds.append(round_result)
+
+    remaining_m = (max_km - d["computed"]["total_km"]) * 1000.0
+    if fill and d.get("loop") and remaining_m >= 1500.0:
+        fill_result = _fill_with_round_trip(
+            d,
+            climb_db,
+            max_km * 1000.0,
+            router=route_fn,
+            round_trip_fn=round_trip_fn,
+        )
+        if fill_result["filled"]:
+            rounds.append(
+                {
+                    "ronde": len(rounds) + 1,
+                    "status": "opgevuld (round_trip)",
+                    "extra_km": fill_result["extra_km"],
+                    "extra_hoogtemeters": fill_result["extra_hoogtemeters"],
+                    "totaal_na": d["computed"]["total_km"],
+                }
+            )
+            stopped_because = "resterend budget opgevuld met round_trip"
+        else:
+            stopped_because = fill_result["reason"]
+        save(d)
 
     return {
         "id": d["id"],

@@ -210,6 +210,7 @@ def plan_route(
     strict: bool = False,
     naam: str | None = None,
     activiteit: str = "fietsen",
+    geen_opvulling: bool = False,
 ) -> dict:
     """Maak en exporteer een fiets- of traillus vanuit één routewens."""
     return intents.plan_route(
@@ -224,6 +225,7 @@ def plan_route(
         strict=strict,
         naam=naam,
         activiteit=activiteit,
+        geen_opvulling=geen_opvulling,
     )
 
 
@@ -253,6 +255,7 @@ def optimize_draft(
     max_km: float,
     objective: str = "hm",
     min_ratio: float = 8.0,
+    geen_opvulling: bool = False,
 ) -> dict:
     """Vul de route greedy met klimmen binnen een hard afstandsbudget."""
     d = draft.load(draft_id)
@@ -263,6 +266,7 @@ def optimize_draft(
             max_km=max_km,
             objective=objective,
             min_ratio=min_ratio,
+            fill=not geen_opvulling,
         )
 
 

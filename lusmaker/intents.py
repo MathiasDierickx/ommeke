@@ -189,6 +189,7 @@ def plan_route(
     strict: bool = False,
     naam: str | None = None,
     activiteit: str = "fietsen",
+    geen_opvulling: bool = False,
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -225,7 +226,12 @@ def plan_route(
             add_climb_fn(draft_id, climb["id"])
         d = load_fn(draft_id)
         if doel == "hoogtemeters" and max_km is not None:
-            optimize_fn(d, climb_db, max_km=max_km)
+            optimize_fn(
+                d,
+                climb_db,
+                max_km=max_km,
+                fill=not geen_opvulling,
+            )
         else:
             route_fn(d, climb_db)
         d = load_fn(draft_id)

@@ -280,7 +280,7 @@ def cmd_draft_optimize(args):
         return draft.optimize(
             d, climbs.all_climbs(), max_km=args.max_km,
             objective=args.objective, min_ratio=args.min_ratio,
-            max_rounds=args.max_rounds,
+            max_rounds=args.max_rounds, fill=not args.geen_opvulling,
         )
 
 
@@ -317,6 +317,7 @@ def cmd_plan_route(args):
         strict=args.strict,
         naam=args.naam,
         activiteit=args.activiteit,
+        geen_opvulling=args.geen_opvulling,
     )
 
 
@@ -416,6 +417,11 @@ def main(argv=None):
         help="vermijd betonbanen niet extra",
     )
     s.add_argument("--strict", action="store_true")
+    s.add_argument(
+        "--geen-opvulling",
+        action="store_true",
+        help="vul resterend budget niet op met een GraphHopper-rondrit",
+    )
     s.add_argument("--naam")
     s.set_defaults(func=cmd_plan_route)
 
@@ -534,6 +540,11 @@ def main(argv=None):
     s.add_argument("--objective", choices=("hm", "hm-per-km"), default="hm")
     s.add_argument("--min-ratio", type=float, default=8.0, help="minimaal aantal hoogtemeters per extra km")
     s.add_argument("--max-rounds", type=int, default=12, help="maximum aantal greedy-rondes")
+    s.add_argument(
+        "--geen-opvulling",
+        action="store_true",
+        help="sla de round_trip-opvulling van resterend budget over",
+    )
     s.set_defaults(func=cmd_draft_optimize)
     s = dsub.add_parser("export", help="schrijf GPX")
     _region_arg(s)
