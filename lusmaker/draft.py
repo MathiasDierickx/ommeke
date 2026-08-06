@@ -425,7 +425,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             climb_xy = [(p[0], p[1]) for p in r2["coords"]]
             approach = geo.retrace_m(climb_xy, [(p[0], p[1]) for p in r1["coords"]])
             exit_ = geo.retrace_m(climb_xy, [(p[0], p[1]) for p in r3["coords"]])
-            if max(approach, exit_) > min(150.0, 0.4 * c["length_m"]):
+            if max(approach, exit_) > min(120.0, 0.45 * c["length_m"]):
                 continue
         prev = per_climb.get(cid)
         if prev and prev["extra_km"] <= extra_m / 1000:
@@ -562,6 +562,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
 
         climb_id = selected["climb"]["id"]
         position = selected["invoegen_op_positie"]
+        prev_retrace = (d["computed"].get("kwaliteit") or {}).get("heen_en_weer_m", 0)
         d["climbs"].insert(position, climb_id)
         d["computed"] = None
         d.pop("_geometry", None)
@@ -573,8 +574,19 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
             "voorspeld_extra_km": selected["extra_km"],
             "totaal_na": d["computed"]["total_km"],
         }
+        new_retrace = (d["computed"].get("kwaliteit") or {}).get("heen_en_weer_m", 0)
         if d["computed"]["total_km"] > max_km:
             round_result["status"] = "teruggedraaid (budget)"
+            d["climbs"].pop(position)
+            d["computed"] = None
+            d.pop("_geometry", None)
+            banned.add(climb_id)
+            route_fn(d, climb_db)
+            save(d)
+        elif new_retrace - prev_retrace > 120:
+            # de toevoeging maakte de lus heen-en-weer-achtig: terugdraaien
+            round_result["status"] = "teruggedraaid (heen-en-weer)"
+            round_result["heen_en_weer_delta_m"] = round(new_retrace - prev_retrace)
             d["climbs"].pop(position)
             d["computed"] = None
             d.pop("_geometry", None)
