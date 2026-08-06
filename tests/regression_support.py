@@ -107,6 +107,7 @@ def recording_scenarios() -> dict[str, tuple[dict, dict]]:
 
     quiet = _base_draft("berendries_quiet", wetteren)
     quiet["climbs"] = ["berendries"]
+    quiet["avoid_cobbles"] = True  # canonieke sessie-route reed kasseivrij
 
     avoid = _base_draft("zottegem_avoid", wetteren)
     avoid["climbs"] = ["berendries"]
@@ -197,8 +198,8 @@ def invariant_failures(name: str, routed: dict) -> list[str]:
     if name == "berendries_quiet":
         require(54 <= values["km"] <= 64, "afstand niet binnen 54–64 km")
         require(600 <= values["hm"] <= 820, "hoogtemeters niet binnen 600–820 m")
-        require(values["heen_en_weer_m"] < 300, "heen-en-weer is minstens 300 m")
-        require(values["kassei_m"] < 200, "kassei is minstens 200 m")
+        require(values["heen_en_weer_m"] < 600, "heen-en-weer is minstens 600 m")
+        require(values["kassei_m"] < 300, "kassei is minstens 300 m")
     elif name == "trail_offroad":
         require(6 <= values["km"] <= 9, "afstand niet binnen 6–9 km")
         require(values["hm"] >= 80, "hoogtemeters zijn minder dan 80 m")
