@@ -61,12 +61,23 @@ AVOID_CONCRETE_PRIORITY = [
     {"if": "surface == CONCRETE", "multiply_by": "0.60"},
 ]
 
+# trail-profiel: straten hard afstraffen zodat paden/tracks winnen
+# (request-side, geen graafherimport nodig)
+TRAIL_OFFROAD_PRIORITY = [
+    {"if": "road_class == SECONDARY", "multiply_by": "0.25"},
+    {"else_if": "road_class == TERTIARY", "multiply_by": "0.35"},
+    {"else_if": "road_class == RESIDENTIAL", "multiply_by": "0.55"},
+    {"else_if": "road_class == UNCLASSIFIED", "multiply_by": "0.70"},
+]
+
 
 def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   strict: bool = False, avoid_cobbles: bool = False,
-                  avoid_concrete: bool = False) -> dict:
+                  avoid_concrete: bool = False, profile: str = "") -> dict:
     """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes."""
     custom = {"priority": list(STRICT_PRIORITY) if strict else []}
+    if profile == "trail":
+        custom["priority"] = custom["priority"] + list(TRAIL_OFFROAD_PRIORITY)
     if avoid_cobbles:
         custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
     if avoid_concrete:
@@ -146,7 +157,8 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     if details:
         body["details"] = ["surface", "road_class"]
     body["custom_model"] = _custom_model(
-        avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete
+        avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
+        profile=profile,
     )
 
     data = post_fn("/route", body)
@@ -172,7 +184,8 @@ def round_trip(point, distance_m: float, seed: int,
         "locale": "nl",
         "ch.disable": True,
         "custom_model": _custom_model(
-            avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete
+            avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
+            profile=profile,
         ),
     }
     return _path_result(post_fn("/route", body))

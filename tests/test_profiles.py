@@ -90,7 +90,8 @@ def test_gh_round_trip_posts_algorithm_distance_seed_and_preferences():
     assert body["algorithm"] == "round_trip"
     assert body["round_trip.distance"] == 5000
     assert body["round_trip.seed"] == 3
-    assert len(body["custom_model"]["priority"]) == 5
+    # strict (4) + kasseien (1) + trail-offroadboost (4)
+    assert len(body["custom_model"]["priority"]) == 9
 
 
 def test_new_draft_stores_and_routes_with_profile():
