@@ -149,3 +149,41 @@ def corridor_polygons(geom, width_m: float = 90.0, seg_len_m: float = 1500.0,
         ring = left + right[::-1] + [left[0]]
         polys.append([[round(lon, 6), round(lat, 6)] for lat, lon in ring])
     return polys
+
+
+def _q12(p):
+    return (round(p[0] / 0.00011), round(p[1] / 0.00017))
+
+
+def retrace_m(coords_a, coords_b) -> float:
+    """Meters van coords_b die segmenten van coords_a in omgekeerde richting
+    herbelopen (12 m-kwantisatie). Voor heen-en-weer-detectie."""
+    fwd = set()
+    ra = resample(list(coords_a), 12.0)
+    for i in range(len(ra) - 1):
+        a, b = _q12(ra[i]), _q12(ra[i + 1])
+        if a != b:
+            fwd.add((a, b))
+    total = 0.0
+    rb = resample(list(coords_b), 12.0)
+    for i in range(len(rb) - 1):
+        a, b = _q12(rb[i]), _q12(rb[i + 1])
+        if a != b and (b, a) in fwd:
+            total += haversine(rb[i][0], rb[i][1], rb[i + 1][0], rb[i + 1][1])
+    return total
+
+
+def self_retrace_m(legs_coords) -> float:
+    """Totaal herbelopen meters binnen een volledige route (alle legs samen)."""
+    seen = set()
+    total = 0.0
+    for leg in legs_coords:
+        r = resample([(c[0], c[1]) for c in leg], 12.0)
+        for i in range(len(r) - 1):
+            a, b = _q12(r[i]), _q12(r[i + 1])
+            if a == b:
+                continue
+            if (b, a) in seen:
+                total += haversine(r[i][0], r[i][1], r[i + 1][0], r[i + 1][1])
+            seen.add((a, b))
+    return total

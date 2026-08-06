@@ -105,6 +105,7 @@ def route_stats(legs_geometry, legs_details) -> dict:
         "kassei_m": round(kassei),
         "steenweg_m": round(steenweg),
         "steenweg_kruisingen": count_crossings(all_coords),
+        "heen_en_weer_m": round(geo.self_retrace_m(legs_geometry)),
     }
     from . import heat
 

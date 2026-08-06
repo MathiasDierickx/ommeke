@@ -65,7 +65,8 @@ AVOID_CONCRETE_PRIORITY = [
 def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           strict: bool = False, avoid_cobbles: bool = False,
           avoid_concrete: bool = False, details: bool = False,
-          profile: str = config.GH_PROFILE, *, post_fn=_post) -> dict:
+          profile: str = config.GH_PROFILE, start_heading: float | None = None,
+          *, post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
 
     avoid_polygons: lijst van GeoJSON-ringen ([[lon,lat],...]) of dicts
@@ -84,7 +85,14 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         "instructions": False,
         "locale": "nl",
         "ch.disable": True,
+        # geen U-bochten op via-punten: voorkomt heen-en-weer-uitsteeksels
+        # bij klimvoeten en -toppen
+        "pass_through": True,
     }
+    if start_heading is not None:
+        # vertrek in de aankomstrichting van de vorige leg: voorkomt
+        # heen-en-weer-uitsteeksels op leg-grenzen
+        body["headings"] = [round(start_heading, 1)]
     if details:
         body["details"] = ["surface", "road_class"]
     custom = {"priority": list(STRICT_PRIORITY) if strict else []}

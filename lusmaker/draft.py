@@ -206,10 +206,13 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
         c = climb_db.get(cid)
         if not c:
             raise DraftError(f"klim '{cid}' niet in database (zie `lus climbs list`)")
-        foot, mid, top = tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])
+        foot, top = tuple(c["foot"]), tuple(c["top"])
+        # pin de klim op zijn volledige geometrie (via-punten elke ~150 m):
+        # voorkomt snap-uitsteeksels en parallelle sluiproutes
+        via = [tuple(p) for p in geo.resample([tuple(q) for q in c["geom"]], 150.0)]
         legs.append({"from": prev_label, "to": f"{c['name']} (voet)", "points": [prev_pt, foot]})
         legs.append({"from": f"{c['name']} (voet)", "to": f"{c['name']} (top)",
-                     "points": [foot, mid, top], "climb": cid})
+                     "points": via, "climb": cid})
         prev_label, prev_pt = f"{c['name']} (top)", top
     if d["loop"]:
         legs.append({"from": prev_label, "to": "start", "points": [prev_pt, start]})
@@ -236,6 +239,17 @@ def place_areas(d: dict) -> list[dict]:
         {"ring": _circle_ring(p["lat"], p["lon"], p["radius_km"]), "factor": p["factor"]}
         for p in d.get("avoid_places", [])
     ]
+
+
+def _bearing(a, b) -> float:
+    """Kompaskoers (graden, noord=0) van punt a naar punt b."""
+    import math
+
+    lat1, lat2 = math.radians(a[0]), math.radians(b[0])
+    dlon = math.radians(b[1] - a[1])
+    x = math.sin(dlon) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    return (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
 
 
 def route(d: dict, climb_db: dict, router=gh.route) -> dict:
@@ -272,10 +286,13 @@ def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
-            {"ring": r, "factor": 0.30}
+            {"ring": r, "factor": 0.12 if is_climb else 0.30}
             for r in geo.corridor_polygons(coords_latlon, seg_len_m=seg_len, protect=protect)
         )
         leg_details.append(res.get("details", {}))
+        if len(res["coords"]) >= 2:
+            tail = res["coords"][-2], res["coords"][-1]
+            prev_heading = _bearing((tail[0][0], tail[0][1]), (tail[1][0], tail[1][1]))
         total_m += res["distance_m"]
         ascend += res["ascend_m"]
         descend += res["descend_m"]
@@ -402,6 +419,14 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
         extra_up = r1["ascend_m"] + r2["ascend_m"] + r3["ascend_m"] - base_r["ascend_m"]
         if extra_m / 1000 > max_detour_km:
             continue
+        # lus-toets: als de aan- of afvoerroute de klim zelf herbeloopt is het
+        # een doodlopend uitsteeksel — geen mooie lus, dus verwerpen
+        if r1.get("coords") and r2.get("coords") and r3.get("coords"):
+            climb_xy = [(p[0], p[1]) for p in r2["coords"]]
+            approach = geo.retrace_m(climb_xy, [(p[0], p[1]) for p in r1["coords"]])
+            exit_ = geo.retrace_m(climb_xy, [(p[0], p[1]) for p in r3["coords"]])
+            if max(approach, exit_) > min(150.0, 0.4 * c["length_m"]):
+                continue
         prev = per_climb.get(cid)
         if prev and prev["extra_km"] <= extra_m / 1000:
             continue
