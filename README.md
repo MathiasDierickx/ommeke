@@ -93,6 +93,45 @@ lokaal.
 
 Alle output is JSON; zie `CLAUDE.md` voor de LLM-instructies.
 
+## Regressievangnet
+
+De gewone offline testsuite speelt drie canonieke GraphHopper-scenario's af
+uit gzipped cassettes en controleert kwaliteitsranges in plaats van exacte
+geometrie:
+
+```bash
+.venv/bin/python -m tests.run
+```
+
+Zolang een cassette nog niet is opgenomen, wordt alleen dat scenario met een
+duidelijke `SKIP` overgeslagen. Cassettes opnemen is bewust een handmatige
+actie met de lokale GraphHopper en default-regio:
+
+```bash
+.venv/bin/python -m tests.record_fixtures
+```
+
+Voor het trailscenario gebruikt de recorder de bestaande, gerouteerde
+Wetteren-draft met profiel `trail`, een afstand van 6–9 km en minstens één
+klim. Zijn er nul of meerdere kandidaten, wijs hem dan expliciet aan:
+
+```bash
+LUSMAKER_TRAIL_DRAFT_ID=<draft-id> .venv/bin/python -m tests.record_fixtures
+```
+
+Na een GraphHopper-upgrade, graafherimport of profielwijziging draait de
+live-smoke dezelfde fixture-scenario's tegen de echte router en print hij een
+metriekentabel:
+
+```bash
+.venv/bin/python -m tests.live_smoke
+```
+
+Een bewuste engine-wijziging die een cassette breekt vereist een heropname;
+vermeld dan de metriekverschuiving in de commitmessage. Een onverwachte
+cassettebreuk is een regressie. De recorder en live-smoke zijn netwerk/GH-tests
+en draaien nooit mee in `tests.run`.
+
 ## MCP
 
 Dezelfde routeflow is beschikbaar als lokale MCP-server via stdio. Vervang

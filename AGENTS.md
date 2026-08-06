@@ -31,6 +31,13 @@ bovenop een lokale GraphHopper. Lees `PRODUCT.md` voor de richting en
   faal met exit 1 en een duidelijke traceback).
 - Na elke wijziging: `.venv/bin/lus --help` moet werken en
   `.venv/bin/python -m tests.run` moet groen zijn.
+- Draai `.venv/bin/python -m tests.live_smoke` na een GraphHopper-upgrade,
+  graafherimport of profielwijziging. Dit is een opt-in test tegen de echte
+  GraphHopper en hoort niet in de gewone offline testsuite.
+- Bewuste engine-wijzigingen die regressiecassettes breken: herrecord met
+  `.venv/bin/python -m tests.record_fixtures` en vermeld de
+  metriekverschuiving in de commitmessage. Een cassettebreuk zonder bewuste
+  wijziging geldt als regressie.
 - Module-overzicht: `cli.py` (argparse, dun), `draft.py` (state + route +
   suggest), `gh.py` (GraphHopper-client), `climbs.py` (klim-DB + detectie),
   `heat.py` (populariteitslaag), `analysis.py` (kwaliteitsmetrieken),
