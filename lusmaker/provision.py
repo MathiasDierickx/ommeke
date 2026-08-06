@@ -372,8 +372,17 @@ def provision(
             "--bbox",
             ",".join(str(value) for value in bbox),
         ]
+        log_path = provision_path(slug, home=home).with_name("provision.log")
         try:
-            popen(command, start_new_session=True)
+            # stdout/stderr naar een logbestand: het kindproces mag nooit in
+            # de stdio-stream van de ouder schrijven (MCP-protocol!)
+            with open(log_path, "ab") as log_file:
+                popen(
+                    command,
+                    start_new_session=True,
+                    stdout=log_file,
+                    stderr=log_file,
+                )
         except Exception as exc:
             write_provision_state(
                 slug,
