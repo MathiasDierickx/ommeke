@@ -377,9 +377,16 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
         pos = sum(1 for m in legs_meta[:leg_i] if m.get("climb"))
         per_climb[cid] = {
             "climb": climbs_mod.summary(c),
+            "id": cid,
+            "label": (
+                f"{c['name']} ({c['length_m'] / 1000:.1f} km "
+                f"@ {c['avg_pct']:g}%)"
+            ),
             "extra_km": round(extra_m / 1000, 1),
             "extra_hoogtemeters": round(extra_up),
+            "extra_hm": round(extra_up),
             "invoegen_op_positie": pos,
+            "pos": pos,
             "voorstel": f"lus draft add-climb {d['id']} {cid} --at {pos}",
         }
     out = sorted(per_climb.values(), key=lambda s: s["extra_km"])[:limit]

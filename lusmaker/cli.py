@@ -301,6 +301,36 @@ def cmd_draft_preview(args):
         return preview.export(d, climbs.all_climbs(), path)
 
 
+def cmd_plan_route(args):
+    from . import intents
+
+    return intents.plan_route(
+        start=args.start,
+        region=args.region,
+        max_km=args.max_km,
+        doel=args.doel,
+        via_klimmen=args.via_klim,
+        vermijd_plaatsen=args.vermijd_plaats,
+        kasseien=args.kasseien,
+        beton_vermijden=not args.beton_toestaan,
+        strict=args.strict,
+        naam=args.naam,
+    )
+
+
+def cmd_adjust_route(args):
+    from . import intents
+
+    return intents.adjust_route(
+        draft_id=args.id,
+        voeg_klimmen_toe=args.voeg_klim_toe,
+        verwijder_klimmen=args.verwijder_klim,
+        vermijd_plaatsen=args.vermijd_plaats,
+        niet_meer_vermijden=args.niet_meer_vermijden,
+        max_km=args.max_km,
+    )
+
+
 def _region_arg(parser):
     parser.add_argument(
         "--region",
@@ -357,6 +387,42 @@ def main(argv=None):
     s.add_argument("query")
     s.add_argument("--limit", type=int, default=5)
     s.set_defaults(func=cmd_geocode)
+
+    s = sub.add_parser(
+        "plan-route",
+        help="maak, routeer, preview en exporteer een lus in één stap",
+    )
+    _region_arg(s)
+    s.add_argument("--start", required=True)
+    s.add_argument("--max-km", type=float)
+    s.add_argument(
+        "--doel",
+        choices=("hoogtemeters", "kort", "toeren"),
+        default="hoogtemeters",
+    )
+    s.add_argument("--via-klim", action="append", default=[])
+    s.add_argument("--vermijd-plaats", action="append", default=[])
+    s.add_argument("--kasseien", action="store_true", help="kasseien zijn toegestaan")
+    s.add_argument(
+        "--beton-toestaan",
+        action="store_true",
+        help="vermijd betonbanen niet extra",
+    )
+    s.add_argument("--strict", action="store_true")
+    s.add_argument("--naam")
+    s.set_defaults(func=cmd_plan_route)
+
+    s = sub.add_parser(
+        "adjust-route",
+        help="pas meerdere routewensen toe en routeer eenmaal opnieuw",
+    )
+    s.add_argument("id")
+    s.add_argument("--voeg-klim-toe", action="append", default=[])
+    s.add_argument("--verwijder-klim", action="append", default=[])
+    s.add_argument("--vermijd-plaats", action="append", default=[])
+    s.add_argument("--niet-meer-vermijden", action="append", default=[])
+    s.add_argument("--max-km", type=float)
+    s.set_defaults(func=cmd_adjust_route)
 
     c = sub.add_parser("climbs", help="klim-database")
     csub = c.add_subparsers(dest="subcmd", required=True)

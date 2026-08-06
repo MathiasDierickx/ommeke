@@ -26,9 +26,21 @@ EXPECTED_TOOLS = {
     "unavoid_place",
     "route_draft",
     "suggest_climbs",
+    "plan_route",
+    "adjust_route",
     "optimize_draft",
     "export_gpx",
     "preview_draft",
+}
+
+EXPECTED_LITE_TOOLS = {
+    "plan_route",
+    "adjust_route",
+    "suggest_climbs",
+    "route_details",
+    "ensure_region",
+    "region_status",
+    "list_drafts",
 }
 
 
@@ -96,6 +108,35 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
+assert len(actual) == 20
+""",
+            Path(temp_dir),
+        )
+
+
+def test_lite_server_has_exact_tools():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        expected = repr(EXPECTED_LITE_TOOLS)
+        _run_isolated(
+            f"""
+import asyncio
+from lusmaker import mcp_server
+
+expected = {expected}
+server = mcp_server.lite_mcp
+if hasattr(server, "_tool_manager"):
+    actual = set(server._tool_manager._tools)
+else:
+    from mcp import Client
+
+    async def tool_names():
+        async with Client(server) as client:
+            return {{tool.name for tool in await client.list_tools()}}
+
+    actual = asyncio.run(tool_names())
+assert actual == expected, (actual, expected)
+assert len(actual) == 7
 """,
             Path(temp_dir),
         )

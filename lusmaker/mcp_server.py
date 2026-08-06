@@ -1,11 +1,23 @@
 """MCP-server bovenop de Lusmaker-domeinfuncties."""
 
+import argparse
+
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
 
-from . import climbs, config, draft, geocode as geocode_mod, geo, gpx, preview, regions
+from . import (
+    climbs,
+    config,
+    draft,
+    geocode as geocode_mod,
+    geo,
+    gpx,
+    intents,
+    preview,
+    regions,
+)
 
 
 mcp = FastMCP("lusmaker")
@@ -184,6 +196,54 @@ def suggest_climbs(
 
 
 @mcp.tool()
+def plan_route(
+    start: str,
+    region: str | None = None,
+    max_km: float | None = None,
+    doel: str = "hoogtemeters",
+    via_klimmen: list[str] = [],
+    vermijd_plaatsen: list[str] = [],
+    kasseien: bool = False,
+    beton_vermijden: bool = True,
+    strict: bool = False,
+    naam: str | None = None,
+) -> dict:
+    """Maak, routeer, preview en exporteer een lus vanuit één routewens."""
+    return intents.plan_route(
+        start=start,
+        region=region,
+        max_km=max_km,
+        doel=doel,
+        via_klimmen=via_klimmen,
+        vermijd_plaatsen=vermijd_plaatsen,
+        kasseien=kasseien,
+        beton_vermijden=beton_vermijden,
+        strict=strict,
+        naam=naam,
+    )
+
+
+@mcp.tool()
+def adjust_route(
+    draft_id: str,
+    voeg_klimmen_toe: list[str] = [],
+    verwijder_klimmen: list[str] = [],
+    vermijd_plaatsen: list[str] = [],
+    niet_meer_vermijden: list[str] = [],
+    max_km: float | None = None,
+) -> dict:
+    """Pas meerdere routewensen toe en lever één compact nieuw resultaat."""
+    return intents.adjust_route(
+        draft_id=draft_id,
+        voeg_klimmen_toe=voeg_klimmen_toe,
+        verwijder_klimmen=verwijder_klimmen,
+        vermijd_plaatsen=vermijd_plaatsen,
+        niet_meer_vermijden=niet_meer_vermijden,
+        max_km=max_km,
+    )
+
+
+@mcp.tool()
 def optimize_draft(
     draft_id: str,
     max_km: float,
@@ -220,9 +280,34 @@ def preview_draft(draft_id: str, output_path: str | None = None) -> dict:
         return preview.export(d, climbs.all_climbs(), path)
 
 
-def main() -> None:
+def route_details(draft_id: str) -> dict:
+    """Toon legs en volledige kwaliteit wanneer compacte route-info niet volstaat."""
+    return intents.route_details(draft_id)
+
+
+lite_mcp = FastMCP("lusmaker-lite")
+for _lite_tool in (
+    plan_route,
+    adjust_route,
+    suggest_climbs,
+    route_details,
+    ensure_region,
+    region_status,
+    list_drafts,
+):
+    lite_mcp.tool()(_lite_tool)
+
+
+def main(argv: list[str] | None = None) -> None:
     """Start de Lusmaker MCP-server via stdio."""
-    mcp.run(transport="stdio")
+    parser = argparse.ArgumentParser(prog="lus-mcp")
+    parser.add_argument(
+        "--lite",
+        action="store_true",
+        help="exposeer alleen de zeven token-zuinige tools",
+    )
+    args = parser.parse_args(argv)
+    (lite_mcp if args.lite else mcp).run(transport="stdio")
 
 
 if __name__ == "__main__":
