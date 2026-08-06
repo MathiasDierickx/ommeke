@@ -6,25 +6,28 @@ Berendries, rustige wegen, geen twee keer dezelfde baan") naar CLI-stappen, en
 speel vragen/suggesties van de tool terug naar de gebruiker.
 Dezelfde flow is ook beschikbaar via de stdio MCP-server `lus-mcp`.
 
-## Begin met de composiet-tools
+## Begin met de readiness-lus
 
-Gebruik via MCP eerst `plan_route`: die maakt de draft, verwerkt klimmen en
-vermijdplaatsen, routeert of optimaliseert, en levert meteen GPX plus preview.
-Gebruik daarna `adjust_route` om meerdere wijzigingen in één call toe te
-passen. Grijp alleen naar `new_draft`, `add_climb`, `avoid_place`,
-`route_draft`, `export_gpx` en de andere granulaire tools als de composiet-flow
-een uitzonderlijke handeling niet kan uitdrukken.
+Maak voor een nieuwe gebruiker eerst een draft met een benoemd profiel en
+minstens één routedoel (bijvoorbeeld een gewenste klim). Roep daarna
+`route_readiness` aan. Die routeert één snelle verkenningsroute, toont alleen
+materiële voorkeurvragen en cachet de probe. Stel de vragen letterlijk aan de
+gebruiker en pas telkens de gekozen `patch` toe met `update_profile`. Staat bij
+een optie `doel: draft`, voer de patch uit met `avoid_place`. Vraag vervolgens
+opnieuw `route_readiness` op. Herhaal tot `klaar=true`; optimaliseer dan pas en
+maak preview/GPX.
 
-Dit beperkt de drie hosted kostenposten tegelijk: minder round-trips die de
-gesprekscontext opnieuw meesturen, kleinere resultaten zonder geometrie en
-legs, en minder toolschema's in de systeemprompt. `route_details` geeft legs en
-de volledige kwaliteitsmetrieken alleen wanneer de gebruiker ernaar vraagt.
+Een `null`-voorkeur betekent onbekend; `ok` betekent expliciet onverschillig.
+Geef daarom `profiel_naam` mee aan `new_draft`, zodat profielupdates de
+verkenningsroute correct ongeldig maken. In lite zijn `route_readiness`,
+`get_profile` en `update_profile` beschikbaar. Gebruik daar `adjust_route` met
+`max_km` voor de definitieve optimalisatie; in volledige MCP-modus kan dat ook
+met `optimize_draft`. `plan_route` blijft geschikt wanneer alle voorkeuren al
+bekend zijn en een compacte one-call-flow gewenst is.
 
-Als de gebruiker een persistent voorkeurenprofiel noemt, geef `profiel_naam`
-mee aan `plan_route` of `new_draft`. Beheer het in volledige MCP-modus met
-`get_profile`, `update_profile` en `list_profiles` (CLI:
-`lus profile show|set|list`). Een `null`-voorkeur betekent onbekend; `ok`
-betekent expliciet onverschillig. Lite bevat deze profieltools pas vanaf T12.
+De compacte tools beperken round-trips en resultaatgrootte. `route_details`
+geeft legs en de volledige kwaliteitsmetrieken alleen wanneer de gebruiker
+erom vraagt.
 
 ## Aanroepen
 
@@ -37,11 +40,6 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 
 ## Typische flow
 
-Via MCP vervangt één `plan_route(...)` normaal stappen 1 t/m 6 en de export;
-een latere `adjust_route(...)` bundelt alle gevraagde wijzigingen. De
-onderstaande granulaire flow blijft beschikbaar als uitwijkmogelijkheid en
-voor CLI-gebruik.
-
 0. Als de plaats niet lokaal geocodet kan worden of geen passende regio
    beschikbaar is: roep `ensure_region(place)` aan (CLI:
    `lus region ensure "<plaats>"`). **Meld de gebruiker meteen dat het
@@ -49,18 +47,19 @@ voor CLI-gebruik.
    niet.** Poll later `region_status(slug)` / `lus region status <slug>`.
    Ga pas bij fase `klaar` verder met `new_draft(..., region=slug)`. Bij
    `status: fout` toon je `melding` en probeer je niet blind verder.
-1. `lus draft new --start "Wetteren" --name berendries-lus` — start een
-   fiets-lusdraft. Gebruik `--profiel trail` voor een traillus.
+1. `lus draft new --start "Wetteren" --name berendries-lus --profiel-naam standaard`
+   — start een fiets-lusdraft die aan het voorkeurenprofiel gekoppeld is.
+   Gebruik `--profiel trail` voor een traillus.
    Check `start_geocoded_als` in de output; bij twijfel de kandidaten aan de
    gebruiker voorleggen. Adres kan ook: `--start "Stationsstraat, Wetteren"`.
 2. `lus climbs near Wetteren --radius-km 25` of `lus climbs list` — kies klimmen.
 3. `lus draft add-climb <id> berendries` — voeg de doelklim toe.
-4. `lus draft route <id>` — routeer. De lus vermijdt automatisch de eigen
-   heenweg (corridor-penalty), klimmen worden voet→top gereden.
-5. Bied na `route` altijd een kaartpreview aan:
-   `lus draft preview <id>`. Geef het teruggekomen `file`-pad aan de gebruiker,
-   zodat die de route, klimmen en het hoogteprofiel kan openen en controleren.
-6. Bij een afstandsbudget: `lus draft optimize <id> --max-km 45` — vult de lus
+4. `lus draft readiness <id> --profiel-naam standaard` (MCP:
+   `route_readiness`) — maakt of hergebruikt de verkenningsprobe. Stel maximaal
+   drie teruggegeven vragen aan de gebruiker. Pas profielopties toe met
+   `update_profile`; gebruik `avoid_place` wanneer `doel=draft`. Vraag readiness
+   opnieuw op tot `klaar=true`.
+5. Bij een afstandsbudget: `lus draft optimize <id> --max-km 45` — vult de lus
    automatisch aan met klimmen en bewaakt het harde budget na elke herroutering.
    Gebruik `--objective hm-per-km` als efficiënt klimmen belangrijker is dan
    het absolute aantal hoogtemeters. Zonder initiële klim kiest de optimizer
@@ -69,13 +68,31 @@ voor CLI-gebruik.
    de niet-overlappende variant met de meeste hoogtemeters. Gebruik
    `--geen-opvulling` (MCP: `geen_opvulling=true`) als alleen klimmen gewenst
    zijn.
-   Bied na `optimize` opnieuw een preview aan van het definitieve resultaat.
+6. Bied na `optimize` een kaartpreview aan: `lus draft preview <id>`. Geef het
+   teruggekomen `file`-pad aan de gebruiker, zodat die route, klimmen en
+   hoogteprofiel kan controleren.
 7. Voor handmatige keuze: `lus draft suggest <id> --max-detour-km 10` — extra
    klimmen die weinig omweg vragen. **Stel deze voor aan de gebruiker** ("wil je
    de Molenberg erbij voor ~X km extra?"); elk voorstel bevat het exacte
    add-climb-commando.
 8. Exporteer wanneer de gebruiker tevreden is:
    `lus draft export <id> -o naam.gpx`.
+
+### Uitgewerkt kasseivoorbeeld
+
+1. Maak `new_draft(..., profiel_naam="standaard")`, voeg de Berendries toe en
+   roep `route_readiness` aan.
+2. Stel dat de probe `kassei_aanwezig_m: 1800` meldt en de vraag `kasseien`
+   teruggeeft. Vraag: “Er liggen kasseistroken op het parcours. Vind je die
+   leuk (Flandrien!), oké, of vermijd je ze liever?”
+3. Antwoordt de gebruiker “vermijd”, voer dan
+   `update_profile("standaard", {"voorkeuren": {"kasseien": "vermijd"}})` uit.
+   De gekoppelde probe wordt automatisch ongeldig.
+4. Roep `route_readiness` opnieuw aan. Die verkent nu met de bijgewerkte
+   voorkeur. Behandel eventuele volgende vraag op dezelfde manier.
+5. Zodra `klaar=true`, optimaliseer de bestaande draft, maak de preview en
+   exporteer de GPX. Optimaliseer niet eerder: anders bouw je voort op nog
+   onbekende materiële voorkeuren.
 
 ## Taalgestuurde voorkeuren -> tool calls
 

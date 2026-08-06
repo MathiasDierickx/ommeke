@@ -60,7 +60,7 @@ docker compose up -d     # GraphHopper importeert België (eenmalig, ~5-15 min)
 lus draft new --start "Wetteren" --name berendries-lus
 lus climbs near Wetteren --radius-km 25
 lus draft add-climb <id> berendries
-lus draft route <id>                      # lus, vermijdt eigen heenweg
+lus draft readiness <id>                  # probe + relevante voorkeurvragen
 lus draft optimize <id> --max-km 45       # klimmen + mooie rondrit binnen budget
 lus draft suggest <id> --max-detour-km 10 # "Molenberg erbij voor +9.2 km?"
 lus draft preview <id> -o route.html      # kaart + hoogteprofiel bekijken
@@ -200,9 +200,10 @@ optimaliseren; controleer dit met `lus status`.
 
 `new_draft` accepteert `profiel="quiet"|"trail"` en `profiel_naam`;
 `plan_route` accepteert `activiteit="fietsen"|"trail"` en `profiel_naam`.
-Beide gebruiken standaard het bestaande fietsprofiel. In volledige MCP-modus
-beheren `get_profile`, `update_profile` en `list_profiles` de persistente
-profielen.
+Beide gebruiken standaard het bestaande fietsprofiel. `get_profile` en
+`update_profile` zijn ook in lite beschikbaar; `list_profiles` alleen in
+volledige MCP-modus. `route_readiness` bouwt of hergebruikt een
+verkenningsprobe en begeleidt de voorkeurvragen vóór optimize.
 
 Voor het normale gesprek volstaan meestal twee composiet-tools:
 `plan_route(...)` maakt en routeert een lus en schrijft meteen
@@ -211,7 +212,7 @@ Voor het normale gesprek volstaan meestal twee composiet-tools:
 vermijdplaatsen en een nieuw afstandsbudget in één call. Beide antwoorden zijn
 compact en bevatten een direct bruikbare Nederlandse samenvattingszin.
 
-Start voor hosted gebruik de lite-modus om alleen de zeven token-zuinige tools
+Start voor hosted gebruik de lite-modus om alleen de tien token-zuinige tools
 aan te bieden:
 
 ```bash
@@ -232,11 +233,10 @@ In een MCP-config voeg je `"--lite"` als argument toe:
 ```
 
 Lite bevat `plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
-`ensure_region`, `region_status` en `list_drafts`. `route_details` is de
-expliciete uitweg voor legs en volledige kwaliteitsmetrieken; zonder
-`--lite` blijft de volledige set van 23 tools beschikbaar. De drie
-profieltools horen bewust nog niet bij lite; T12 voegt ze daar samen met de
-vraagbegeleiding toe.
+`route_readiness`, `get_profile`, `update_profile`, `ensure_region`,
+`region_status` en `list_drafts`. `route_details` is de expliciete uitweg voor
+legs en volledige kwaliteitsmetrieken; zonder `--lite` blijft de volledige set
+van 24 tools beschikbaar.
 
 Dezelfde composiet-flow bestaat in de CLI:
 
