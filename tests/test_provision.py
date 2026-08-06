@@ -81,7 +81,10 @@ def test_background_provision_uses_injected_popen_and_writes_initial_state():
             "-m",
             "lusmaker.provision",
         ]
-        assert calls[0][1] == {"start_new_session": True}
+        kwargs = calls[0][1]
+        assert kwargs["start_new_session"] is True
+        assert kwargs["stdout"].name.endswith("provision.log")
+        assert kwargs["stderr"] is kwargs["stdout"]
         assert provision.region_status("zeeland", home=home)["fase"] == "downloaden"
 
 
