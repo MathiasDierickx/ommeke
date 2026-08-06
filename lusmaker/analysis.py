@@ -8,6 +8,7 @@ from . import config, geo
 BIG_ROADS = {"primary", "primary_link", "secondary", "secondary_link"}
 OFFROAD_CLASSES = {"path", "track", "footway", "pedestrian", "bridleway", "cycleway"}
 COBBLE_SURFACES = {"cobblestone", "sett", "unhewn_cobblestone", "cobblestone:flattened"}
+CONCRETE_SURFACES = {"concrete", "concrete:lanes", "concrete:plates"}
 
 
 def detail_meters(coords, detail_intervals, wanted) -> float:
@@ -96,11 +97,12 @@ def count_crossings(route_coords) -> int:
 def route_stats(legs_geometry, legs_details) -> dict:
     """Kwaliteitsrapport over een volledige (gerouteerde) draft."""
     all_coords = [pt for leg in legs_geometry for pt in leg]
-    kassei = steenweg = offroad = 0.0
+    kassei = beton = steenweg = offroad = 0.0
     for leg, det in zip(legs_geometry, legs_details):
         if not det:
             continue
         kassei += detail_meters(leg, det.get("surface", []), COBBLE_SURFACES | {"cobblestone"})
+        beton += detail_meters(leg, det.get("surface", []), CONCRETE_SURFACES)
         steenweg += detail_meters(leg, det.get("road_class", []), BIG_ROADS)
         offroad += detail_meters(leg, det.get("road_class", []), OFFROAD_CLASSES)
     try:
@@ -110,6 +112,7 @@ def route_stats(legs_geometry, legs_details) -> dict:
         crossings = None
     out = {
         "kassei_m": round(kassei),
+        "beton_m": round(beton),
         "steenweg_m": round(steenweg),
         "steenweg_kruisingen": crossings,
         "heen_en_weer_m": round(geo.self_retrace_m(legs_geometry)),
