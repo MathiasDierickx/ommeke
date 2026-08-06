@@ -4,3 +4,4 @@ __pycache__/
 *.gpx
 .DS_Store
 *.html
+docker-compose.regions.yml
