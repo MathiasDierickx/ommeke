@@ -13,6 +13,8 @@ from unittest import SkipTest
 EXPECTED_TOOLS = {
     "status",
     "list_regions",
+    "ensure_region",
+    "region_status",
     "geocode",
     "list_climbs",
     "new_draft",

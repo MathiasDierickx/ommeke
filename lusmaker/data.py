@@ -30,15 +30,15 @@ def _download(url: str, dest, label: str) -> None:
     print(f"[setup] {label}: klaar ({done // 1_000_000} MB)", file=sys.stderr)
 
 
-def setup() -> dict:
+def setup(*, downloader=_download, pbf_url: str | None = None) -> dict:
     config.ensure_dirs()
-    _download(config.PBF_URL, config.PBF_PATH, config.PBF_PATH.name)
+    downloader(pbf_url or config.PBF_URL, config.PBF_PATH, config.PBF_PATH.name)
     for name in config.DEM_TILES:
         url = config.DEM_URL.format(ns=name[:3], name=name)
         gz = config.DATA / f"{name}.hgt.gz"
         hgt = config.DATA / f"{name}.hgt"
         if not hgt.exists():
-            _download(url, gz, f"DEM {name}")
+            downloader(url, gz, f"DEM {name}")
             hgt.write_bytes(gzip.decompress(gz.read_bytes()))
             gz.unlink()
     return {

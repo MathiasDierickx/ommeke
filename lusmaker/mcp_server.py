@@ -24,6 +24,22 @@ def list_regions() -> dict:
 
 
 @mcp.tool()
+def ensure_region(place: str) -> dict:
+    """Zoek een plaats of slug en start provisioning van de kleinste regio."""
+    from . import provision
+
+    return provision.ensure_region(place)
+
+
+@mcp.tool()
+def region_status(slug: str) -> dict:
+    """Toon de pollbare voortgang van een regioprovisioning."""
+    from . import provision
+
+    return provision.region_status(slug)
+
+
+@mcp.tool()
 def geocode(query: str, limit: int = 5) -> dict:
     """Zoek een plaats, straat of adres in de lokale geocoder."""
     return {

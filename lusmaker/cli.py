@@ -89,6 +89,24 @@ def cmd_region_migrate_legacy(args):
     return regions.migrate_legacy()
 
 
+def cmd_region_ensure(args):
+    from . import provision
+
+    return provision.ensure_region(args.place)
+
+
+def cmd_region_status(args):
+    from . import provision
+
+    return provision.region_status(args.slug)
+
+
+def cmd_region_pack(args):
+    from . import provision
+
+    return provision.create_pack(args.slug, args.output)
+
+
 def cmd_geocode(args):
     from . import geocode
 
@@ -321,6 +339,18 @@ def main(argv=None):
     s.set_defaults(func=cmd_region_default)
     s = rsub.add_parser("migrate-legacy", help="verplaats bestaande data naar regio vlaanderen")
     s.set_defaults(func=cmd_region_migrate_legacy)
+    s = rsub.add_parser(
+        "ensure", help="zoek een plaats of slug en provision de kleinste regio"
+    )
+    s.add_argument("place", help="plaatsnaam of Geofabrik-regioslug")
+    s.set_defaults(func=cmd_region_ensure)
+    s = rsub.add_parser("status", help="toon de voortgang van regioprovisioning")
+    s.add_argument("slug")
+    s.set_defaults(func=cmd_region_status)
+    s = rsub.add_parser("pack", help="maak een cachebaar regiopack")
+    s.add_argument("slug")
+    s.add_argument("-o", "--output")
+    s.set_defaults(func=cmd_region_pack)
 
     s = sub.add_parser("geocode", help="zoek een plaats of 'straat, plaats'")
     _region_arg(s)
