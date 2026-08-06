@@ -43,6 +43,22 @@ def _invalidate_route(d: dict) -> None:
     d.pop("_probe", None)
 
 
+def invalidate_profile(profile_name: str) -> int:
+    """Invalideer drafts die een gewijzigd voorkeurenprofiel gebruiken."""
+    invalidated = 0
+    if not config.DRAFTS.exists():
+        return invalidated
+    for path in sorted(config.DRAFTS.glob("*.json")):
+        with open(path, encoding="utf-8") as handle:
+            d = json.load(handle)
+        if d.get("profile_doc") != profile_name:
+            continue
+        _invalidate_route(d)
+        save(d)
+        invalidated += 1
+    return invalidated
+
+
 def region_slug(d: dict) -> str:
     """Oude drafts horen na migratie bij Vlaanderen."""
     if d.get("region"):

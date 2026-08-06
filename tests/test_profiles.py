@@ -190,6 +190,33 @@ def test_preference_profile_patch_records_history_and_normalizes_weights():
     assert stored["historiek"][0]["timestamp"]
 
 
+def test_profile_patch_invalidates_computed_route_and_probe_on_linked_drafts():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            d = draft.new(
+                start={"lat": 50.98, "lon": 3.87, "label": "Wetteren"},
+                name="profielcache",
+                loop=True,
+                end=None,
+                profile_doc="gravel",
+            )
+            d["computed"] = {"total_km": 12.3}
+            d["_geometry"] = [[[50.98, 3.87, 10], [50.99, 3.88, 20]]]
+            d["_probe"] = {"km": 12.3}
+            draft.save(d)
+
+            profiles.apply_patch(
+                "gravel",
+                {"voorkeuren": {"kasseien": "vermijd"}},
+                bron="test",
+            )
+            stored = draft.load(d["id"])
+
+    assert stored["computed"] is None
+    assert "_geometry" not in stored
+    assert "_probe" not in stored
+
+
 def test_preference_validation_and_routing_mapping_keep_graag_scoring_only():
     profile = profiles.default_document("trailfan")
     profile["activiteit"] = "trail"

@@ -173,7 +173,13 @@ def apply_patch(name: str, patch: dict, bron: str) -> dict:
             "patch": copy.deepcopy(patch),
         }
     )
-    return save(updated)
+    saved = save(updated)
+    # Een profielwijziging beïnvloedt zowel routering als scoring. Gekoppelde
+    # drafts mogen daarom geen oude route- of probe-afgeleiden behouden.
+    from . import draft
+
+    draft.invalidate_profile(name)
+    return saved
 
 
 def routing_prefs(profile: dict) -> dict:
