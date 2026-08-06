@@ -127,7 +127,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           strict: bool = False, avoid_cobbles: bool = False,
           avoid_concrete: bool = False, details: bool = False,
           profile: str = config.GH_PROFILE, start_heading: float | None = None,
-          *, post_fn=_post) -> dict:
+          point_hints: list | None = None, *, post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
 
     avoid_polygons: lijst van GeoJSON-ringen ([[lon,lat],...]) of dicts
@@ -154,6 +154,9 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         # vertrek in de aankomstrichting van de vorige leg: voorkomt
         # heen-en-weer-uitsteeksels op leg-grenzen
         body["headings"] = [round(start_heading, 1)]
+    if point_hints is not None:
+        # snap via-punten op de juiste (genoemde) weg, niet op een parallelpad
+        body["point_hints"] = point_hints
     if details:
         body["details"] = ["surface", "road_class"]
     body["custom_model"] = _custom_model(

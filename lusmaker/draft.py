@@ -212,9 +212,11 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
         # pin de klim op zijn volledige geometrie (via-punten elke ~150 m):
         # voorkomt snap-uitsteeksels en parallelle sluiproutes
         via = [tuple(p) for p in geo.resample([tuple(q) for q in c["geom"]], 150.0)]
-        legs.append({"from": prev_label, "to": f"{c['name']} (voet)", "points": [prev_pt, foot]})
+        name_hint = c["name"].split(" (")[0]
+        legs.append({"from": prev_label, "to": f"{c['name']} (voet)", "points": [prev_pt, foot],
+                     "hints": ["", name_hint]})
         legs.append({"from": f"{c['name']} (voet)", "to": f"{c['name']} (top)",
-                     "points": via, "climb": cid})
+                     "points": via, "climb": cid, "hints": [name_hint] * len(via)})
         prev_label, prev_pt = f"{c['name']} (top)", top
     if d["loop"]:
         legs.append({"from": prev_label, "to": "start", "points": [prev_pt, start]})
