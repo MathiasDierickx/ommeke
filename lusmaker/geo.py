@@ -66,6 +66,47 @@ def midpoint(geom):
     return geom[len(geom) // 2]
 
 
+def _point_on_segment(x: float, y: float, a, b, epsilon: float = 1e-12) -> bool:
+    """Return whether ``(x, y)`` lies on the GeoJSON segment ``a``–``b``."""
+    cross = (x - a[0]) * (b[1] - a[1]) - (y - a[1]) * (b[0] - a[0])
+    if abs(cross) > epsilon:
+        return False
+    return (
+        min(a[0], b[0]) - epsilon <= x <= max(a[0], b[0]) + epsilon
+        and min(a[1], b[1]) - epsilon <= y <= max(a[1], b[1]) + epsilon
+    )
+
+
+def point_in_ring(lat: float, lon: float, ring) -> bool:
+    """Ray-casting test for a point in a GeoJSON ring (coordinates are lon/lat).
+
+    Points on the boundary count as contained. That avoids surprising misses
+    for places exactly on an administrative border.
+    """
+    if len(ring) < 3:
+        return False
+    inside = False
+    previous = ring[-1]
+    for current in ring:
+        if _point_on_segment(lon, lat, previous, current):
+            return True
+        x1, y1 = previous
+        x2, y2 = current
+        if (y1 > lat) != (y2 > lat):
+            intersection_x = (x2 - x1) * (lat - y1) / (y2 - y1) + x1
+            if lon < intersection_x:
+                inside = not inside
+        previous = current
+    return inside
+
+
+def point_in_polygon(lat: float, lon: float, rings) -> bool:
+    """Return whether a point is in a GeoJSON polygon, respecting holes."""
+    if not rings or not point_in_ring(lat, lon, rings[0]):
+        return False
+    return not any(point_in_ring(lat, lon, hole) for hole in rings[1:])
+
+
 def _offset(lat: float, lon: float, dnorth_m: float, deast_m: float):
     return (lat + dnorth_m / 111320.0, lon + deast_m / (111320.0 * math.cos(math.radians(lat))))
 
