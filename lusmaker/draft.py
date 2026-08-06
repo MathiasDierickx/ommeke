@@ -12,6 +12,9 @@ class DraftError(RuntimeError):
     pass
 
 
+PROFILES = ("quiet", "trail")
+
+
 def _path(draft_id: str):
     return config.DRAFTS / f"{draft_id}.json"
 
@@ -44,7 +47,10 @@ def region_scope(d: dict):
 
 
 def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False,
-        avoid_cobbles: bool = False, avoid_concrete: bool = False) -> dict:
+        avoid_cobbles: bool = False, avoid_concrete: bool = False,
+        profile: str = config.GH_PROFILE) -> dict:
+    if profile not in PROFILES:
+        raise DraftError("profiel moet 'quiet' of 'trail' zijn")
     d = {
         "id": uuid.uuid4().hex[:6],
         "name": name or "lus",
@@ -53,6 +59,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "start": start,  # {lat, lon, label}
         "end": end,      # None => zelfde als start bij loop
         "loop": loop,
+        "profile": profile,
         "strict": strict,
         "avoid_cobbles": avoid_cobbles,
         "avoid_concrete": avoid_concrete,
@@ -67,7 +74,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
 def create(start: str, name: str | None = None, loop: bool = True,
            end: str | None = None, strict: bool = False,
            avoid_cobbles: bool = False, avoid_concrete: bool = False,
-           region: str | None = None) -> dict:
+           region: str | None = None, profile: str = config.GH_PROFILE) -> dict:
     """Maak een draft vanuit gebruikersgerichte plaatsnamen of coördinaten."""
     from . import geocode
 
@@ -82,6 +89,7 @@ def create(start: str, name: str | None = None, loop: bool = True,
             strict=strict,
             avoid_cobbles=avoid_cobbles,
             avoid_concrete=avoid_concrete,
+            profile=profile,
         )
     out = summary(d)
     out["start_geocoded_als"] = start_point["label"]
@@ -247,15 +255,20 @@ def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
     leg_details = []
     computed_legs = []
     total_m = ascend = descend = 0.0
+    profile = d.get("profile", config.GH_PROFILE)
 
     for leg in legs:
         is_climb = "climb" in leg
         # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
-        res = router(leg["points"],
-                     avoid_polygons=place_areas(d) if is_climb else avoid,
-                     strict=d.get("strict", False),
-                     avoid_cobbles=d.get("avoid_cobbles", False),
-                     avoid_concrete=d.get("avoid_concrete", False), details=True)
+        res = router(
+            leg["points"],
+            avoid_polygons=place_areas(d) if is_climb else avoid,
+            strict=d.get("strict", False),
+            avoid_cobbles=d.get("avoid_cobbles", False),
+            avoid_concrete=d.get("avoid_concrete", False),
+            details=True,
+            profile=profile,
+        )
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
@@ -303,6 +316,7 @@ def summary(d: dict) -> dict:
         "name": d["name"],
         "start": d["start"].get("label"),
         "loop": d["loop"],
+        "profile": d.get("profile", config.GH_PROFILE),
         "strict": d.get("strict", False),
         "avoid_cobbles": d.get("avoid_cobbles", False),
         "avoid_concrete": d.get("avoid_concrete", False),
@@ -354,16 +368,34 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
     strict = d.get("strict", False)
     cobb = d.get("avoid_cobbles", False)
     conc = d.get("avoid_concrete", False)
+    profile = d.get("profile", config.GH_PROFILE)
     zones = place_areas(d)
     per_climb: dict[str, dict] = {}
     for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
         try:
-            r1 = router([a, tuple(c["foot"])], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
-            r2 = router([tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])], strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
-            r3 = router([tuple(c["top"]), b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            preferences = {
+                "strict": strict,
+                "avoid_cobbles": cobb,
+                "avoid_concrete": conc,
+                "profile": profile,
+            }
+            r1 = router(
+                [a, tuple(c["foot"])],
+                avoid_polygons=zones,
+                **preferences,
+            )
+            r2 = router(
+                [tuple(c["foot"]), tuple(c["mid"]), tuple(c["top"])],
+                **preferences,
+            )
+            r3 = router(
+                [tuple(c["top"]), b],
+                avoid_polygons=zones,
+                **preferences,
+            )
             # eerlijke baseline: zelfde leg zonder corridor-constraint, anders
             # vertekent een omweg-leg de vergelijking (negatieve extra's)
-            base_r = router([a, b], avoid_polygons=zones, strict=strict, avoid_cobbles=cobb, avoid_concrete=conc)
+            base_r = router([a, b], avoid_polygons=zones, **preferences)
         except gh.GhError:
             continue
         extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base_r["distance_m"]

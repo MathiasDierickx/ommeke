@@ -1,4 +1,4 @@
-"""lus — CLI om stap voor stap fiets-GPX-lussen te bouwen.
+"""lus — CLI om stap voor stap fiets- en trail-GPX-lussen te bouwen.
 
 Alle output is JSON zodat een LLM (Claude/OpenAI) de tool kan aansturen.
 """
@@ -161,6 +161,7 @@ def cmd_draft_new(args):
         start=args.start, name=args.name, loop=not args.no_loop, end=args.end,
         strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
         avoid_concrete=args.vermijd_beton, region=args.region,
+        profile=args.profiel,
     )
 
 
@@ -315,6 +316,7 @@ def cmd_plan_route(args):
         beton_vermijden=not args.beton_toestaan,
         strict=args.strict,
         naam=args.naam,
+        activiteit=args.activiteit,
     )
 
 
@@ -394,6 +396,11 @@ def main(argv=None):
     )
     _region_arg(s)
     s.add_argument("--start", required=True)
+    s.add_argument(
+        "--activiteit",
+        choices=("fietsen", "trail"),
+        default="fietsen",
+    )
     s.add_argument("--max-km", type=float)
     s.add_argument(
         "--doel",
@@ -466,6 +473,11 @@ def main(argv=None):
     s.add_argument("--name")
     s.add_argument("--end", help="eindpunt (anders lus naar start)")
     s.add_argument("--no-loop", action="store_true")
+    s.add_argument(
+        "--profiel",
+        choices=("quiet", "trail"),
+        default="quiet",
+    )
     s.add_argument("--strict", action="store_true", help="steenwegen maximaal vermijden")
     s.add_argument("--vermijd-kasseien", action="store_true", help="zachte straf op kasseistroken")
     s.add_argument("--vermijd-beton", action="store_true", help="zachte straf op betonbanen")

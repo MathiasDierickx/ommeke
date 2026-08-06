@@ -14,6 +14,9 @@ class IntentError(RuntimeError):
     """Gebruikersfout bij het uitvoeren van een composiet-intentie."""
 
 
+ACTIVITY_PROFILES = {"fietsen": "quiet", "trail": "trail"}
+
+
 def _normalise(value: str) -> str:
     value = unicodedata.normalize("NFKD", value.casefold())
     value = "".join(char for char in value if not unicodedata.combining(char))
@@ -185,6 +188,7 @@ def plan_route(
     beton_vermijden: bool = True,
     strict: bool = False,
     naam: str | None = None,
+    activiteit: str = "fietsen",
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -200,6 +204,8 @@ def plan_route(
     """Maak, routeer en exporteer een lus in één intentie."""
     if doel not in {"hoogtemeters", "kort", "toeren"}:
         raise IntentError("doel moet 'hoogtemeters', 'kort' of 'toeren' zijn")
+    if activiteit not in ACTIVITY_PROFILES:
+        raise IntentError("activiteit moet 'fietsen' of 'trail' zijn")
     created = create_fn(
         start=start,
         name=naam,
@@ -207,6 +213,7 @@ def plan_route(
         avoid_cobbles=not kasseien,
         avoid_concrete=beton_vermijden,
         region=region,
+        profile=ACTIVITY_PROFILES[activiteit],
     )
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)

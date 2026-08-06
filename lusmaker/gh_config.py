@@ -1,4 +1,4 @@
-"""Genereert de GraphHopper-configuratie en het 'quiet' custom model."""
+"""Genereert de GraphHopper-configuratie en custom sportmodellen."""
 import json
 
 from . import config
@@ -11,7 +11,7 @@ graphhopper:
   graph.elevation.provider: skadi
   graph.elevation.cache_dir: /lus/gh/elevation-cache
 
-  graph.encoded_values: bike_access, bike_priority, bike_average_speed, bike_road_access, roundabout, road_class, road_environment, surface, smoothness, max_speed, track_type, bike_network, mtb_rating, hike_rating, ferry_speed
+  graph.encoded_values: bike_access, bike_priority, bike_average_speed, bike_road_access, foot_access, foot_priority, foot_average_speed, roundabout, road_class, road_environment, surface, smoothness, max_speed, track_type, bike_network, mtb_rating, hike_rating, ferry_speed
 
   import.osm.ignored_highways: motorway, trunk
 
@@ -20,6 +20,8 @@ graphhopper:
   profiles:
     - name: quiet
       custom_model_files: [bike.json, quiet.json]
+    - name: trail
+      custom_model_files: [foot.json, trail.json]
 
   profiles_ch: []
   prepare.min_network_size: 200
@@ -51,6 +53,20 @@ QUIET_MODEL = {
     ]
 }
 
+TRAIL_MODEL = {
+    "priority": [
+        {"if": "road_class == PRIMARY", "multiply_by": "0.20"},
+        {"else_if": "road_class == SECONDARY", "multiply_by": "0.30"},
+        {"else_if": "road_class == TERTIARY", "multiply_by": "0.55"},
+        {"else_if": "road_class == RESIDENTIAL", "multiply_by": "0.75"},
+        {
+            "if": "surface == ASPHALT || surface == CONCRETE || surface == PAVED",
+            "multiply_by": "0.75",
+        },
+        {"if": "road_environment == FERRY", "multiply_by": "0.10"},
+    ]
+}
+
 
 # relatieve boost voor bereden corridors: alles daarbuiten een zachte straf
 POPULAR_RULE = {"if": "!in_popular", "multiply_by": "0.75"}
@@ -72,4 +88,6 @@ def write_gh_files() -> list[str]:
         model = {"priority": QUIET_MODEL["priority"] + [POPULAR_RULE]}
     quiet = config.GH_DIR / "custom_models" / "quiet.json"
     quiet.write_text(json.dumps(model, indent=2))
-    return [str(cfg), str(quiet)]
+    trail = config.GH_DIR / "custom_models" / "trail.json"
+    trail.write_text(json.dumps(TRAIL_MODEL, indent=2))
+    return [str(cfg), str(quiet), str(trail)]

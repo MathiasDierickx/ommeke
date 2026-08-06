@@ -100,17 +100,19 @@ def new_draft(
     name: str | None = None,
     loop: bool = True,
     end: str | None = None,
+    profiel: str = "quiet",
     strict: bool = False,
     vermijd_kasseien: bool = False,
     vermijd_beton: bool = False,
     region: str | None = None,
 ) -> dict:
-    """Maak een nieuwe route-draft vanaf een plaatsnaam of ``lat,lon``."""
+    """Maak een quiet-fiets- of traildraft vanaf een plaats of ``lat,lon``."""
     return draft.create(
         start=start,
         name=name,
         loop=loop,
         end=end,
+        profile=profiel,
         strict=strict,
         avoid_cobbles=vermijd_kasseien,
         avoid_concrete=vermijd_beton,
@@ -207,8 +209,9 @@ def plan_route(
     beton_vermijden: bool = True,
     strict: bool = False,
     naam: str | None = None,
+    activiteit: str = "fietsen",
 ) -> dict:
-    """Maak, routeer, preview en exporteer een lus vanuit één routewens."""
+    """Maak en exporteer een fiets- of traillus vanuit één routewens."""
     return intents.plan_route(
         start=start,
         region=region,
@@ -220,6 +223,7 @@ def plan_route(
         beton_vermijden=beton_vermijden,
         strict=strict,
         naam=naam,
+        activiteit=activiteit,
     )
 
 

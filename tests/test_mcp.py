@@ -157,6 +157,7 @@ created = mcp_server.new_draft(
 shown = mcp_server.get_draft(created["id"])
 assert shown["id"] == created["id"]
 assert shown["name"] == "mcp-test"
+assert shown["profile"] == "quiet"
 assert shown["avoid_cobbles"] is True
 
 try:

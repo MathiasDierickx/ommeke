@@ -64,7 +64,8 @@ AVOID_CONCRETE_PRIORITY = [
 
 def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           strict: bool = False, avoid_cobbles: bool = False,
-          avoid_concrete: bool = False, details: bool = False) -> dict:
+          avoid_concrete: bool = False, details: bool = False,
+          profile: str = config.GH_PROFILE, *, post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
 
     avoid_polygons: lijst van GeoJSON-ringen ([[lon,lat],...]) of dicts
@@ -73,10 +74,11 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     strict: extra straf op steenwegen/drukke wegen bovenop het quiet-profiel.
     avoid_cobbles / avoid_concrete: zachte oppervlakte-voorkeuren.
     details: per-segment surface/road_class in het resultaat ("details").
+    profile: GraphHopper-profiel, standaard het bestaande fietsprofiel.
     """
     body = {
         "points": [[lon, lat] for lat, lon in points_latlon],
-        "profile": config.GH_PROFILE,
+        "profile": profile,
         "elevation": True,
         "points_encoded": False,
         "instructions": False,
@@ -109,7 +111,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         custom["areas"] = {"type": "FeatureCollection", "features": features}
     body["custom_model"] = custom
 
-    data = _post("/route", body)
+    data = post_fn("/route", body)
     if not data.get("paths"):
         raise GhError("geen route gevonden")
     p = data["paths"][0]

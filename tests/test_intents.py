@@ -120,6 +120,7 @@ def test_plan_route_injects_route_and_export_functions():
 
     def create_fn(**kwargs):
         state["avoid_cobbles"] = kwargs["avoid_cobbles"]
+        state["profile"] = kwargs["profile"]
         return {"id": state["id"]}
 
     def add_climb_fn(_draft_id, climb_id):
@@ -137,6 +138,7 @@ def test_plan_route_injects_route_and_export_functions():
         result = intents.plan_route(
             "Wetteren",
             doel="kort",
+            activiteit="trail",
             via_klimmen=["Diepestraat"],
             create_fn=create_fn,
             load_fn=lambda _draft_id: state,
@@ -150,6 +152,7 @@ def test_plan_route_injects_route_and_export_functions():
 
     assert calls == ["route", ".gpx", ".html"]
     assert state["avoid_cobbles"] is True
+    assert state["profile"] == "trail"
     assert result["draft"] == "abc123"
 
 
