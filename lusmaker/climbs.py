@@ -140,6 +140,11 @@ def _town_coord(places, town):
 
 def resolve_all(extract: dict, force: bool = False) -> dict:
     """Match elke klim uit climbs.yaml op OSM-wegen en bepaal voet/top via DEM."""
+    if config.current_region().slug != config.LEGACY_SLUG:
+        raise RuntimeError(
+            "de curated climbs.yaml is alleen voor regio 'vlaanderen'; "
+            "gebruik `lus climbs detect`"
+        )
     if config.CLIMBS_JSON.exists() and not force:
         with open(config.CLIMBS_JSON) as f:
             return json.load(f)

@@ -41,7 +41,15 @@ def cmd_build(args):
 
     extract = osm.build_extract(force=args.force)
     osm.build_gazetteer(extract, force=args.force)
-    res = climbs.resolve_all(extract, force=True)
+    if config.current_region().slug == config.LEGACY_SLUG:
+        res = climbs.resolve_all(extract, force=True)
+    else:
+        config.ensure_dirs()
+        config.CLIMBS_JSON.write_text(
+            json.dumps({"climbs": {}, "failed": []}), encoding="utf-8"
+        )
+        res = {"climbs": {}, "failed": []}
+        climbs.detect_auto(extract)
     return {
         "ok": True,
         "wegen_in_regio": len(extract["ways"]),
@@ -52,7 +60,33 @@ def cmd_build(args):
 
 
 def cmd_status(args):
-    return config.status()
+    return config.status(args.region)
+
+
+def cmd_region_add(args):
+    from . import regions
+
+    return regions.install(
+        args.slug, args.geofabrik, regions.parse_bbox(args.bbox)
+    )
+
+
+def cmd_region_list(args):
+    from . import regions
+
+    return regions.list_all()
+
+
+def cmd_region_default(args):
+    from . import regions
+
+    return regions.set_default(args.slug)
+
+
+def cmd_region_migrate_legacy(args):
+    from . import regions
+
+    return regions.migrate_legacy()
 
 
 def cmd_geocode(args):
@@ -91,7 +125,14 @@ def cmd_climbs_resolve(args):
     from . import climbs, osm
 
     extract = osm.build_extract()
-    res = climbs.resolve_all(extract, force=True)
+    if config.current_region().slug == config.LEGACY_SLUG:
+        res = climbs.resolve_all(extract, force=True)
+    else:
+        config.ensure_dirs()
+        config.CLIMBS_JSON.write_text(
+            json.dumps({"climbs": {}, "failed": []}), encoding="utf-8"
+        )
+        res = climbs.detect_auto(extract)
     return {"opgelost": len(res["climbs"]), "niet_opgelost": res["failed"]}
 
 
@@ -101,7 +142,7 @@ def cmd_draft_new(args):
     return draft.create(
         start=args.start, name=args.name, loop=not args.no_loop, end=args.end,
         strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
-        avoid_concrete=args.vermijd_beton,
+        avoid_concrete=args.vermijd_beton, region=args.region,
     )
 
 
@@ -191,16 +232,19 @@ def cmd_draft_route(args):
     from . import climbs, draft
 
     d = draft.load(args.id)
-    db = climbs.all_climbs()
-    return draft.route(d, db)
+    with draft.region_scope(d):
+        return draft.route(d, climbs.all_climbs())
 
 
 def cmd_draft_suggest(args):
     from . import climbs, draft
 
     d = draft.load(args.id)
-    db = climbs.all_climbs()
-    sugg = draft.suggest(d, db, max_detour_km=args.max_detour_km, limit=args.limit)
+    with draft.region_scope(d):
+        sugg = draft.suggest(
+            d, climbs.all_climbs(),
+            max_detour_km=args.max_detour_km, limit=args.limit,
+        )
     return {
         "draft": d["id"],
         "huidige_km": d["computed"]["total_km"],
@@ -213,20 +257,21 @@ def cmd_draft_optimize(args):
     from . import climbs, draft
 
     d = draft.load(args.id)
-    db = climbs.all_climbs()
-    return draft.optimize(
-        d, db, max_km=args.max_km, objective=args.objective,
-        min_ratio=args.min_ratio, max_rounds=args.max_rounds,
-    )
+    with draft.region_scope(d):
+        return draft.optimize(
+            d, climbs.all_climbs(), max_km=args.max_km,
+            objective=args.objective, min_ratio=args.min_ratio,
+            max_rounds=args.max_rounds,
+        )
 
 
 def cmd_draft_export(args):
     from . import climbs, draft, gpx
 
     d = draft.load(args.id)
-    db = climbs.all_climbs()
     path = args.output or f"{d['name']}.gpx"
-    return gpx.export(d, db, path)
+    with draft.region_scope(d):
+        return gpx.export(d, climbs.all_climbs(), path)
 
 
 def cmd_draft_preview(args):
@@ -234,7 +279,15 @@ def cmd_draft_preview(args):
 
     d = draft.load(args.id)
     path = args.output or f"{d['name']}-preview.html"
-    return preview.export(d, climbs.all_climbs(), path)
+    with draft.region_scope(d):
+        return preview.export(d, climbs.all_climbs(), path)
+
+
+def _region_arg(parser):
+    parser.add_argument(
+        "--region",
+        help="regioslug (overschrijft LUSMAKER_REGION en de default-regio)",
+    )
 
 
 def main(argv=None):
@@ -242,16 +295,35 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("setup", help="download OSM-extract + DEM en schrijf GraphHopper-config")
+    _region_arg(s)
     s.set_defaults(func=cmd_setup)
 
     s = sub.add_parser("build", help="bouw lokale caches: extract, gazetteer, klim-database")
+    _region_arg(s)
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_build)
 
     s = sub.add_parser("status", help="check data + GraphHopper")
+    _region_arg(s)
     s.set_defaults(func=cmd_status)
 
+    r = sub.add_parser("region", help="regiopacks beheren")
+    rsub = r.add_subparsers(dest="subcmd", required=True)
+    s = rsub.add_parser("add", help="download en bouw een nieuw regiopack")
+    s.add_argument("slug")
+    s.add_argument("--geofabrik", required=True, help="pad zoals europe/netherlands/zeeland")
+    s.add_argument("--bbox", required=True, help="minlat,minlon,maxlat,maxlon")
+    s.set_defaults(func=cmd_region_add)
+    s = rsub.add_parser("list", help="toon geregistreerde regio's en status")
+    s.set_defaults(func=cmd_region_list)
+    s = rsub.add_parser("default", help="stel de default-regio in")
+    s.add_argument("slug")
+    s.set_defaults(func=cmd_region_default)
+    s = rsub.add_parser("migrate-legacy", help="verplaats bestaande data naar regio vlaanderen")
+    s.set_defaults(func=cmd_region_migrate_legacy)
+
     s = sub.add_parser("geocode", help="zoek een plaats of 'straat, plaats'")
+    _region_arg(s)
     s.add_argument("query")
     s.add_argument("--limit", type=int, default=5)
     s.set_defaults(func=cmd_geocode)
@@ -259,14 +331,18 @@ def main(argv=None):
     c = sub.add_parser("climbs", help="klim-database")
     csub = c.add_subparsers(dest="subcmd", required=True)
     s = csub.add_parser("list", help="alle opgeloste klimmen")
+    _region_arg(s)
     s.set_defaults(func=cmd_climbs_list)
     s = csub.add_parser("near", help="klimmen in de buurt van een punt")
+    _region_arg(s)
     s.add_argument("plaats", help="plaatsnaam of lat,lon")
     s.add_argument("--radius-km", type=float, default=15.0)
     s.set_defaults(func=cmd_climbs_near)
     s = csub.add_parser("resolve", help="klim-database opnieuw opbouwen uit climbs.yaml")
+    _region_arg(s)
     s.set_defaults(func=cmd_climbs_resolve)
     s = csub.add_parser("detect", help="auto-detectie: DEM-sweep over alle wegen")
+    _region_arg(s)
     s.add_argument("--min-gain", type=float, default=18.0)
     s.add_argument("--min-avg", type=float, default=3.0)
     s.set_defaults(func=cmd_climbs_detect)
@@ -274,18 +350,22 @@ def main(argv=None):
     h = sub.add_parser("heat", help="persoonlijke heatmap uit eigen GPX-ritten")
     hsub = h.add_subparsers(dest="subcmd", required=True)
     s = hsub.add_parser("build", help="heatmap bouwen uit eigen GPX + OSM-traces")
+    _region_arg(s)
     s.add_argument("--min-passes", type=int, default=1, help="min. aantal eigen ritten per cel")
     s.add_argument("--osm-min-points", type=int, default=30, help="min. OSM-tracepunten per cel")
     s.set_defaults(func=cmd_heat_build)
     s = hsub.add_parser("fetch-osm", help="publieke OSM GPS-traces downloaden (eenmalig)")
+    _region_arg(s)
     s.add_argument("--max-pages", type=int, default=150)
     s.set_defaults(func=cmd_heat_fetch_osm)
     s = hsub.add_parser("status")
+    _region_arg(s)
     s.set_defaults(func=cmd_heat_status)
 
     d = sub.add_parser("draft", help="routes bouwen")
     dsub = d.add_subparsers(dest="subcmd", required=True)
     s = dsub.add_parser("new", help="nieuwe draft")
+    _region_arg(s)
     s.add_argument("--start", required=True, help="plaats, 'straat, plaats' of lat,lon")
     s.add_argument("--name")
     s.add_argument("--end", help="eindpunt (anders lus naar start)")
@@ -295,42 +375,52 @@ def main(argv=None):
     s.add_argument("--vermijd-beton", action="store_true", help="zachte straf op betonbanen")
     s.set_defaults(func=cmd_draft_new)
     s = dsub.add_parser("list")
+    _region_arg(s)
     s.set_defaults(func=cmd_draft_list)
     s = dsub.add_parser("show")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("--full", action="store_true", help="inclusief geometrie")
     s.set_defaults(func=cmd_draft_show)
     s = dsub.add_parser("delete")
+    _region_arg(s)
     s.add_argument("id")
     s.set_defaults(func=cmd_draft_delete)
     s = dsub.add_parser("add-climb")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("climb")
     s.add_argument("--at", type=int, help="positie in de klimvolgorde (0-based)")
     s.set_defaults(func=cmd_draft_add_climb)
     s = dsub.add_parser("remove-climb")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("climb")
     s.set_defaults(func=cmd_draft_remove_climb)
     s = dsub.add_parser("avoid", help="zachte vermijdzone rond een plaats")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("plaats")
     s.add_argument("--radius-km", type=float, default=2.5)
     s.add_argument("--factor", type=float, default=0.35)
     s.set_defaults(func=cmd_draft_avoid)
     s = dsub.add_parser("unavoid", help="vermijdzone weghalen")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("plaats")
     s.set_defaults(func=cmd_draft_unavoid)
     s = dsub.add_parser("route", help="routeer alle legs (lus vermijdt eigen heenweg)")
+    _region_arg(s)
     s.add_argument("id")
     s.set_defaults(func=cmd_draft_route)
     s = dsub.add_parser("suggest", help="klimmen die weinig omweg vragen")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("--max-detour-km", type=float, default=10.0)
     s.add_argument("--limit", type=int, default=5)
     s.set_defaults(func=cmd_draft_suggest)
     s = dsub.add_parser("optimize", help="vul de route greedy met klimmen binnen een budget")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("--max-km", type=float, required=True, help="hard afstandsbudget")
     s.add_argument("--objective", choices=("hm", "hm-per-km"), default="hm")
@@ -338,17 +428,24 @@ def main(argv=None):
     s.add_argument("--max-rounds", type=int, default=12, help="maximum aantal greedy-rondes")
     s.set_defaults(func=cmd_draft_optimize)
     s = dsub.add_parser("export", help="schrijf GPX")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("-o", "--output")
     s.set_defaults(func=cmd_draft_export)
     s = dsub.add_parser("preview", help="schrijf een HTML-kaartpreview")
+    _region_arg(s)
     s.add_argument("id")
     s.add_argument("-o", "--output")
     s.set_defaults(func=cmd_draft_preview)
 
     args = p.parse_args(argv)
     try:
-        _out(args.func(args))
+        if args.cmd == "region":
+            result = args.func(args)
+        else:
+            with config.use_region(getattr(args, "region", None)):
+                result = args.func(args)
+        _out(result)
     except Exception as e:  # nette JSON-fout voor de LLM
         _err(e)
 

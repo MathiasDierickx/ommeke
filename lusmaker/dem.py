@@ -9,8 +9,8 @@ from . import config, geo
 VOID = -32768
 
 
-@lru_cache(maxsize=8)
-def _tile(lat_i: int, lon_i: int):
+@lru_cache(maxsize=24)
+def _tile(region_slug: str, lat_i: int, lon_i: int):
     name = f"{'N' if lat_i >= 0 else 'S'}{abs(lat_i):02d}{'E' if lon_i >= 0 else 'W'}{abs(lon_i):03d}"
     path = config.DATA / f"{name}.hgt"
     if not path.exists():
@@ -22,7 +22,7 @@ def _tile(lat_i: int, lon_i: int):
 
 def elevation(lat: float, lon: float) -> float | None:
     lat_i, lon_i = math.floor(lat), math.floor(lon)
-    t = _tile(lat_i, lon_i)
+    t = _tile(config.current_region().slug, lat_i, lon_i)
     if t is None:
         return None
     n = t.shape[0] - 1  # 3600

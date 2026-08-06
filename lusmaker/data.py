@@ -32,7 +32,7 @@ def _download(url: str, dest, label: str) -> None:
 
 def setup() -> dict:
     config.ensure_dirs()
-    _download(config.PBF_URL, config.PBF_PATH, "belgium-latest.osm.pbf")
+    _download(config.PBF_URL, config.PBF_PATH, config.PBF_PATH.name)
     for name in config.DEM_TILES:
         url = config.DEM_URL.format(ns=name[:3], name=name)
         gz = config.DATA / f"{name}.hgt.gz"

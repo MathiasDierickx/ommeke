@@ -21,8 +21,8 @@ def detail_meters(coords, detail_intervals, wanted) -> float:
     return total
 
 
-@lru_cache(maxsize=1)
-def _big_road_grid():
+@lru_cache(maxsize=8)
+def _big_road_grid(region_slug: str):
     """Gridindex van primaire/secundaire wegsegmenten uit het OSM-extract."""
     with open(config.EXTRACT_PKL, "rb") as f:
         extract = pickle.load(f)
@@ -68,7 +68,7 @@ def count_crossings(route_coords) -> int:
     Parallelle stukken (oprijden/afslaan, kort meerijden) tellen niet mee:
     enkel snijdingen met een hoek > 30 graden, samengevoegd binnen 60 m.
     """
-    segs, grid = _big_road_grid()
+    segs, grid = _big_road_grid(config.current_region().slug)
     pts = [(c[0], c[1]) for c in route_coords]
     events = []
     for i in range(len(pts) - 1):

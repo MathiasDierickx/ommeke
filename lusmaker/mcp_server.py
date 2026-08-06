@@ -5,7 +5,7 @@ try:
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
 
-from . import climbs, config, draft, geocode as geocode_mod, geo, gpx, preview
+from . import climbs, config, draft, geocode as geocode_mod, geo, gpx, preview, regions
 
 
 mcp = FastMCP("lusmaker")
@@ -18,6 +18,12 @@ def status() -> dict:
 
 
 @mcp.tool()
+def list_regions() -> dict:
+    """Toon beschikbare regiopacks, de default-regio en hun status."""
+    return regions.list_all()
+
+
+@mcp.tool()
 def geocode(query: str, limit: int = 5) -> dict:
     """Zoek een plaats, straat of adres in de lokale geocoder."""
     return {
@@ -27,32 +33,37 @@ def geocode(query: str, limit: int = 5) -> dict:
 
 
 @mcp.tool()
-def list_climbs(near: str | None = None, radius_km: float = 15) -> dict:
+def list_climbs(
+    near: str | None = None,
+    radius_km: float = 15,
+    region: str | None = None,
+) -> dict:
     """Toon bekende klimmen, eventueel rond een plaats of ``lat,lon``."""
-    if near is None:
-        data = climbs.load()
-        return {
-            "klimmen": [
-                climbs.summary(climb)
-                for climb in sorted(
-                    data["climbs"].values(), key=lambda climb: climb["id"]
-                )
-            ],
-            "niet_opgelost": data["failed"],
-        }
+    with config.use_region(region):
+        if near is None:
+            data = climbs.load()
+            return {
+                "klimmen": [
+                    climbs.summary(climb)
+                    for climb in sorted(
+                        data["climbs"].values(), key=lambda climb: climb["id"]
+                    )
+                ],
+                "niet_opgelost": data["failed"],
+            }
 
-    point, _ = geocode_mod.resolve(near)
-    results = []
-    for climb in climbs.all_climbs().values():
-        distance_m = geo.haversine(
-            point["lat"], point["lon"], climb["foot"][0], climb["foot"][1]
-        )
-        if distance_m <= radius_km * 1000:
-            item = climbs.summary(climb)
-            item["afstand_km"] = round(distance_m / 1000, 1)
-            results.append(item)
-    results.sort(key=lambda climb: climb["afstand_km"])
-    return {"bij": point["label"], "klimmen": results}
+        point, _ = geocode_mod.resolve(near)
+        results = []
+        for climb in climbs.all_climbs().values():
+            distance_m = geo.haversine(
+                point["lat"], point["lon"], climb["foot"][0], climb["foot"][1]
+            )
+            if distance_m <= radius_km * 1000:
+                item = climbs.summary(climb)
+                item["afstand_km"] = round(distance_m / 1000, 1)
+                results.append(item)
+        results.sort(key=lambda climb: climb["afstand_km"])
+        return {"bij": point["label"], "klimmen": results}
 
 
 @mcp.tool()
@@ -64,6 +75,7 @@ def new_draft(
     strict: bool = False,
     vermijd_kasseien: bool = False,
     vermijd_beton: bool = False,
+    region: str | None = None,
 ) -> dict:
     """Maak een nieuwe route-draft vanaf een plaatsnaam of ``lat,lon``."""
     return draft.create(
@@ -74,6 +86,7 @@ def new_draft(
         strict=strict,
         avoid_cobbles=vermijd_kasseien,
         avoid_concrete=vermijd_beton,
+        region=region,
     )
 
 
@@ -126,7 +139,8 @@ def unavoid_place(draft_id: str, place: str) -> dict:
 def route_draft(draft_id: str) -> dict:
     """Routeer de draft via GraphHopper en bereken de kwaliteitsmetrieken."""
     d = draft.load(draft_id)
-    return draft.route(d, climbs.all_climbs())
+    with draft.region_scope(d):
+        return draft.route(d, climbs.all_climbs())
 
 
 @mcp.tool()
@@ -135,12 +149,13 @@ def suggest_climbs(
 ) -> dict:
     """Zoek klimmen die met weinig extra kilometers in de route passen."""
     d = draft.load(draft_id)
-    suggestions = draft.suggest(
-        d,
-        climbs.all_climbs(),
-        max_detour_km=max_detour_km,
-        limit=limit,
-    )
+    with draft.region_scope(d):
+        suggestions = draft.suggest(
+            d,
+            climbs.all_climbs(),
+            max_detour_km=max_detour_km,
+            limit=limit,
+        )
     return {
         "draft": d["id"],
         "huidige_km": d["computed"]["total_km"],
@@ -161,13 +176,14 @@ def optimize_draft(
 ) -> dict:
     """Vul de route greedy met klimmen binnen een hard afstandsbudget."""
     d = draft.load(draft_id)
-    return draft.optimize(
-        d,
-        climbs.all_climbs(),
-        max_km=max_km,
-        objective=objective,
-        min_ratio=min_ratio,
-    )
+    with draft.region_scope(d):
+        return draft.optimize(
+            d,
+            climbs.all_climbs(),
+            max_km=max_km,
+            objective=objective,
+            min_ratio=min_ratio,
+        )
 
 
 @mcp.tool()
@@ -175,7 +191,8 @@ def export_gpx(draft_id: str, output_path: str | None = None) -> dict:
     """Exporteer een gerouteerde draft als GPX-bestand."""
     d = draft.load(draft_id)
     path = output_path or f"{d['name']}.gpx"
-    return gpx.export(d, climbs.all_climbs(), path)
+    with draft.region_scope(d):
+        return gpx.export(d, climbs.all_climbs(), path)
 
 
 @mcp.tool()
@@ -183,7 +200,8 @@ def preview_draft(draft_id: str, output_path: str | None = None) -> dict:
     """Schrijf een HTML-kaartpreview van een gerouteerde draft."""
     d = draft.load(draft_id)
     path = output_path or f"{d['name']}-preview.html"
-    return preview.export(d, climbs.all_climbs(), path)
+    with draft.region_scope(d):
+        return preview.export(d, climbs.all_climbs(), path)
 
 
 def main() -> None:

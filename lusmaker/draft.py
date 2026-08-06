@@ -2,6 +2,7 @@
 import json
 import time
 import uuid
+from contextlib import contextmanager
 
 from . import climbs as climbs_mod
 from . import config, geo, gh
@@ -29,12 +30,26 @@ def save(d: dict) -> None:
         json.dump(d, f, ensure_ascii=False)
 
 
+def region_slug(d: dict) -> str:
+    """Oude drafts horen na migratie bij Vlaanderen."""
+    if d.get("region"):
+        return d["region"]
+    return config.LEGACY_SLUG
+
+
+@contextmanager
+def region_scope(d: dict):
+    with config.use_region(region_slug(d)) as region:
+        yield region
+
+
 def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False,
         avoid_cobbles: bool = False, avoid_concrete: bool = False) -> dict:
     d = {
         "id": uuid.uuid4().hex[:6],
         "name": name or "lus",
         "created": time.strftime("%Y-%m-%d %H:%M"),
+        "region": config.current_region().slug,
         "start": start,  # {lat, lon, label}
         "end": end,      # None => zelfde als start bij loop
         "loop": loop,
@@ -51,21 +66,23 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
 
 def create(start: str, name: str | None = None, loop: bool = True,
            end: str | None = None, strict: bool = False,
-           avoid_cobbles: bool = False, avoid_concrete: bool = False) -> dict:
+           avoid_cobbles: bool = False, avoid_concrete: bool = False,
+           region: str | None = None) -> dict:
     """Maak een draft vanuit gebruikersgerichte plaatsnamen of coördinaten."""
     from . import geocode
 
-    start_point, alternatives = geocode.resolve(start)
-    end_point = geocode.resolve(end)[0] if end else None
-    d = new(
-        start=start_point,
-        name=name,
-        loop=loop,
-        end=end_point,
-        strict=strict,
-        avoid_cobbles=avoid_cobbles,
-        avoid_concrete=avoid_concrete,
-    )
+    with config.use_region(region):
+        start_point, alternatives = geocode.resolve(start)
+        end_point = geocode.resolve(end)[0] if end else None
+        d = new(
+            start=start_point,
+            name=name,
+            loop=loop,
+            end=end_point,
+            strict=strict,
+            avoid_cobbles=avoid_cobbles,
+            avoid_concrete=avoid_concrete,
+        )
     out = summary(d)
     out["start_geocoded_als"] = start_point["label"]
     if alternatives:
@@ -82,8 +99,7 @@ def list_all() -> list[dict]:
     for p in sorted(config.DRAFTS.glob("*.json")):
         with open(p) as f:
             d = json.load(f)
-        out.append(
-            {
+        item = {
                 "id": d["id"],
                 "name": d["name"],
                 "start": d["start"].get("label"),
@@ -91,7 +107,9 @@ def list_all() -> list[dict]:
                 "climbs": d["climbs"],
                 "total_km": (d.get("computed") or {}).get("total_km"),
             }
-        )
+        if config.load_registry() is not None:
+            item["region"] = region_slug(d)
+        out.append(item)
     return out
 
 
@@ -99,19 +117,20 @@ def add_climb(draft_id: str, climb_id: str, position: int | None = None,
               climb_db: dict | None = None) -> dict:
     """Voeg een bekende klim toe en maak een bestaande berekening ongeldig."""
     d = load(draft_id)
-    db = climbs_mod.all_climbs() if climb_db is None else climb_db
-    if climb_id not in db:
-        raise DraftError(f"onbekende klim '{climb_id}' — zie `lus climbs list`")
-    if climb_id in d["climbs"]:
-        raise DraftError(f"klim '{climb_id}' zit al in de draft")
-    insert_at = position if position is not None else len(d["climbs"])
-    d["climbs"].insert(insert_at, climb_id)
-    d["computed"] = None
-    d.pop("_geometry", None)
-    save(d)
-    out = summary(d)
-    out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
-    return out
+    with region_scope(d):
+        db = climbs_mod.all_climbs() if climb_db is None else climb_db
+        if climb_id not in db:
+            raise DraftError(f"onbekende klim '{climb_id}' — zie `lus climbs list`")
+        if climb_id in d["climbs"]:
+            raise DraftError(f"klim '{climb_id}' zit al in de draft")
+        insert_at = position if position is not None else len(d["climbs"])
+        d["climbs"].insert(insert_at, climb_id)
+        d["computed"] = None
+        d.pop("_geometry", None)
+        save(d)
+        out = summary(d)
+        out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
+        return out
 
 
 def remove_climb(draft_id: str, climb_id: str) -> dict:
@@ -132,7 +151,8 @@ def avoid_place(draft_id: str, place: str, radius_km: float = 2.5,
     from . import geocode
 
     d = load(draft_id)
-    point, alternatives = geocode.resolve(place)
+    with region_scope(d):
+        point, alternatives = geocode.resolve(place)
     d.setdefault("avoid_places", []).append(
         {
             "label": point["label"],
@@ -211,6 +231,11 @@ def place_areas(d: dict) -> list[dict]:
 
 
 def route(d: dict, climb_db: dict, router=gh.route) -> dict:
+    with region_scope(d):
+        return _route(d, climb_db, router)
+
+
+def _route(d: dict, climb_db: dict, router=gh.route) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
     legs = _waypoints(d, climb_db)
     if not legs:
@@ -285,6 +310,8 @@ def summary(d: dict) -> dict:
         "climbs": d["climbs"],
         "computed": d.get("computed"),
     }
+    if config.load_registry() is not None:
+        out["region"] = region_slug(d)
     return out
 
 
@@ -362,7 +389,8 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
 def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5,
             router=gh.route) -> list[dict]:
     """Klimmen dicht bij de huidige route, gerangschikt op extra kilometers."""
-    return _candidates(d, climb_db, max_detour_km, limit, router=router)
+    with region_scope(d):
+        return _candidates(d, climb_db, max_detour_km, limit, router=router)
 
 
 def _pick_anchor(start: dict, climb_db: dict, max_km: float) -> dict | None:
@@ -413,6 +441,16 @@ def _select_candidate(candidates: list[dict], objective: str) -> dict | None:
 def optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
              min_ratio: float = 8.0, max_rounds: int = 12,
              route_fn=route, candidates_fn=_candidates) -> dict:
+    with region_scope(d):
+        return _optimize(
+            d, climb_db, max_km, objective, min_ratio, max_rounds,
+            route_fn, candidates_fn,
+        )
+
+
+def _optimize(d: dict, climb_db: dict, max_km: float, objective: str = "hm",
+              min_ratio: float = 8.0, max_rounds: int = 12,
+              route_fn=route, candidates_fn=_candidates) -> dict:
     """Vul een draft greedy met klimmen binnen een hard afstandsbudget."""
     if max_km <= 0:
         raise DraftError("max-km moet groter dan 0 zijn")

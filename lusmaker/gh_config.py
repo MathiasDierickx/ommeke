@@ -5,7 +5,7 @@ from . import config
 
 GH_CONFIG_YML = """\
 graphhopper:
-  datareader.file: /lus/data/belgium-latest.osm.pbf
+  datareader.file: /lus/data/{pbf_name}
   graph.location: /lus/gh/graph-cache
 
   graph.elevation.provider: skadi
@@ -27,11 +27,11 @@ graphhopper:
 server:
   application_connectors:
     - type: http
-      port: 8989
+      port: {gh_port}
       bind_host: 0.0.0.0
   admin_connectors:
     - type: http
-      port: 8990
+      port: {admin_port}
       bind_host: 0.0.0.0
 """
 
@@ -58,8 +58,15 @@ POPULAR_RULE = {"if": "!in_popular", "multiply_by": "0.75"}
 
 def write_gh_files() -> list[str]:
     config.ensure_dirs()
+    region = config.current_region()
     cfg = config.GH_DIR / "config.yml"
-    cfg.write_text(GH_CONFIG_YML)
+    cfg.write_text(
+        GH_CONFIG_YML.format(
+            pbf_name=region.pbf_name,
+            gh_port=region.gh_port,
+            admin_port=region.gh_port + 1,
+        )
+    )
     model = dict(QUIET_MODEL)
     if (config.CUSTOM_AREAS / "popular.geojson").exists():
         model = {"priority": QUIET_MODEL["priority"] + [POPULAR_RULE]}
