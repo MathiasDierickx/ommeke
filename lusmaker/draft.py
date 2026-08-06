@@ -36,6 +36,13 @@ def save(d: dict) -> None:
         json.dump(d, f, ensure_ascii=False)
 
 
+def _invalidate_route(d: dict) -> None:
+    """Maak alle van route-invoer afgeleide waarden ongeldig."""
+    d["computed"] = None
+    d.pop("_geometry", None)
+    d.pop("_probe", None)
+
+
 def region_slug(d: dict) -> str:
     """Oude drafts horen na migratie bij Vlaanderen."""
     if d.get("region"):
@@ -162,8 +169,7 @@ def add_climb(draft_id: str, climb_id: str, position: int | None = None,
             raise DraftError(f"klim '{climb_id}' zit al in de draft")
         insert_at = position if position is not None else len(d["climbs"])
         d["climbs"].insert(insert_at, climb_id)
-        d["computed"] = None
-        d.pop("_geometry", None)
+        _invalidate_route(d)
         save(d)
         out = summary(d)
         out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
@@ -176,8 +182,7 @@ def remove_climb(draft_id: str, climb_id: str) -> dict:
     if climb_id not in d["climbs"]:
         raise DraftError(f"klim '{climb_id}' zit niet in de draft")
     d["climbs"].remove(climb_id)
-    d["computed"] = None
-    d.pop("_geometry", None)
+    _invalidate_route(d)
     save(d)
     return summary(d)
 
@@ -199,8 +204,7 @@ def avoid_place(draft_id: str, place: str, radius_km: float = 2.5,
             "factor": factor,
         }
     )
-    d["computed"] = None
-    d.pop("_geometry", None)
+    _invalidate_route(d)
     save(d)
     out = summary(d)
     if alternatives:
@@ -219,8 +223,7 @@ def unavoid_place(draft_id: str, place: str) -> dict:
     ]
     if len(d["avoid_places"]) == before:
         raise DraftError(f"geen vermijdzone gevonden voor '{place}'")
-    d["computed"] = None
-    d.pop("_geometry", None)
+    _invalidate_route(d)
     save(d)
     return summary(d)
 
@@ -402,6 +405,7 @@ def route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
 
 def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
+    d.pop("_probe", None)
     legs = _waypoints(d, climb_db)
     if not legs:
         raise DraftError("draft heeft geen doel: voeg een klim toe of zet een eindpunt")
@@ -542,10 +546,9 @@ def _candidate_surface_components(routes: list[dict], popular_cells=_LOAD_HEAT) 
     }
 
 
-def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
-                banned=frozenset(), router=gh.route, weighted: bool = False,
-                popular_cells=_LOAD_HEAT) -> list[dict]:
-    """Bereken kandidaat-klimmen dicht bij de huidige route."""
+def _candidate_prefilter(d: dict, climb_db: dict, max_detour_km: float,
+                         banned=frozenset()) -> list[tuple]:
+    """Goedkope suggest-prefilter zonder routercalls."""
     if not d.get("computed") or not d.get("_geometry"):
         raise DraftError("routeer eerst: `lus draft route <id>`")
 
@@ -578,7 +581,15 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             if est / 1000 <= max_detour_km * 1.5:
                 candidates.append((est, cid, c, i, a, b))
 
-    candidates.sort()
+    return sorted(candidates)
+
+
+def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
+                banned=frozenset(), router=gh.route, weighted: bool = False,
+                popular_cells=_LOAD_HEAT) -> list[dict]:
+    """Bereken kandidaat-klimmen dicht bij de huidige route."""
+    candidates = _candidate_prefilter(d, climb_db, max_detour_km, banned=banned)
+    legs_meta = d["computed"]["legs"]
     routing = routing_preferences(d)
     zones = place_areas(d)
     per_climb: dict[str, dict] = {}
@@ -646,6 +657,50 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
         per_climb[cid] = suggestion
     out = sorted(per_climb.values(), key=lambda s: s["extra_km"])[:limit]
     return out
+
+
+def probe(d: dict, climb_db: dict, router=gh.route) -> dict:
+    """Routeer eenmaal en cache een compacte terreinverkenning op de draft."""
+    if d.get("_probe") is not None:
+        return d["_probe"]
+
+    route(d, climb_db, router=router)
+    quality = copy.deepcopy(d["computed"].get("kwaliteit") or {})
+    nearby_climbs = {
+        candidate[1]
+        for candidate in _candidate_prefilter(d, climb_db, max_detour_km=5.0)
+    }
+
+    route_coords = [
+        (point[0], point[1])
+        for leg in d.get("_geometry", [])
+        for point in leg
+    ]
+    try:
+        from . import geocode
+
+        place_cores = geocode.places_near_route(route_coords, radius_m=400.0)
+    except RuntimeError:
+        # Een route kan uit een cassette of minimale installatie komen zonder
+        # gazetteer; readiness blijft dan bruikbaar voor de andere vragen.
+        place_cores = []
+
+    result = {
+        "km": d["computed"]["total_km"],
+        "hm": d["computed"]["ascend_m"],
+        "kwaliteit": quality,
+        "terrein": {
+            "kassei_aanwezig_m": quality.get("kassei_m", 0),
+            "beton_m": quality.get("beton_m", 0),
+            "offroad_beschikbaar_pct": quality.get("offroad_pct", 0),
+            "klimmen_binnen_5km": len(nearby_climbs),
+            "heat_dekking_pct": quality.get("populair_pct"),
+            "plaatskernen": place_cores,
+        },
+    }
+    d["_probe"] = result
+    save(d)
+    return result
 
 
 def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5,
