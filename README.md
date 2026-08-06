@@ -34,8 +34,15 @@ LLM (Claude Code, ...) ──bash──> lus CLI (JSON in/uit)
   dus altijd in de klimrichting.
 - **Klim-database**: `lusmaker/climbs.yaml` (namen + gemeente) wordt gematcht op
   OSM-straatnamen; uit het DEM-hoogteprofiel wordt het steilste aaneengesloten
-  segment geknipt (de straat is vaak langer dan de klim). Resultaten liggen
-  dicht bij de Climbfinder-cijfers, uit 100% open data.
+  segment geknipt (de straat is vaak langer dan de klim). Voet en top worden
+  langs de straat tot maximaal 120 m naar een kruispunt verlengd; `kern_m` en
+  de klimstatistieken blijven het steile kernsegment beschrijven. Resultaten
+  liggen dicht bij de Climbfinder-cijfers, uit 100% open data.
+
+Na een upgrade naar het extract-cacheformaat met kruispunten moet de lokale
+cache bewust opnieuw worden gebouwd. Draai eenmalig `lus build --force` en
+daarna `lus climbs detect`. Dit kan klimgeometrieën en daardoor gerouteerde
+metriekwaarden wijzigen.
 
 ## Setup (eenmalig)
 

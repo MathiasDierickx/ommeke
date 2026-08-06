@@ -10,6 +10,7 @@ from . import config
 
 PLACE_TYPES = {"city", "town", "village", "municipality", "hamlet", "suburb", "borough", "quarter"}
 KEEP_TAGS = ("highway", "name", "surface")
+EXTRACT_FORMAT_VERSION = 2
 
 
 def _in_bbox(lat: float, lon: float) -> bool:
@@ -17,11 +18,30 @@ def _in_bbox(lat: float, lon: float) -> bool:
     return b[0] <= lat <= b[2] and b[1] <= lon <= b[3]
 
 
+def _record_way_refs(owner: dict[int, int], junctions: set[int], way_id: int, refs) -> None:
+    for ref in set(refs):
+        previous = owner.setdefault(ref, way_id)
+        if previous != way_id:
+            junctions.add(ref)
+
+
+def _junction_refs(ways) -> set[int]:
+    """Node-refs die door minstens twee verschillende ways gebruikt worden."""
+    owner: dict[int, int] = {}
+    junctions: set[int] = set()
+    for way_id, refs, *_rest in ways:
+        _record_way_refs(owner, junctions, way_id, refs)
+    return junctions
+
+
 def build_extract(force: bool = False) -> dict:
     """Parse de Belgium-PBF en cache benoemde wegen + plaatsen in de regio-bbox."""
     if config.EXTRACT_PKL.exists() and not force:
         with open(config.EXTRACT_PKL, "rb") as f:
-            return pickle.load(f)
+            extract = pickle.load(f)
+        if extract.get("format_version") != EXTRACT_FORMAT_VERSION:
+            raise RuntimeError("extract-cache is verouderd — draai `lus build --force`")
+        return extract
 
     import osmium
 
@@ -42,20 +62,21 @@ def build_extract(force: bool = False) -> dict:
             places.append((name, ptype, lat, lon))
     print(f"[build]   {len(places)} plaatsen", file=sys.stderr)
 
-    print("[build] pass 2/2: benoemde wegen (dit duurt een paar minuten) ...", file=sys.stderr)
+    print("[build] pass 2/2: wegen en kruispunten (dit duurt een paar minuten) ...", file=sys.stderr)
     ways = []
+    ref_owner: dict[int, int] = {}
+    junction_refs: set[int] = set()
     fp = (
         osmium.FileProcessor(pbf, osmium.osm.NODE | osmium.osm.WAY)
         .with_locations()
         .with_filter(osmium.filter.EntityFilter(osmium.osm.WAY))
         .with_filter(osmium.filter.KeyFilter("highway"))
-        .with_filter(osmium.filter.KeyFilter("name"))
     )
     n_seen = 0
     for w in fp:
         n_seen += 1
         if n_seen % 200_000 == 0:
-            print(f"[build]   {n_seen} benoemde wegen gezien, {len(ways)} in regio", file=sys.stderr)
+            print(f"[build]   {n_seen} wegen gezien, {len(ways)} benoemd in regio", file=sys.stderr)
         refs = []
         coords = []
         for node in w.nodes:
@@ -64,11 +85,22 @@ def build_extract(force: bool = False) -> dict:
                 coords.append((node.location.lat, node.location.lon))
         if len(coords) < 2 or not _in_bbox(*coords[0]):
             continue
+        _record_way_refs(ref_owner, junction_refs, w.id, refs)
+        if not w.tags.get("name"):
+            continue
         tags = {k: w.tags[k] for k in KEEP_TAGS if k in w.tags}
         ways.append((w.id, refs, coords, tags))
-    print(f"[build]   {len(ways)} wegen in regio", file=sys.stderr)
+    print(
+        f"[build]   {len(ways)} benoemde wegen en {len(junction_refs)} kruispunten in regio",
+        file=sys.stderr,
+    )
 
-    extract = {"ways": ways, "places": places}
+    extract = {
+        "format_version": EXTRACT_FORMAT_VERSION,
+        "ways": ways,
+        "places": places,
+        "junction_refs": junction_refs,
+    }
     config.ensure_dirs()
     with open(config.EXTRACT_PKL, "wb") as f:
         pickle.dump(extract, f, protocol=pickle.HIGHEST_PROTOCOL)

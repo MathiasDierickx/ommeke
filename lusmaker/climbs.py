@@ -7,6 +7,9 @@ import yaml
 
 from . import config, dem, geo
 
+JUNCTION_EXTENSION_M = 120.0
+BLOCK_WARNING = "eindigt midden in een blok"
+
 
 def _load_yaml():
     with open(config.climbs_yaml_path()) as f:
@@ -87,14 +90,62 @@ def _order_chain(ways, idxs):
             break
         dfs(leaf, set(), [], 0.0)
 
-    merged, way_ids = [], []
+    merged, merged_refs, way_ids = [], [], []
     for k, first in best_path:
-        wid, _refs, coords, _tags = ways[k]
+        wid, refs, coords, _tags = ways[k]
         if not first:
             coords = coords[::-1]
+            refs = refs[::-1]
         way_ids.append(wid)
         merged.extend(coords if not merged else coords[1:])
-    return merged, way_ids
+        merged_refs.extend(refs if not merged_refs else refs[1:])
+    return merged, merged_refs, way_ids
+
+
+def _chain_index_for_resampled(merged, sampled, sample_index):
+    """Map een resamplepunt op de dichtstbijzijnde originele ketenknoop."""
+    point = sampled[sample_index]
+    return min(
+        range(len(merged)),
+        key=lambda i: geo.haversine(point[0], point[1], merged[i][0], merged[i][1]),
+    )
+
+
+def _walk_to_junction(merged, refs, start, direction, junction_refs, cap_m):
+    if refs[start] in junction_refs:
+        return start, True
+    distance = 0.0
+    current = start
+    while 0 <= current + direction < len(merged):
+        nxt = current + direction
+        distance += geo.haversine(
+            merged[current][0], merged[current][1], merged[nxt][0], merged[nxt][1]
+        )
+        if distance > cap_m:
+            break
+        current = nxt
+        if refs[current] in junction_refs:
+            return current, True
+    return start, False
+
+
+def _extend_to_junctions(
+    merged, merged_refs, foot_index, top_index, junction_refs, cap_m=JUNCTION_EXTENSION_M
+):
+    """Verleng de klim in beide richtingen langs de originele ketting."""
+    uphill_direction = 1 if top_index > foot_index else -1
+    foot_index, foot_found = _walk_to_junction(
+        merged, merged_refs, foot_index, -uphill_direction, junction_refs, cap_m
+    )
+    top_index, top_found = _walk_to_junction(
+        merged, merged_refs, top_index, uphill_direction, junction_refs, cap_m
+    )
+    if foot_index < top_index:
+        geom = merged[foot_index : top_index + 1]
+    else:
+        geom = merged[top_index : foot_index + 1][::-1]
+    warnings = [] if foot_found and top_found else [BLOCK_WARNING]
+    return geom, warnings
 
 
 def _best_segment(merged):
@@ -102,7 +153,9 @@ def _best_segment(merged):
 
     De OSM-straat is vaak langer dan de eigenlijke helling (vlakke aanloop,
     afdaling na de top); dit knipt het echte klimstuk eruit.
-    Returns (geom, gain, length) of None als er geen echte klim in zit.
+    Returns (geom, gain, length, foot_index, top_index), waarbij de indices
+    naar knopen in de originele ketting wijzen. None als er geen echte klim
+    in zit.
     """
     step = 25.0
     pts, eles = dem.profile(merged, step=step)
@@ -133,7 +186,19 @@ def _best_segment(merged):
     gain, _avg, i, j, direction = best
     seq = pts if direction == 1 else pts[::-1]
     geom = seq[i : j + 1]
-    return geom, gain, (j - i) * step
+    foot_index = _chain_index_for_resampled(merged, seq, i)
+    top_index = _chain_index_for_resampled(merged, seq, j)
+    return geom, gain, (j - i) * step, foot_index, top_index
+
+
+def _max_gradient(geom):
+    _, eles = dem.profile(geom, step=25.0)
+    sm = dem.smooth(eles, 5)
+    max_pct = 0.0
+    win = 4  # 100 m
+    for i in range(len(sm) - win):
+        max_pct = max(max_pct, (sm[i + win] - sm[i]) / (win * 25.0) * 100.0)
+    return max_pct
 
 
 def _town_coord(places, town):
@@ -187,27 +252,36 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
             continue
 
         # per component het beste klimsegment; hoogste gain wint
-        best = None  # (gain, geom, way_ids, length)
+        best = None  # (gain, kern_geom, merged, refs, foot_i, top_i, way_ids, kern_m)
         fallback = None  # langste ketting, voor vlakke sectoren (kasseistroken)
         for idxs in _components(cand):
-            merged, way_ids = _order_chain(cand, idxs)
+            merged, merged_refs, way_ids = _order_chain(cand, idxs)
             if len(merged) < 2:
                 continue
             length = geo.path_length(merged)
             if fallback is None or length > fallback[3]:
-                fallback = (0.0, merged, way_ids, length)
+                fallback = (merged, merged_refs, way_ids, length)
             seg = _best_segment(merged)
             if seg:
-                geom, gain_m, seg_len = seg
+                kern_geom, gain_m, kern_m, foot_i, top_i = seg
                 if best is None or gain_m > best[0]:
-                    best = (gain_m, geom, way_ids, seg_len)
+                    best = (
+                        gain_m,
+                        kern_geom,
+                        merged,
+                        merged_refs,
+                        foot_i,
+                        top_i,
+                        way_ids,
+                        kern_m,
+                    )
 
         warn = []
         if best is None:
             if fallback is None:
                 failed.append({"id": entry["id"], "reden": "geen bruikbare geometrie"})
                 continue
-            _, merged, way_ids, length = fallback
+            merged, _merged_refs, way_ids, kern_m = fallback
             e0, e1 = dem.elevation(*merged[0]), dem.elevation(*merged[-1])
             if e0 is None or e1 is None:
                 failed.append({"id": entry["id"], "reden": "geen DEM-dekking"})
@@ -215,19 +289,28 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
             if e0 > e1:
                 merged = merged[::-1]
             geom = merged
+            kern_geom = geom
+            gain_m = abs(e1 - e0)
             warn.append("vlak segment (kasseistrook?) — volledige straat gebruikt")
         else:
-            _gain, geom, way_ids, length = best
+            (
+                gain_m,
+                kern_geom,
+                merged,
+                merged_refs,
+                foot_i,
+                top_i,
+                way_ids,
+                kern_m,
+            ) = best
+            geom, extension_warnings = _extend_to_junctions(
+                merged, merged_refs, foot_i, top_i, extract["junction_refs"]
+            )
+            warn.extend(extension_warnings)
 
         e0 = dem.elevation(*geom[0])
         e1 = dem.elevation(*geom[-1])
-        _, eles = dem.profile(geom, step=25.0)
-        sm = dem.smooth(eles, 5)
-        max_pct = 0.0
-        win = 4  # 100 m
-        for i in range(len(sm) - win):
-            max_pct = max(max_pct, (sm[i + win] - sm[i]) / (win * 25.0) * 100.0)
-        gain_m = max(0.0, (e1 or 0) - (e0 or 0))
+        max_pct = _max_gradient(kern_geom)
         length = geo.path_length(geom)
         merged = geom
         if length < 150:
@@ -238,8 +321,9 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
             "name": entry["name"],
             "town": entry.get("town"),
             "length_m": round(length),
+            "kern_m": round(kern_m),
             "gain_m": round(gain_m, 1),
-            "avg_pct": round(gain_m / length * 100, 1) if length else 0,
+            "avg_pct": round(gain_m / kern_m * 100, 1) if kern_m else 0,
             "max_pct": round(max_pct, 1),
             "ele_foot": round(e0, 1),
             "ele_top": round(e1, 1),
@@ -295,7 +379,7 @@ def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> 
     n_profiled = 0
     for name, ways in by_name.items():
         for idxs in _components(ways):
-            merged, way_ids = _order_chain(ways, idxs)
+            merged, merged_refs, way_ids = _order_chain(ways, idxs)
             if len(merged) < 2 or geo.path_length(merged) < 250:
                 continue
             if known_ways.intersection(way_ids):
@@ -308,16 +392,15 @@ def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> 
             seg = _best_segment(merged)
             if not seg:
                 continue
-            geom, gain_m, _seg_len = seg
+            kern_geom, gain_m, kern_m, foot_i, top_i = seg
+            geom, extension_warnings = _extend_to_junctions(
+                merged, merged_refs, foot_i, top_i, extract["junction_refs"]
+            )
             length = geo.path_length(geom)
-            avg = gain_m / length * 100 if length else 0
+            avg = gain_m / kern_m * 100 if kern_m else 0
             if gain_m < min_gain or avg < min_avg:
                 continue
-            _, eles = dem.profile(geom, step=25.0)
-            sm = dem.smooth(eles, 5)
-            max_pct = 0.0
-            for i in range(len(sm) - 4):
-                max_pct = max(max_pct, (sm[i + 4] - sm[i]) / 100.0 * 100.0)
+            max_pct = _max_gradient(kern_geom)
             town = _nearest_place(extract["places"], *geo.midpoint(geom))
             surfaces = {w[3].get("surface", "") for w in ways if w[0] in way_ids}
             cid = f"auto-{_slug(name)}"
@@ -330,6 +413,7 @@ def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> 
                 "auto": True,
                 "surface": sorted(s for s in surfaces if s) or None,
                 "length_m": round(length),
+                "kern_m": round(kern_m),
                 "gain_m": round(gain_m, 1),
                 "avg_pct": round(avg, 1),
                 "max_pct": round(max_pct, 1),
@@ -340,7 +424,7 @@ def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> 
                 "mid": [round(geo.midpoint(geom)[0], 6), round(geo.midpoint(geom)[1], 6)],
                 "geom": [[round(a, 6), round(b, 6)] for a, b in geom],
                 "osm_way_ids": way_ids,
-                "warnings": [],
+                "warnings": extension_warnings,
             }
 
     data["auto"] = auto
@@ -367,6 +451,8 @@ def all_climbs() -> dict:
 
 def summary(c: dict) -> dict:
     out = {k: c[k] for k in ("id", "name", "town", "length_m", "gain_m", "avg_pct", "max_pct", "warnings")}
+    if "kern_m" in c:
+        out["kern_m"] = c["kern_m"]
     if c.get("auto"):
         out["auto"] = True
     if c.get("surface"):
