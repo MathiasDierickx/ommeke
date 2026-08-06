@@ -236,9 +236,25 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
         if not c:
             raise DraftError(f"klim '{cid}' niet in database (zie `lus climbs list`)")
         foot, top = tuple(c["foot"]), tuple(c["top"])
-        # pin de klim op zijn volledige geometrie (via-punten elke ~150 m):
-        # voorkomt snap-uitsteeksels en parallelle sluiproutes
-        via = [tuple(p) for p in geo.resample([tuple(q) for q in c["geom"]], 150.0)]
+        geom = [tuple(q) for q in c["geom"]]
+        kern_van, kern_tot = c.get("kern_van"), c.get("kern_tot")
+        if (
+            isinstance(kern_van, int)
+            and isinstance(kern_tot, int)
+            and 0 <= kern_van <= kern_tot < len(geom)
+        ):
+            # De kruispunt-uiteinden blijven aansluitpunten, maar alleen de
+            # steile kern krijgt gedwongen via-punten.
+            core_via = [tuple(p) for p in geo.resample(
+                geom[kern_van : kern_tot + 1], 150.0
+            )]
+            via = [foot]
+            for point in [*core_via, top]:
+                if point != via[-1]:
+                    via.append(point)
+        else:
+            # Oude klimrecords zonder kerngrenzen behouden hun gedrag.
+            via = [tuple(p) for p in geo.resample(geom, 150.0)]
         name_hint = c["name"].split(" (")[0]
         legs.append({"from": prev_label, "to": f"{c['name']} (voet)", "points": [prev_pt, foot],
                      "hints": ["", name_hint]})

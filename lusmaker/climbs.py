@@ -148,6 +148,11 @@ def _extend_to_junctions(
     return geom, warnings
 
 
+def _core_indices(geom, core_foot, core_top):
+    """Indices van de oorspronkelijke klimkern in de verlengde geometrie."""
+    return geom.index(core_foot), geom.index(core_top)
+
+
 def _best_segment(merged):
     """Steilste aaneengesloten klimsegment uit het hoogteprofiel van de ketting.
 
@@ -306,7 +311,12 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
             geom, extension_warnings = _extend_to_junctions(
                 merged, merged_refs, foot_i, top_i, extract["junction_refs"]
             )
+            kern_van, kern_tot = _core_indices(
+                geom, merged[foot_i], merged[top_i]
+            )
             warn.extend(extension_warnings)
+        if best is None:
+            kern_van, kern_tot = 0, len(geom) - 1
 
         e0 = dem.elevation(*geom[0])
         e1 = dem.elevation(*geom[-1])
@@ -322,6 +332,8 @@ def resolve_all(extract: dict, force: bool = False) -> dict:
             "town": entry.get("town"),
             "length_m": round(length),
             "kern_m": round(kern_m),
+            "kern_van": kern_van,
+            "kern_tot": kern_tot,
             "gain_m": round(gain_m, 1),
             "avg_pct": round(gain_m / kern_m * 100, 1) if kern_m else 0,
             "max_pct": round(max_pct, 1),
@@ -396,6 +408,9 @@ def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> 
             geom, extension_warnings = _extend_to_junctions(
                 merged, merged_refs, foot_i, top_i, extract["junction_refs"]
             )
+            kern_van, kern_tot = _core_indices(
+                geom, merged[foot_i], merged[top_i]
+            )
             length = geo.path_length(geom)
             avg = gain_m / kern_m * 100 if kern_m else 0
             if gain_m < min_gain or avg < min_avg:
@@ -414,6 +429,8 @@ def detect_auto(extract: dict, min_gain: float = 18.0, min_avg: float = 3.0) -> 
                 "surface": sorted(s for s in surfaces if s) or None,
                 "length_m": round(length),
                 "kern_m": round(kern_m),
+                "kern_van": kern_van,
+                "kern_tot": kern_tot,
                 "gain_m": round(gain_m, 1),
                 "avg_pct": round(avg, 1),
                 "max_pct": round(max_pct, 1),

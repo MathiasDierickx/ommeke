@@ -56,6 +56,7 @@ def test_extension_moves_both_endpoints_to_junction_nodes():
 
     assert geom == merged[1:6]
     assert warnings == []
+    assert climbs._core_indices(geom, merged[2], merged[4]) == (1, 3)
 
 
 def test_extension_preserves_reverse_uphill_direction():
@@ -67,6 +68,7 @@ def test_extension_preserves_reverse_uphill_direction():
 
     assert geom == merged[1:6][::-1]
     assert warnings == []
+    assert climbs._core_indices(geom, merged[4], merged[2]) == (1, 3)
 
 
 def test_extension_respects_120_meter_cap():

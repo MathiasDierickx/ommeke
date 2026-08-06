@@ -1,4 +1,4 @@
-from lusmaker import draft
+from lusmaker import draft, geo
 
 
 def _climb(climb_id, foot, gain_m, length_m=500):
@@ -180,6 +180,56 @@ def _synthetic_climb_db():
             "geom": [[50.0, 4.0], [50.0, 4.02]],
         }
     }
+
+
+def test_waypoints_pin_only_core_but_keep_extended_endpoints():
+    routed = _synthetic_routed_draft()
+    geom = [[50.0, 4.0 + i * 0.002] for i in range(7)]
+    climb_db = {
+        "testklim": {
+            "name": "Testklim",
+            "foot": geom[0],
+            "top": geom[-1],
+            "geom": geom,
+            "kern_van": 2,
+            "kern_tot": 4,
+        }
+    }
+
+    climb_leg = next(
+        leg for leg in draft._waypoints(routed, climb_db) if leg.get("climb")
+    )
+
+    assert climb_leg["points"][0] == tuple(geom[0])
+    assert climb_leg["points"][-1] == tuple(geom[-1])
+    assert tuple(geom[1]) not in climb_leg["points"]
+    assert tuple(geom[5]) not in climb_leg["points"]
+    assert all(
+        point in (tuple(geom[0]), tuple(geom[-1]))
+        or geom[2][1] <= point[1] <= geom[4][1]
+        for point in climb_leg["points"]
+    )
+
+
+def test_waypoints_without_core_indices_pin_full_geometry():
+    routed = _synthetic_routed_draft()
+    geom = [[50.0, 4.0 + i * 0.002] for i in range(7)]
+    climb_db = {
+        "testklim": {
+            "name": "Testklim",
+            "foot": geom[0],
+            "top": geom[-1],
+            "geom": geom,
+        }
+    }
+
+    climb_leg = next(
+        leg for leg in draft._waypoints(routed, climb_db) if leg.get("climb")
+    )
+
+    assert climb_leg["points"] == geo.resample(
+        [tuple(point) for point in geom], 150.0
+    )
 
 
 def test_round_trip_anchor_chooses_farthest_route_waypoint():
