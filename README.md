@@ -1,7 +1,7 @@
 # Lusmaker
 
-Bouw fiets-GPX-**lussen** in de Vlaamse Ardennen, stap voor stap, aangestuurd door
-een LLM (Claude/OpenAI) via de `lus`-CLI. Denk:
+Bouw fiets- en trail-GPX-**lussen** stap voor stap, aangestuurd door een LLM
+(Claude/OpenAI) via de `lus`-CLI. Denk:
 
 > "Zoek een route van Wetteren naar de Berendries, rustige wegen, klimmen die
 > weinig omweg vragen erbij, en een lus — geen twee keer dezelfde baan."
@@ -14,7 +14,8 @@ erbij voor ~9 km extra?") die de LLM aan de gebruiker terugspeelt.
 ```
 LLM (Claude Code, ...) ──bash──> lus CLI (JSON in/uit)
                                    ├── GraphHopper (Docker, lokaal) — routing
-                                   │     profiel "quiet" + per-request custom model
+                                   │     profielen "quiet" en "trail"
+                                   │     + per-request custom model
                                    ├── klim-database — OSM-namen + DEM-klimsegmentdetectie
                                    ├── gazetteer — lokale geocoder (OSM plaatsen/straten)
                                    └── drafts — stateful route-opbouw + GPX-export
@@ -24,7 +25,8 @@ LLM (Claude Code, ...) ──bash──> lus CLI (JSON in/uit)
   op het Geofabrik België-extract, met elevation (AWS Terrain Tiles). Het
   `quiet`-profiel straft drukke wegen en beloont fietsnetwerk-wegen
   (`bike_network`), à la "populair bij fietsers" zonder Strava-data nodig te
-  hebben.
+  hebben. Het `trail`-profiel gebruikt voettoegang en geeft paden, tracks en
+  onverhard relatief voorrang op verharde en grotere wegen.
 - **Lus zonder herhaalde wegen**: elke leg buffert zijn geometrie tot
   corridor-polygonen die als `areas` in het custom model van de volgende legs
   worden meegegeven (priority ×0.15). De start-omgeving wordt vrijgehouden.
@@ -57,6 +59,18 @@ lus draft suggest <id> --max-detour-km 10 # "Molenberg erbij voor +9.2 km?"
 lus draft preview <id> -o route.html      # kaart + hoogteprofiel bekijken
 lus draft export <id> -o route.gpx
 ```
+
+Voor een traillus kies je het profiel bij het aanmaken, of gebruik je de
+composietopdracht met een activiteit:
+
+```bash
+lus draft new --start "Wetteren" --name trail-lus --profiel trail
+lus plan-route --start "Wetteren" --max-km 10 --activiteit trail
+```
+
+Zonder optie blijft het profiel `quiet`, zodat bestaande fietsflows
+ongewijzigd werken. Een draft bewaart zijn profiel en gebruikt het bij
+routeren, suggesties en optimalisatie.
 
 `draft optimize` kiest per ronde de klim met de meeste extra hoogtemeters
 (`--objective hm`, standaard) of de beste verhouding hoogtemeters per extra
@@ -100,6 +114,10 @@ De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.
 GraphHopper moet draaien wanneer MCP-tools routeren, suggesties berekenen of
 optimaliseren; controleer dit met `lus status`.
 
+`new_draft` accepteert `profiel="quiet"|"trail"`; `plan_route` accepteert
+`activiteit="fietsen"|"trail"`. Beide gebruiken standaard het bestaande
+fietsprofiel.
+
 Voor het normale gesprek volstaan meestal twee composiet-tools:
 `plan_route(...)` maakt en routeert een lus en schrijft meteen
 `<LUSMAKER_HOME>/exports/<draft>/route.gpx` plus `preview.html`;
@@ -138,6 +156,15 @@ Dezelfde composiet-flow bestaat in de CLI:
 lus plan-route --start Wetteren --max-km 45 --via-klim Berendries
 lus adjust-route <draft-id> --voeg-klim-toe Molenberg --max-km 45
 ```
+
+### GraphHopper herimporteren voor trail
+
+De trailondersteuning voegt de encoded values `foot_access`, `foot_priority`
+en `foot_average_speed` toe. Een bestaande GraphHopper-graaf bevat die waarden
+niet: schrijf eerst de nieuwe configuratie met `lus setup` en voer daarna een
+volledige graafherimport uit (bestaande graph-cache verwijderen en
+GraphHopper opnieuw starten). Dit gebeurt niet automatisch; maak eerst een
+back-up als de cache behouden moet blijven.
 
 ## Regiopacks
 
@@ -256,6 +283,7 @@ Bekende beperkingen en volgende stappen:
 - [x] M2: stdio MCP-server met LLM-gerichte tools bovenop dezelfde kern
 - [x] M3: lokale HTML-kaartpreview per draft met hoogteprofiel
 - [x] M4: regiopacks met eigen data, GraphHopper-graaf en draftbinding
+- [x] M5: sportprofielen met trail-lopen naast het bestaande fietsprofiel
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
 - [ ] Corridor-penalty is zacht; bij smalle valleien kan een stukje heenweg

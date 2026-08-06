@@ -43,7 +43,8 @@ voor CLI-gebruik.
    niet.** Poll later `region_status(slug)` / `lus region status <slug>`.
    Ga pas bij fase `klaar` verder met `new_draft(..., region=slug)`. Bij
    `status: fout` toon je `melding` en probeer je niet blind verder.
-1. `lus draft new --start "Wetteren" --name berendries-lus` — start een lus-draft.
+1. `lus draft new --start "Wetteren" --name berendries-lus` — start een
+   fiets-lusdraft. Gebruik `--profiel trail` voor een traillus.
    Check `start_geocoded_als` in de output; bij twijfel de kandidaten aan de
    gebruiker voorleggen. Adres kan ook: `--start "Stationsstraat, Wetteren"`.
 2. `lus climbs near Wetteren --radius-km 25` of `lus climbs list` — kies klimmen.
@@ -77,10 +78,13 @@ voor CLI-gebruik.
 | "rij graag waar veel gefietst wordt" | `lus heat build` na GPX-drop (zie hieronder) |
 | "maximaal 45 km, zoveel mogelijk klimmen" | `lus draft optimize <id> --max-km 45 --objective hm` |
 | "efficiënt klimmen binnen 45 km" | `lus draft optimize <id> --max-km 45 --objective hm-per-km` |
+| "maak een trail" / "trail-lopen" | `--profiel trail` bij `draft new`, of `--activiteit trail` bij `plan-route` |
 
 Dit zijn zachte voorkeuren (penalties, geen verboden) — kort meerijden op een
 steenweg kan dus nog. Check het effect in `computed.kwaliteit`
 (kassei_m, steenweg_m, steenweg_kruisingen) en koppel terug naar de gebruiker.
+`strict`, `vermijd_kasseien` en `vermijd_beton` blijven ook bij het
+trailprofiel werken, maar zijn fietsspecifiek en bij trail meestal ongewenst.
 
 ## Persoonlijke heatmap (populaire wegen)
 

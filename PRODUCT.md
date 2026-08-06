@@ -46,7 +46,7 @@ zijn custom-model-regels. Vlaanderen is launch-regio, geen beperking.
 | M2 ✅ | **MCP-server** via stdio met LLM-gerichte tools bovenop de CLI-kern | Go-to-market-artefact |
 | M3 ✅ | Kaartpreview per draft (zelfstandige HTML) | Niemand vertrouwt een blinde GPX |
 | M4 ✅ | Regiopacks: `lus region add <slug>` → extract, DEM-tegels uit bbox, eigen GH-graaf | Regio-agnostisch |
-| M5 | Profielen: gravel / mtb / hardlopen (varianten van quiet.json) | Sport-agnostisch |
+| M5 ✅ | Sportprofielen: trail-lopen naast het rustige fietsprofiel | Sport-agnostisch |
 | M6 | Strava/Garmin OAuth-sync voor eigen-ritten-heat | Frictie weg bij de saus |
 | M7 | Hosted multi-tenant + betaald plan | Pas na pilotvalidatie |
 
@@ -54,6 +54,10 @@ zijn custom-model-regels. Vlaanderen is launch-regio, geen beperking.
 Nominatim en de Geofabrik-index naar de kleinste regio vertaald. Provisioning
 draait pollbaar op de achtergrond en kan vooraf gebouwde packs uit lokale,
 HTTP(S)- of S3-caches hergebruiken.
+
+**Noot bij M5:** trail-lopen gebruikt een afzonderlijk GraphHopper-profiel dat
+paden en onverhard opzoekt. Run, gravel en MTB volgen later als extra custom
+models.
 
 ## Go-to-market (klein en toetsbaar)
 
