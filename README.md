@@ -100,6 +100,59 @@ De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.
 GraphHopper moet draaien wanneer MCP-tools routeren, suggesties berekenen of
 optimaliseren; controleer dit met `lus status`.
 
+## Regiopacks
+
+Zonder `~/.lusmaker/regions.json` gebruikt Lusmaker exact de bestaande
+Vlaanderen-paden (`~/.lusmaker/data`, `cache`, `gh` en `heat`) en GraphHopper
+op poort 8989. Migreer een bestaande installatie eenmalig voordat je meerdere
+regio's toevoegt:
+
+```bash
+lus region migrate-legacy
+```
+
+Dit registreert `vlaanderen`, verplaatst de vier datamappen naar
+`~/.lusmaker/regions/vlaanderen/` en schrijft
+`docker-compose.regions.yml`. Drafts blijven in de globale map en bestaande
+drafts zonder regioveld worden als Vlaanderen behandeld.
+
+Een regiopack voor Zeeland toevoegen:
+
+```bash
+lus region add zeeland \
+  --geofabrik europe/netherlands/zeeland \
+  --bbox 51.2,3.4,51.8,4.3
+lus region list
+lus region default zeeland
+```
+
+`region add` downloadt het Geofabrik-extract en de DEM-tegels die de bbox
+raakt, bouwt gazetteer en auto-klimdatabase, schrijft een eigen
+GraphHopper-config en voegt een service toe aan
+`docker-compose.regions.yml`. Poorten worden vanaf 8989 toegewezen. Alleen
+`vlaanderen` gebruikt de meegeleverde, handmatig samengestelde
+`climbs.yaml`; andere regio's gebruiken uitsluitend auto-detectie.
+
+De default-regio geldt voor `setup`, `build` en nieuwe drafts. Een eenmalige
+override kan met `--region` op een commando of met `LUSMAKER_REGION`, waarbij
+de CLI-optie voorrang heeft:
+
+```bash
+lus climbs near Middelburg --region zeeland
+lus draft new --start Middelburg --region zeeland --name zeeuwse-lus
+LUSMAKER_REGION=zeeland lus status
+```
+
+Een draft bewaart zijn regio. `route`, `suggest`, `optimize`, preview en export
+gebruiken daarom altijd de regiopaden en GraphHopper-poort uit de draft, ook
+als de default later verandert. MCP biedt dezelfde keuze via de optionele
+`region`-parameter van `new_draft` en `list_climbs`; `list_regions` toont het
+register.
+
+Regiopacks ondersteunen nog geen route over twee packs heen. Maak daarvoor
+voorlopig één regio met één passend Geofabrik-extract. Lusmaker leidt een bbox
+ook niet automatisch af uit de Geofabrik-polygon; `--bbox` blijft verplicht.
+
 ## Status / roadmap
 
 PoC. Al gebouwd naast de basisflow: auto-klimdetectie (DEM-sweep, ~700 klimmen
@@ -116,6 +169,7 @@ Bekende beperkingen en volgende stappen:
       budget-rollback
 - [x] M2: stdio MCP-server met LLM-gerichte tools bovenop dezelfde kern
 - [x] M3: lokale HTML-kaartpreview per draft met hoogteprofiel
+- [x] M4: regiopacks met eigen data, GraphHopper-graaf en draftbinding
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
 - [ ] Corridor-penalty is zacht; bij smalle valleien kan een stukje heenweg
@@ -123,4 +177,5 @@ Bekende beperkingen en volgende stappen:
 - [ ] Heat-polygonen schalen: bij duizenden ritten eerst vereenvoudigen
       (concave hulls) voor de GH-import
 - [ ] Strava API-sync voor automatische eigen-ritten-import (OAuth)
-- Regio is nu de bbox Wetteren–Vlaamse Ardennen (`config.BBOX`)
+- Grensoverschrijdende routes over meerdere regiopacks worden nog niet gemerged
+- Een bbox wordt nog niet automatisch uit de Geofabrik-polygon afgeleid

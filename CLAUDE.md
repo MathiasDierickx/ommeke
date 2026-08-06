@@ -83,8 +83,10 @@ legale variant met eigen data.
 - Na add/remove-climb is de route stale; altijd opnieuw `draft route` draaien.
 - `draft route`, `suggest` en `optimize` doen meerdere GraphHopper-calls en
   kunnen enkele seconden duren.
-- Regio is beperkt tot de bbox Wetteren/Vlaamse Ardennen (config.BBOX). Punten
-  daarbuiten geocoden niet.
+- Regiopacks hebben elk hun eigen bbox, caches en GraphHopper. Gebruik
+  `lus region list`; nieuwe drafts kunnen `--region <slug>` krijgen en bewaren
+  die regio voor alle vervolgstappen. Zonder register blijft Vlaanderen
+  legacy-default.
 - Nieuwe klimmen toevoegen: kopieer `lusmaker/climbs.yaml` naar
   `~/.lusmaker/climbs.yaml`, vul aan, en draai `lus climbs resolve`.
 
