@@ -504,10 +504,20 @@ def ensure_region(
     home = home or config.home_path()
     existing = _registered(place, home)
     if existing is not None:
+        status = region_status(existing.slug, home=home)
+        if status.get("status") == "fout":
+            # eerdere poging mislukt (bv. transiente 502 upstream): herstart
+            pbf_url = f"https://download.geofabrik.de/{existing.geofabrik}-latest.osm.pbf"
+            result = provision(
+                existing.slug, pbf_url, list(existing.bbox),
+                background=background, home=home, **provision_kwargs,
+            )
+            result["herstart"] = True
+            return result
         return {
             "region": existing.as_dict(),
             "bestaand": True,
-            "provisioning": region_status(existing.slug, home=home),
+            "provisioning": status,
         }
     if discover_func is None:
         from .discover import region_for_query
