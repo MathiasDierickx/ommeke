@@ -67,6 +67,22 @@ lus draft preview <id> -o route.html      # kaart + hoogteprofiel bekijken
 lus draft export <id> -o route.gpx
 ```
 
+Voorkeuren kunnen regio-onafhankelijk in een benoemd profiel worden bewaard:
+
+```bash
+lus profile set gravel \
+  --gewichten "hoogtemeters=0.4,offroad=0.5,populair=0.1" \
+  --kasseien graag --beton ok --steenwegen vermijd
+lus profile show gravel
+lus draft new --start "Wetteren" --profiel-naam gravel
+```
+
+Profielen staan onder `<LUSMAKER_HOME>/profiles/`. Een voorkeur met waarde
+`null` is nog onbekend; `ok` betekent dat de gebruiker er expliciet geen
+voorkeur voor heeft. Elke wijziging via CLI of MCP wordt met tijdstip en bron
+in de profielhistoriek bewaard. Expliciete draftknoppen zoals
+`--vermijd-kasseien` blijven boven op het profiel werken.
+
 Voor een traillus kies je het profiel bij het aanmaken, of gebruik je de
 composietopdracht met een activiteit:
 
@@ -91,6 +107,21 @@ hoogtemeters die de bestaande route niet overlapt. De rondrit blijft als
 deterministisch blijft. Gebruik `--geen-opvulling` om exact de vroegere,
 uitsluitend op klimmen gebaseerde optimalisatie te behouden; dezelfde optie is
 beschikbaar op `plan-route` en als `geen_opvulling=true` via MCP.
+
+Met een voorkeurenprofiel gebruikt `draft optimize` standaard diens
+genormaliseerde mix van `hoogtemeters`, `offroad`, `populair` en `kort`. Een
+eenmalige override kan zonder het profiel te wijzigen:
+
+```bash
+lus draft optimize <id> --max-km 45 \
+  --gewichten "hoogtemeters=0.5,offroad=0.35,populair=0.15"
+```
+
+De componenten liggen tussen 0 en 1; budget, luskwaliteit en heen-en-weer-
+detectie blijven harde voorwaarden. `kasseien=graag` voegt boven op de
+genormaliseerde mix een kasseicomponent met gewicht 0,15 toe. Het beïnvloedt
+alleen de selectie, niet het GraphHopper-routingmodel. Zonder profiel of
+gewichten blijft de bestaande standaardoptimalisatie ongewijzigd.
 
 `draft preview` schrijft één HTML-bestand met een interactieve routekaart,
 klimmarkers, kwaliteitsmetrieken en een hoogteprofiel. Zonder `-o` wordt
@@ -167,9 +198,11 @@ De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.
 GraphHopper moet draaien wanneer MCP-tools routeren, suggesties berekenen of
 optimaliseren; controleer dit met `lus status`.
 
-`new_draft` accepteert `profiel="quiet"|"trail"`; `plan_route` accepteert
-`activiteit="fietsen"|"trail"`. Beide gebruiken standaard het bestaande
-fietsprofiel.
+`new_draft` accepteert `profiel="quiet"|"trail"` en `profiel_naam`;
+`plan_route` accepteert `activiteit="fietsen"|"trail"` en `profiel_naam`.
+Beide gebruiken standaard het bestaande fietsprofiel. In volledige MCP-modus
+beheren `get_profile`, `update_profile` en `list_profiles` de persistente
+profielen.
 
 Voor het normale gesprek volstaan meestal twee composiet-tools:
 `plan_route(...)` maakt en routeert een lus en schrijft meteen
@@ -201,7 +234,9 @@ In een MCP-config voeg je `"--lite"` als argument toe:
 Lite bevat `plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
 `ensure_region`, `region_status` en `list_drafts`. `route_details` is de
 expliciete uitweg voor legs en volledige kwaliteitsmetrieken; zonder
-`--lite` blijft de volledige set van 20 tools beschikbaar.
+`--lite` blijft de volledige set van 23 tools beschikbaar. De drie
+profieltools horen bewust nog niet bij lite; T12 voegt ze daar samen met de
+vraagbegeleiding toe.
 
 Dezelfde composiet-flow bestaat in de CLI:
 

@@ -20,6 +20,12 @@ gesprekscontext opnieuw meesturen, kleinere resultaten zonder geometrie en
 legs, en minder toolschema's in de systeemprompt. `route_details` geeft legs en
 de volledige kwaliteitsmetrieken alleen wanneer de gebruiker ernaar vraagt.
 
+Als de gebruiker een persistent voorkeurenprofiel noemt, geef `profiel_naam`
+mee aan `plan_route` of `new_draft`. Beheer het in volledige MCP-modus met
+`get_profile`, `update_profile` en `list_profiles` (CLI:
+`lus profile show|set|list`). Een `null`-voorkeur betekent onbekend; `ok`
+betekent expliciet onverschillig. Lite bevat deze profieltools pas vanaf T12.
+
 ## Aanroepen
 
 ```bash
@@ -83,6 +89,8 @@ voor CLI-gebruik.
 | "maximaal 45 km, zoveel mogelijk klimmen" | `lus draft optimize <id> --max-km 45 --objective hm` |
 | "efficiënt klimmen binnen 45 km" | `lus draft optimize <id> --max-km 45 --objective hm-per-km` |
 | "alleen klimmen, geen extra rondrit" | `lus draft optimize <id> --max-km 45 --geen-opvulling` |
+| "veel offroad én hoogtemeters" | `lus draft optimize <id> --max-km 45 --gewichten "hoogtemeters=0.5,offroad=0.5"` |
+| "gebruik mijn gravelprofiel" | `--profiel-naam gravel` bij `draft new` of `plan-route` |
 | "maak een trail" / "trail-lopen" | `--profiel trail` bij `draft new`, of `--activiteit trail` bij `plan-route` |
 
 Dit zijn zachte voorkeuren (penalties, geen verboden) — kort meerijden op een
@@ -90,6 +98,8 @@ steenweg kan dus nog. Check het effect in `computed.kwaliteit`
 (kassei_m, steenweg_m, steenweg_kruisingen) en koppel terug naar de gebruiker.
 `strict`, `vermijd_kasseien` en `vermijd_beton` blijven ook bij het
 trailprofiel werken, maar zijn fietsspecifiek en bij trail meestal ongewenst.
+Profielgewichten worden op som 1 genormaliseerd. `kasseien=graag` is uitsluitend
+een scorebonus van 0,15 boven op die mix en verandert de routering niet.
 
 ## Persoonlijke heatmap (populaire wegen)
 
