@@ -128,6 +128,7 @@ alle routing, en rapporteert `computed.kwaliteit.populair_pct` hoeveel van de
 route op bekende wegen ligt. `lus heat status` toont wat actief is.
 De Strava Global Heatmap zelf mag juridisch niet gebruikt worden; dit is de
 legale variant met eigen data.
+Gebruik `lus heat fetch-vlaanderen` vóór `lus heat build` om ook de open fiets- en wandelroutelagen van Toerisme Vlaanderen te gebruiken.
 
 ## Weetjes
 

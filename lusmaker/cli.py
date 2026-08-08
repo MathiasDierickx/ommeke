@@ -556,9 +556,11 @@ def main(argv=None):
     s.add_argument("--min-avg", type=float, default=3.0)
     s.set_defaults(func=cmd_climbs_detect)
 
-    h = sub.add_parser("heat", help="persoonlijke heatmap uit eigen GPX-ritten")
+    h = sub.add_parser("heat", help="persoonlijke en gecureerde populariteitslagen")
     hsub = h.add_subparsers(dest="subcmd", required=True)
-    s = hsub.add_parser("build", help="heatmap bouwen uit eigen GPX + OSM-traces")
+    s = hsub.add_parser(
+        "build", help="populariteitslagen bouwen uit GPX, OSM en open routedata"
+    )
     _region_arg(s)
     s.add_argument("--min-passes", type=int, default=1, help="min. aantal eigen ritten per cel")
     s.add_argument("--osm-min-points", type=int, default=30, help="min. OSM-tracepunten per cel")

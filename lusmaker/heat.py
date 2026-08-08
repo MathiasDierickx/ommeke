@@ -1,9 +1,9 @@
-"""Persoonlijke heatmap uit eigen GPX-ritten.
+"""Populariteitslagen uit eigen GPX-ritten en gecureerde open routegegevens.
 
 Drop GPX-bestanden (Strava/Garmin bulk-export, toertocht-parcours) in
-~/.lusmaker/heat/. `lus heat build` rastert ze op het ~130 m-celgrid, bouwt
-corridor-polygonen en schrijft die als GraphHopper custom area ("popular").
-Het quiet-profiel geeft bereden wegen dan een relatieve boost.
+~/.lusmaker/heat/. `lus heat build` rastert ze samen met gecachete OSM-traces
+en Toerisme Vlaanderen-routes op het ~130 m-celgrid. Het quiet-profiel krijgt
+de custom area "popular"; met wandeldata krijgt trail "popular_trail".
 
 Let op: de area wordt bij de GRAAF-IMPORT ingebakken; na `heat build` moet de
 graph-cache weg en GraphHopper herstarten (instructie in de output).

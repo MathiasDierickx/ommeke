@@ -96,6 +96,24 @@ def test_fetch_vlaanderen_rejects_html_with_clear_error():
                 raise AssertionError("HTML-antwoord werd als GeoJSON aanvaard")
 
 
+def test_fetch_vlaanderen_reports_http_404_as_clear_error():
+    class NotFound(OSError):
+        code = 404
+
+    def fetcher(_url):
+        raise NotFound("niet gevonden")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            try:
+                heat.fetch_vlaanderen(fetcher=fetcher)
+            except RuntimeError as exc:
+                assert "HTTP 404" in str(exc)
+                assert "fietsnetwerk" in str(exc)
+            else:
+                raise AssertionError("HTTP 404 werd niet als duidelijke fout gemeld")
+
+
 def test_build_writes_both_area_ids_and_keeps_cellsets_separate():
     bike_cell = heat.geo.cell(50.82, 3.72)
     walk_cell = heat.geo.cell(50.83, 3.73)

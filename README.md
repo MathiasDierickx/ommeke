@@ -245,6 +245,33 @@ lus plan-route --start Wetteren --max-km 45 --via-klim Berendries
 lus adjust-route <draft-id> --voeg-klim-toe Molenberg --max-km 45
 ```
 
+### Open routelagen en populariteit
+
+`lus heat build` combineert eigen GPX-tracks, optioneel gecachete publieke
+OSM-GPS-traces en drie gecureerde datasets van
+[Toerisme Vlaanderen Open Data](https://data.toerismevlaanderen.be):
+
+- `cycling_node_network_v2` — fietsknooppuntnetwerk;
+- `hiking_node_network_v2` — wandelknooppuntnetwerken;
+- `lf_routes` — LF- en icoonroutes.
+
+De Toerisme Vlaanderen-data vallen onder de Modellicentie Gratis Hergebruik;
+de bron en datasetnamen blijven hierboven vermeld voor naamsvermelding en
+herleidbaarheid. De WFS-download vraagt GeoJSON met een server-side bbox-filter
+voor de actieve regio en bewaart alleen het gerasterde resultaat lokaal.
+
+```bash
+lus heat fetch-vlaanderen [--region vlaanderen]
+lus heat build [--region vlaanderen]
+```
+
+`popular` combineert eigen GPX, OSM-traces en de fietslagen. Zodra de wandellaag
+beschikbaar is, combineert `popular_trail` die met de eigen GPX-tracks. Beide
+custom areas staan in `popular.geojson`; `quiet` en `trail` gebruiken alleen
+hun eigen area. Na `heat build` is een volledige GraphHopper-graafherimport
+nodig voordat de nieuwe areas routering beïnvloeden. Lusmaker verwijdert of
+herimporteert de bestaande graaf niet automatisch.
+
 ### GraphHopper herimporteren voor trail
 
 De trailondersteuning voegt de encoded values `foot_access`, `foot_priority`
@@ -359,10 +386,9 @@ De MCP-server biedt dezelfde asynchrone flow met `ensure_region(place)` en
 PoC. Al gebouwd naast de basisflow: auto-klimdetectie (DEM-sweep, ~700 klimmen
 naast de namenlijst), zachte voorkeuren (kasseien/beton/strict), vermijdzones
 rond plaatsen (`draft avoid`), kwaliteitsmetrieken per route (kassei- en
-steenwegmeters, kruisingen met drukke wegen), en een persoonlijke heatmap
-(`lus heat build`): eigen GPX-ritten worden een GraphHopper custom area die
-bereden wegen een relatieve boost geeft — de legale variant van
-Strava-heatmap-routing.
+steenwegmeters, kruisingen met drukke wegen), en profielgebonden
+populariteitslagen (`lus heat build`) uit eigen GPX en gecureerde open
+routedata — zonder de juridisch gesloten Strava Global Heatmap.
 
 Bekende beperkingen en volgende stappen:
 
