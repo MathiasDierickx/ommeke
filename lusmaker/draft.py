@@ -677,30 +677,77 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
     return out
 
 
-def probe(d: dict, climb_db: dict, router=gh.route) -> dict:
+def probe(
+    d: dict,
+    climb_db: dict,
+    router=gh.route,
+    *,
+    round_trip_fn=gh.round_trip,
+) -> dict:
     """Routeer eenmaal en cache een compacte terreinverkenning op de draft."""
     if d.get("_probe") is not None:
         return d["_probe"]
 
-    route(d, climb_db, router=router)
-    quality = copy.deepcopy(d["computed"].get("kwaliteit") or {})
     effective_profile = routing_preferences(d)["profile"]
+    if d.get("loop") and not d.get("climbs"):
+        preferences = routing_preferences(d)
+        exploratory = round_trip_fn(
+            (d["start"]["lat"], d["start"]["lon"]),
+            15_000.0,
+            0,
+            avoid_polygons=place_areas(d),
+            strict=preferences["strict"],
+            avoid_cobbles=preferences["avoid_cobbles"],
+            avoid_concrete=preferences["avoid_concrete"],
+            profile=preferences["profile"],
+            details=True,
+        )
+        route_coords = [
+            (point[0], point[1]) for point in exploratory.get("coords", [])
+        ]
+        sampled_route = geo.resample(route_coords, 500.0)
+        from . import analysis
+
+        try:
+            quality = analysis.route_stats(
+                [exploratory.get("coords", [])],
+                [exploratory.get("details", {})],
+                profile=preferences["profile"],
+            )
+        except Exception as exc:
+            quality = {"error": str(exc)}
+        route_km = round(exploratory.get("distance_m", 0) / 1000.0, 1)
+        route_hm = round(exploratory.get("ascend_m", 0))
+        nearby_climbs = {
+            climb_id
+            for climb_id, climb in climb_db.items()
+            if route_coords
+            and min(
+                geo.haversine(point[0], point[1], climb["foot"][0], climb["foot"][1])
+                for point in sampled_route
+            )
+            <= 5_000.0
+        }
+    else:
+        route(d, climb_db, router=router)
+        quality = copy.deepcopy(d["computed"].get("kwaliteit") or {})
+        route_coords = [
+            (point[0], point[1])
+            for leg in d.get("_geometry", [])
+            for point in leg
+        ]
+        route_km = d["computed"]["total_km"]
+        route_hm = d["computed"]["ascend_m"]
+        nearby_climbs = {
+            candidate[1]
+            for candidate in _candidate_prefilter(d, climb_db, max_detour_km=5.0)
+        }
     from . import heat
 
     walking_popularity_available = (
         effective_profile == "trail"
         and heat.popular_cells("trail", fallback=False) is not None
     )
-    nearby_climbs = {
-        candidate[1]
-        for candidate in _candidate_prefilter(d, climb_db, max_detour_km=5.0)
-    }
-
-    route_coords = [
-        (point[0], point[1])
-        for leg in d.get("_geometry", [])
-        for point in leg
-    ]
     try:
         from . import geocode
 
@@ -711,8 +758,8 @@ def probe(d: dict, climb_db: dict, router=gh.route) -> dict:
         place_cores = []
 
     result = {
-        "km": d["computed"]["total_km"],
-        "hm": d["computed"]["ascend_m"],
+        "km": route_km,
+        "hm": route_hm,
         "kwaliteit": quality,
         "terrein": {
             "kassei_aanwezig_m": quality.get("kassei_m", 0),
@@ -793,7 +840,7 @@ def _eligible_candidates(candidates: list[dict], budget_km: float,
 
 
 def _objective_weights(objective) -> dict | None:
-    if objective in ("hm-per-km", _LEGACY_HM):
+    if objective in ("hm-per-km", "toeren", _LEGACY_HM):
         return None
     if objective == "hm":
         objective = {"hoogtemeters": 1.0}
@@ -801,7 +848,8 @@ def _objective_weights(objective) -> dict | None:
         objective = {"offroad": 1.0}
     if not isinstance(objective, dict):
         raise DraftError(
-            "objective moet 'hm', 'hm-per-km', 'offroad' of een gewichten-dict zijn"
+            "objective moet 'hm', 'hm-per-km', 'offroad', 'toeren' "
+            "of een gewichten-dict zijn"
         )
     try:
         return profiles.normalize_weights(objective)
@@ -878,7 +926,8 @@ def _round_trip_anchor(d: dict, climb_db: dict) -> tuple[tuple[float, float], st
 def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                           router=route, round_trip_fn=gh.round_trip,
                           objective="hm", prefer_cobbles: bool = False,
-                          popular_cells=_LOAD_HEAT) -> dict:
+                          popular_cells=_LOAD_HEAT,
+                          target_total_m: float | None = None) -> dict:
     """Vul restbudget met de beste van vijf niet-overlappende GH-rondritten."""
     if not d.get("loop"):
         return {"filled": False, "reason": "draft is geen lus"}
@@ -887,7 +936,12 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
 
     current_m = d["computed"]["total_km"] * 1000.0
     remaining_m = budget_m - current_m
-    if remaining_m < 1500.0:
+    requested_m = (
+        remaining_m * 0.9
+        if target_total_m is None
+        else min(remaining_m, target_total_m - current_m)
+    )
+    if requested_m < 1500.0:
         return {"filled": False, "reason": "minder dan 1,5 km opvulbudget over"}
 
     anchor, label = _round_trip_anchor(d, climb_db)
@@ -907,7 +961,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         try:
             candidate = round_trip_fn(
                 anchor,
-                remaining_m * 0.9,
+                requested_m,
                 seed,
                 details=(weights is not None),
                 **preferences,
@@ -988,7 +1042,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
 def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
              min_ratio: float = 8.0, max_rounds: int = 12,
              route_fn=route, candidates_fn=_candidates, fill: bool = True,
-             round_trip_fn=gh.round_trip) -> dict:
+             round_trip_fn=gh.round_trip,
+             fill_target_km: float | None = None) -> dict:
     with region_scope(d):
         return _optimize(
             d, climb_db, max_km, objective, min_ratio, max_rounds,
@@ -996,13 +1051,15 @@ def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             candidates_fn=candidates_fn,
             fill=fill,
             round_trip_fn=round_trip_fn,
+            fill_target_km=fill_target_km,
         )
 
 
 def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
               min_ratio: float = 8.0, max_rounds: int = 12,
               route_fn=route, candidates_fn=_candidates, fill: bool = True,
-              round_trip_fn=gh.round_trip) -> dict:
+              round_trip_fn=gh.round_trip,
+              fill_target_km: float | None = None) -> dict:
     """Vul een draft greedy met klimmen binnen een hard afstandsbudget."""
     if max_km <= 0:
         raise DraftError("max-km moet groter dan 0 zijn")
@@ -1010,6 +1067,10 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         raise DraftError("min-ratio mag niet negatief zijn")
     if max_rounds < 0:
         raise DraftError("max-rounds mag niet negatief zijn")
+    if fill_target_km is not None and fill_target_km <= 0:
+        raise DraftError("fill-target-km moet groter dan 0 zijn")
+    if fill_target_km is not None and fill_target_km > max_km:
+        raise DraftError("fill-target-km mag het afstandsbudget niet overschrijden")
     objective = objective_for_draft(d, objective)
     # Valideer ook als er door max_rounds=0 geen kandidaat gekozen wordt.
     weights = _objective_weights(objective)
@@ -1020,10 +1081,15 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
     )
     _select_candidate([], objective, prefer_cobbles=prefer_cobbles)
     pure_offroad = weights is not None and weights["offroad"] == 1.0
+    tour_only = objective == "toeren"
 
     if not d["climbs"] and d.get("loop"):
-        # offroad-doel jaagt niet op klimmen: direct naar de rondrit-opvulling
-        anchor = None if pure_offroad else _pick_anchor(d["start"], climb_db, max_km)
+        # Offroad en een gewone toer jagen niet op klimmen: meteen opvullen.
+        anchor = (
+            None
+            if pure_offroad or tour_only
+            else _pick_anchor(d["start"], climb_db, max_km)
+        )
         if anchor is None:
             if not fill:
                 raise DraftError("geen klim bereikbaar binnen het budget")
@@ -1052,9 +1118,13 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
     rounds = []
     banned = set()
     stopped_because = "maximum aantal rondes bereikt"
-    if pure_offroad:
+    if pure_offroad or tour_only:
         max_rounds = 0
-        stopped_because = "offroad-doel: alleen rondrit-opvulling"
+        stopped_because = (
+            "toerdoel: alleen rondrit-opvulling"
+            if tour_only
+            else "offroad-doel: alleen rondrit-opvulling"
+        )
     for round_number in range(1, max_rounds + 1):
         budget_km = max_km - d["computed"]["total_km"]
         if budget_km < 1.0:
@@ -1134,6 +1204,9 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             round_trip_fn=round_trip_fn,
             objective=objective,
             prefer_cobbles=prefer_cobbles,
+            target_total_m=(
+                fill_target_km * 1000.0 if fill_target_km is not None else None
+            ),
         )
         if fill_result["filled"]:
             rounds.append(

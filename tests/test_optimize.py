@@ -1,3 +1,7 @@
+import os
+import tempfile
+from pathlib import Path
+
 from lusmaker import draft, geo
 
 
@@ -359,3 +363,81 @@ def test_optimize_without_fill_keeps_existing_budget_and_skips_round_trip():
     assert result["resultaat"]["computed"]["total_km"] == 5.0
     assert result["rondes"] == []
     assert routed["opvullingen"] == []
+
+
+def test_tour_objective_targets_distance_without_adding_climbs():
+    routed = _synthetic_routed_draft()
+    routed["climbs"] = []
+    routed["computed"] = None
+    routed.pop("_geometry")
+    requested_distances = []
+
+    def unexpected_candidates(*_args, **_kwargs):
+        raise AssertionError("een gewone toer mag geen klimkandidaten zoeken")
+
+    def round_trip_fn(anchor, distance_m, seed, **_preferences):
+        assert anchor == (50.0, 4.0)
+        requested_distances.append(distance_m)
+        return {
+            "distance_m": 9_800,
+            "ascend_m": seed,
+            "coords": [
+                [50.0, 4.0, 0],
+                [50.02, 4.04 + seed * 0.001, 10],
+                [50.0, 4.0, 0],
+            ],
+        }
+
+    def router(current, _climb_db):
+        assert current["climbs"] == []
+        assert len(current["opvullingen"]) == 1
+        current["computed"] = {
+            "total_km": 9.8,
+            "ascend_m": 4,
+            "descend_m": 4,
+            "legs": [{"opvulling": True}],
+            "kwaliteit": {"heen_en_weer_m": 0},
+        }
+        current["_geometry"] = [
+            [[point[0], point[1], 0] for point in current["opvullingen"][0]["points"]]
+        ]
+
+    previous_home = os.environ.get("LUSMAKER_HOME")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        os.environ["LUSMAKER_HOME"] = str(Path(temp_dir))
+        try:
+            result = draft._optimize(
+                routed,
+                {},
+                max_km=12,
+                objective="toeren",
+                route_fn=router,
+                candidates_fn=unexpected_candidates,
+                round_trip_fn=round_trip_fn,
+                fill_target_km=10,
+            )
+        finally:
+            if previous_home is None:
+                os.environ.pop("LUSMAKER_HOME", None)
+            else:
+                os.environ["LUSMAKER_HOME"] = previous_home
+
+    assert requested_distances == [10_000] * 5
+    assert result["objective"] == "toeren"
+    assert result["resultaat"]["computed"]["total_km"] == 9.8
+    assert result["rondes"][0]["status"] == "opgevuld (round_trip)"
+    assert routed["climbs"] == []
+
+
+def test_fill_target_must_fit_inside_hard_budget():
+    try:
+        draft._optimize(
+            _synthetic_routed_draft(),
+            _synthetic_climb_db(),
+            max_km=10,
+            fill_target_km=11,
+        )
+    except draft.DraftError as exc:
+        assert "afstandsbudget" in str(exc)
+    else:
+        raise AssertionError("fill-target boven hard budget werd aanvaard")

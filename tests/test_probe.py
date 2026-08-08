@@ -86,6 +86,61 @@ def test_probe_routes_once_uses_prefilter_and_caches_result():
     assert first["terrein"]["klimmen_binnen_5km"] == 1
 
 
+def test_probe_empty_loop_uses_exploratory_round_trip_without_mutating_route():
+    round_trip_calls = []
+
+    def unexpected_router(*_args, **_kwargs):
+        raise AssertionError("een lege lus mag niet als start-naar-start gerouteerd worden")
+
+    def round_trip_fn(anchor, distance_m, seed, **preferences):
+        round_trip_calls.append((anchor, distance_m, seed, preferences))
+        coords = [
+            [50.0, 4.0, 10],
+            [50.01, 4.04, 30],
+            [50.02, 4.0, 20],
+            [50.0, 4.0, 10],
+        ]
+        return {
+            "distance_m": 14_800,
+            "ascend_m": 120,
+            "descend_m": 120,
+            "coords": coords,
+            "details": {
+                "surface": [[0, len(coords) - 1, "concrete"]],
+                "road_class": [[0, len(coords) - 1, "track"]],
+            },
+        }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            d = draft.new(
+                start={"lat": 50.0, "lon": 4.0, "label": "Start"},
+                name="lege-lus-probe",
+                loop=True,
+                end=None,
+            )
+            result = draft.probe(
+                d,
+                _climb_db(),
+                router=unexpected_router,
+                round_trip_fn=round_trip_fn,
+            )
+            stored = draft.load(d["id"])
+
+    assert len(round_trip_calls) == 1
+    anchor, distance_m, seed, preferences = round_trip_calls[0]
+    assert anchor == (50.0, 4.0)
+    assert distance_m == 15_000
+    assert seed == 0
+    assert preferences["details"] is True
+    assert result["km"] == 14.8
+    assert result["hm"] == 120
+    assert result["kwaliteit"]["beton_m"] > 0
+    assert stored["computed"] is None
+    assert "_geometry" not in stored
+    assert stored["_probe"] == result
+
+
 def test_route_mutations_invalidate_probe_cache():
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
