@@ -149,6 +149,67 @@ assert len(actual) == 10
         )
 
 
+def test_lite_server_advertises_typed_contract_and_annotations():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+import asyncio
+from lusmaker import mcp_server
+
+async def inspect_contract():
+    tools = {tool.name: tool for tool in await mcp_server.lite_mcp.list_tools()}
+    plan = tools["plan_route"]
+    assert plan.input_schema["properties"]["doel"]["enum"] == [
+        "hoogtemeters", "kort", "toeren"
+    ]
+    max_km = plan.input_schema["properties"]["max_km"]["anyOf"][0]
+    assert max_km["exclusiveMinimum"] == 0
+    assert plan.output_schema["properties"]["draft"]["type"] == "string"
+    assert plan.annotations.read_only_hint is False
+    assert plan.annotations.open_world_hint is True
+
+    profile = tools["update_profile"]
+    profile_schema = profile.input_schema["$defs"]["ProfilePatch"]
+    preference_schema = profile.input_schema["$defs"]["PreferencePatch"]
+    assert profile_schema["additionalProperties"] is False
+    assert preference_schema["additionalProperties"] is False
+    assert preference_schema["properties"]["kasseien"]["anyOf"][0]["enum"] == [
+        "vermijd", "ok", "graag"
+    ]
+
+    drafts = tools["list_drafts"]
+    assert drafts.annotations.read_only_hint is True
+    assert drafts.annotations.destructive_hint is False
+    assert mcp_server.lite_mcp.instructions
+    assert mcp_server.lite_mcp.version
+
+asyncio.run(inspect_contract())
+""",
+            Path(temp_dir),
+        )
+
+
+def test_tool_call_returns_structured_content():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+import asyncio
+from lusmaker import mcp_server
+
+async def call_profile():
+    result = await mcp_server.lite_mcp.call_tool("get_profile", {})
+    assert result.is_error is False
+    assert result.structured_content["naam"] == "standaard"
+    assert result.content[0].type == "text"
+
+asyncio.run(call_profile())
+""",
+            Path(temp_dir),
+        )
+
+
 def test_draft_tools_use_isolated_home_and_validate_climbs():
     _require_mcp()
     with tempfile.TemporaryDirectory() as temp_dir:
