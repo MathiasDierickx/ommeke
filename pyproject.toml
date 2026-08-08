@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 aws = ["boto3>=1.40,<2", "uvicorn>=0.35,<1"]
+e2e = ["pycognito"]
 
 [project.scripts]
 lus = "lusmaker.cli:main"
