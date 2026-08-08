@@ -7,6 +7,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
+from deploy.aws.prepare_region import prepare
 from lusmaker import config, provision
 
 
@@ -108,6 +109,8 @@ def test_pack_contains_rebuild_outputs_but_not_pbf():
             (region.gh_dir / "graph-cache" / "edges").write_bytes(b"graph")
             (region.gh_dir / "custom_models").mkdir()
             (region.gh_dir / "custom_models" / "quiet.json").write_text("{}")
+            (region.gh_dir / "custom_areas").mkdir()
+            (region.gh_dir / "custom_areas" / "popular.geojson").write_text("{}")
             (region.gh_dir / "config.yml").write_text("graphhopper:")
 
             output = home / "pack.tar.gz"
@@ -122,8 +125,18 @@ def test_pack_contains_rebuild_outputs_but_not_pbf():
         assert "gh/graph-cache/edges" in names
         assert "gh/config.yml" in names
         assert "gh/custom_models/quiet.json" in names
+        assert "gh/custom_areas/popular.geojson" in names
         assert not any(name.endswith(".osm.pbf") for name in names)
         assert manifest["slug"] == "zeeland"
+
+        prepared = prepare(output, "zeeland", home / "docker-context")
+        context = Path(prepared["destination"])
+        registry = json.loads((context / "regions.json").read_text())
+        assert registry["default"] == "zeeland"
+        assert registry["regions"]["zeeland"]["bbox"] == [51.2, 3.4, 51.8, 4.3]
+        assert (
+            context / "regions" / "zeeland" / "gh" / "graph-cache" / "edges"
+        ).read_bytes() == b"graph"
 
 
 def test_foreground_provision_uses_injected_build_exec_and_health():

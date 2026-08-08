@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pbf
+*.tar.gz
+tests
+docs
+infra
+.aws/region/pack.json

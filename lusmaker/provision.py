@@ -145,6 +145,9 @@ def create_pack(
         _tar_add_path(
             archive, region.gh_dir / "custom_models", "gh/custom_models"
         )
+        _tar_add_path(
+            archive, region.gh_dir / "custom_areas", "gh/custom_areas"
+        )
         payload = (
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
         ).encode("utf-8")
