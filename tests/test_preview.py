@@ -7,6 +7,10 @@ from lusmaker import draft as draft_mod
 from lusmaker import preview
 
 
+def _no_features(_route_coords, **_kwargs):
+    return {"pois": [], "knopen": []}
+
+
 def _draft():
     return {
         "id": "abc123",
@@ -48,7 +52,9 @@ def _climbs():
 
 
 def test_render_contains_route_climb_and_profile():
-    document = preview.render(_draft(), _climbs())
+    document = preview.render(
+        _draft(), _climbs(), feature_selector=_no_features
+    )
 
     assert "Ronde van &lt;Wetteren&gt;" in document
     assert "Testklim" in document
@@ -63,7 +69,9 @@ def test_render_handles_missing_elevations_and_popularity():
     draft["_geometry"][0][0][2] = None
     draft["computed"]["kwaliteit"].pop("populair_pct", None)
 
-    document = preview.render(draft, _climbs())
+    document = preview.render(
+        draft, _climbs(), feature_selector=_no_features
+    )
 
     assert "Hoogteprofiel" in document
     assert "populair" not in document
@@ -74,7 +82,7 @@ def test_render_requires_a_routed_draft():
     draft.pop("_geometry")
 
     try:
-        preview.render(draft, _climbs())
+        preview.render(draft, _climbs(), feature_selector=_no_features)
     except draft_mod.DraftError as exc:
         assert str(exc) == "routeer eerst: `lus draft route <id>`"
     else:
@@ -84,7 +92,9 @@ def test_render_requires_a_routed_draft():
 def test_export_writes_html_and_returns_route_totals():
     with tempfile.TemporaryDirectory() as temp_dir:
         path = str(Path(temp_dir) / "preview.html")
-        result = preview.export(_draft(), _climbs(), path)
+        result = preview.export(
+            _draft(), _climbs(), path, feature_selector=_no_features
+        )
 
         assert Path(path).read_text(encoding="utf-8").startswith("<!doctype html>")
         assert result == {"file": path, "total_km": 2.4, "ascend_m": 61}

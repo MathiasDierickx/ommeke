@@ -296,9 +296,15 @@ def render(
 </html>'''
 
 
-def export(d: dict, climb_db: dict, path: str) -> dict:
+def export(
+    d: dict,
+    climb_db: dict,
+    path: str,
+    *,
+    feature_selector=heat.features_near_route,
+) -> dict:
     """Schrijf de preview naar ``path`` en geef het CLI-resultaat terug."""
-    document = render(d, climb_db)
+    document = render(d, climb_db, feature_selector=feature_selector)
     with open(path, "w", encoding="utf-8") as file:
         file.write(document)
     computed = d["computed"]
