@@ -15,6 +15,8 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+import contextlib
+
 from starlette.routing import Mount, Route
 
 from . import __version__, tenant
@@ -214,7 +216,16 @@ def create_app(
         json_response=True,
         host="0.0.0.0",
     )
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        # de gemounte MCP-subapp krijgt zijn lifespan niet van Starlette:
+        # zonder dit is de StreamableHTTP-sessiemanager nooit gestart en
+        # geeft /mcp met geldige token een 500 (Task group is not initialized)
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
+
     routed = Starlette(
+        lifespan=lifespan,
         routes=[
             Route("/health", health, methods=["GET"]),
             Route(
