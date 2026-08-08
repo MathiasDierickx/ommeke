@@ -28,11 +28,68 @@ CLIMBS_YAML_BUILTIN = Path(__file__).with_name("climbs.yaml")
 _active_region: ContextVar[str | None] = ContextVar(
     "lusmaker_active_region", default=None
 )
+_active_user: ContextVar[str] = ContextVar(
+    "lusmaker_active_user", default="local"
+)
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def home_path() -> Path:
     return Path(os.environ.get("LUSMAKER_HOME", str(Path.home() / ".lusmaker")))
+
+
+def validate_user_id(uid: str) -> str:
+    """Valideer een opaque OAuth-subject voordat het een padcomponent wordt."""
+    if (
+        not isinstance(uid, str)
+        or not uid
+        or len(uid) > 256
+        or uid in {".", ".."}
+        or "/" in uid
+        or "\\" in uid
+        or any(ord(char) < 32 or ord(char) == 127 for char in uid)
+    ):
+        raise ValueError("ongeldige user-id voor opslagpad")
+    return uid
+
+
+def current_user_id() -> str:
+    return _active_user.get()
+
+
+def user_home_path(home: Path | None = None) -> Path:
+    """Geef de gebruikersroot; ``local`` behoudt de historische HOME-layout."""
+    base = home or home_path()
+    uid = current_user_id()
+    if uid == "local":
+        return base
+    users_root = base / "users"
+    scoped = users_root / validate_user_id(uid)
+    if scoped.resolve(strict=False).parent != users_root.resolve(strict=False):
+        raise ValueError("user-id wijst buiten de gebruikersmap")
+    return scoped
+
+
+def drafts_path(home: Path | None = None) -> Path:
+    return user_home_path(home) / "drafts"
+
+
+def profiles_path(home: Path | None = None) -> Path:
+    return user_home_path(home) / "profiles"
+
+
+def exports_path(home: Path | None = None) -> Path:
+    return user_home_path(home) / "exports"
+
+
+@contextmanager
+def user_scope(uid: str):
+    """Scopeer persoonlijke opslag request-lokaal op een gevalideerd subject."""
+    token = _active_user.set(validate_user_id(uid))
+    try:
+        yield current_user_id()
+    finally:
+        _active_user.reset(token)
 
 
 @dataclass(frozen=True)
@@ -252,7 +309,7 @@ def ensure_dirs() -> None:
     for path in (
         region.data,
         region.cache,
-        home_path() / "drafts",
+        drafts_path(),
         region.gh_dir,
         region.gh_dir / "custom_models",
         region.heat_dir,
@@ -326,7 +383,7 @@ def __getattr__(name: str):
     if name == "HOME":
         return home_path()
     if name == "DRAFTS":
-        return home_path() / "drafts"
+        return drafts_path()
     if name == "CLIMBS_YAML_USER":
         return home_path() / "climbs.yaml"
     try:

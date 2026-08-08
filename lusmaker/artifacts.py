@@ -21,7 +21,7 @@ _ARTIFACTS = {
 }
 
 
-def _validate_draft_id(draft_id: str) -> str:
+def validate_draft_id(draft_id: str) -> str:
     if not isinstance(draft_id, str) or not _DRAFT_ID_RE.fullmatch(draft_id):
         raise ArtifactError("ongeldig draft-id voor artifact")
     return draft_id
@@ -29,13 +29,14 @@ def _validate_draft_id(draft_id: str) -> str:
 
 def root() -> Path:
     if aws_state.enabled():
-        return Path(os.environ.get("LUSMAKER_TMP", "/tmp/lusmaker")) / "exports"
-    return config.home_path() / "exports"
+        temporary_home = Path(os.environ.get("LUSMAKER_TMP", "/tmp/lusmaker"))
+        return config.exports_path(temporary_home)
+    return config.exports_path()
 
 
 def draft_dir(draft_id: str, *, create: bool = False) -> Path:
     artifact_root = root().resolve()
-    path = artifact_root / _validate_draft_id(draft_id)
+    path = artifact_root / validate_draft_id(draft_id)
     if create:
         path.mkdir(parents=True, exist_ok=True)
     resolved = path.resolve(strict=False)

@@ -24,7 +24,7 @@ class ProfileError(RuntimeError):
 def _path(name: str):
     if not isinstance(name, str) or not name or not _NAME_RE.fullmatch(name):
         raise ProfileError("profielnaam gebruikt alleen letters, cijfers, _ of -")
-    return config.home_path() / "profiles" / f"{name}.json"
+    return config.profiles_path() / f"{name}.json"
 
 
 def default_document(name: str = "standaard") -> dict:
@@ -174,7 +174,7 @@ def list_all() -> list[dict]:
             (_validate(item) for item in aws_state.list_json("profiles")),
             key=lambda profile: profile["naam"],
         )
-    directory = config.home_path() / "profiles"
+    directory = config.profiles_path()
     if not directory.exists():
         return []
     return [load(path.stem) for path in sorted(directory.glob("*.json"))]

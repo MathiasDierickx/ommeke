@@ -250,7 +250,7 @@ def cmd_draft_show(args):
 def cmd_draft_delete(args):
     from . import draft
 
-    p = config.DRAFTS / f"{args.id}.json"
+    p = config.drafts_path() / f"{draft.validate_draft_id(args.id)}.json"
     if not p.exists():
         raise RuntimeError(f"draft '{args.id}' bestaat niet")
     p.unlink()

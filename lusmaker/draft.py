@@ -2,6 +2,7 @@
 import copy
 import fcntl
 import json
+import re
 import time
 import uuid
 from contextlib import contextmanager
@@ -15,15 +16,23 @@ class DraftError(RuntimeError):
 
 
 PROFILES = ("quiet", "trail")
+_DRAFT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _LEGACY_HM = "__legacy_hm__"
 _LOAD_HEAT = object()
 
 
+def validate_draft_id(draft_id: str) -> str:
+    if not isinstance(draft_id, str) or not _DRAFT_ID_RE.fullmatch(draft_id):
+        raise DraftError("ongeldig draft-id")
+    return draft_id
+
+
 def _path(draft_id: str):
-    return config.DRAFTS / f"{draft_id}.json"
+    return config.drafts_path() / f"{validate_draft_id(draft_id)}.json"
 
 
 def load(draft_id: str) -> dict:
+    validate_draft_id(draft_id)
     if aws_state.enabled():
         value, _etag = aws_state.get_json(f"drafts/{draft_id}.json")
         if value is None:
@@ -110,9 +119,10 @@ def find_by_request_id(request_id: str) -> dict | None:
             ),
             None,
         )
-    if not config.DRAFTS.exists():
+    drafts_path = config.drafts_path()
+    if not drafts_path.exists():
         return None
-    for path in sorted(config.DRAFTS.glob("*.json")):
+    for path in sorted(drafts_path.glob("*.json")):
         with open(path, encoding="utf-8") as handle:
             candidate = json.load(handle)
         if (candidate.get("route_request") or {}).get("request_id") == request_id:
@@ -133,10 +143,11 @@ def invalidate_profile(profile_name: str) -> int:
     if aws_state.enabled():
         drafts = aws_state.list_json("drafts")
     else:
-        if not config.DRAFTS.exists():
+        drafts_path = config.drafts_path()
+        if not drafts_path.exists():
             return invalidated
         drafts = []
-        for path in sorted(config.DRAFTS.glob("*.json")):
+        for path in sorted(drafts_path.glob("*.json")):
             with open(path, encoding="utf-8") as handle:
                 drafts.append(json.load(handle))
     for d in drafts:
