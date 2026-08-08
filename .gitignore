@@ -4,6 +4,7 @@ __pycache__/
 *.gpx
 .DS_Store
 *.html
+!lusmaker/appsdk/*.html
 docker-compose.regions.yml
 .terraform/
 *.tfstate

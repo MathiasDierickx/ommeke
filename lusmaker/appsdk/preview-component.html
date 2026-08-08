@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lusmaker-routepreview</title>
+  <!--
+    Apps-SDK-CSP: alleen unpkg (Leaflet + markerassets) en OSM-tegels zijn
+    externe resources. Houd deze lijst gelijk aan APPS_RESOURCE_META.
+  -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f6f7f9; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; }
+    body { overflow: hidden; }
+    #app { display: flex; flex-direction: column; height: min(480px, 100vh); min-height: 360px; background: #f6f7f9; }
+    body.fullscreen #app { height: 100vh; }
+    header { display: flex; align-items: center; gap: 12px; padding: 10px 12px 8px; background: white; }
+    .title { min-width: 0; flex: 1; }
+    h1 { overflow: hidden; margin: 0; font-size: 17px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    #metrics { margin-top: 3px; color: #526070; font-size: 12px; }
+    button { border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 9px; color: #172033; background: white; cursor: pointer; }
+    button:hover { background: #f1f5f9; }
+    #map { min-height: 190px; flex: 1; }
+    #empty { display: none; place-items: center; min-height: 190px; flex: 1; padding: 24px; color: #526070; text-align: center; }
+    #profile-wrap { height: 112px; padding: 8px 12px 10px; background: white; }
+    #profile-wrap h2 { margin: 0 0 3px; font-size: 12px; }
+    #profile { display: block; width: 100%; height: 80px; }
+    .axis { stroke: #94a3b8; stroke-width: 1; }
+    .elevation { fill: none; stroke: #172033; stroke-width: 2.5; }
+    .climb-zone { fill: #dc2626; opacity: .12; }
+    .label { fill: #526070; font-size: 10px; }
+    @media (max-width: 520px) { button span { display: none; } }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="title"><h1 id="title">Routepreview</h1><div id="metrics"></div></div>
+      <button id="fullscreen" type="button" aria-label="Open preview op volledig scherm">⛶ <span>Volledig scherm</span></button>
+    </header>
+    <div id="map" aria-label="Kaart van de route"></div>
+    <div id="empty">De kaart verschijnt zodra de route berekend is.</div>
+    <section id="profile-wrap"><h2>Hoogteprofiel</h2><svg id="profile" role="img" aria-label="Hoogteprofiel"></svg></section>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const COLORS = ['#2563eb', '#f97316'];
+    const CLIMB_COLOR = '#dc2626';
+    let map;
+    let routeLayer;
+
+    function popup(lines) {
+      const node = document.createElement('div');
+      lines.filter(value => value != null && value !== '').forEach((value, index) => {
+        if (index) node.append(document.createElement('br'));
+        node.append(document.createTextNode(String(value)));
+      });
+      return node;
+    }
+
+    function metric(value, suffix) {
+      return value == null ? null : `${value}${suffix}`;
+    }
+
+    function renderProfile(legs) {
+      const svg = document.getElementById('profile');
+      svg.replaceChildren();
+      svg.setAttribute('viewBox', '0 0 800 90');
+      const points = [];
+      const zones = [];
+      let distance = 0;
+      let previous;
+      const haversine = (a, b) => {
+        const rad = Math.PI / 180;
+        const dLat = (b[0] - a[0]) * rad;
+        const dLon = (b[1] - a[1]) * rad;
+        const lat1 = a[0] * rad;
+        const lat2 = b[0] * rad;
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+        return 12742000 * Math.asin(Math.sqrt(h));
+      };
+      legs.forEach(leg => {
+        const start = distance;
+        leg.coords.forEach(point => {
+          if (previous) distance += haversine(previous, point);
+          previous = point;
+          if (point.length > 2 && point[2] != null) points.push([distance, Number(point[2])]);
+        });
+        if (leg.klim) zones.push([start, distance]);
+      });
+      if (!points.length) {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', '400'); text.setAttribute('y', '45'); text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('class', 'label'); text.textContent = 'Geen hoogtegegevens beschikbaar';
+        svg.append(text);
+        return;
+      }
+      const left = 38, right = 10, top = 5, bottom = 18;
+      const elevations = points.map(point => point[1]);
+      const min = Math.min(...elevations), max = Math.max(...elevations), span = Math.max(max - min, 1);
+      const total = Math.max(distance, 1);
+      const x = value => left + value / total * (800 - left - right);
+      const y = value => top + (max - value) / span * (90 - top - bottom);
+      zones.forEach(([start, end]) => {
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', x(start)); rect.setAttribute('y', top); rect.setAttribute('width', Math.max(1, x(end) - x(start)));
+        rect.setAttribute('height', 90 - top - bottom); rect.setAttribute('class', 'climb-zone'); svg.append(rect);
+      });
+      const axis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      axis.setAttribute('x1', left); axis.setAttribute('y1', 90 - bottom); axis.setAttribute('x2', 800 - right); axis.setAttribute('y2', 90 - bottom); axis.setAttribute('class', 'axis');
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('points', points.map(point => `${x(point[0])},${y(point[1])}`).join(' ')); line.setAttribute('class', 'elevation');
+      svg.append(axis, line);
+      [[left, '0 km', 'start'], [800 - right, `${(distance / 1000).toFixed(1)} km`, 'end']].forEach(([position, label, anchor]) => {
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', position); text.setAttribute('y', 87); text.setAttribute('text-anchor', anchor); text.setAttribute('class', 'label'); text.textContent = label; svg.append(text);
+      });
+    }
+
+    function render(toolOutput) {
+      const data = toolOutput?.preview || toolOutput;
+      const legs = Array.isArray(data?.legs) ? data.legs.filter(leg => Array.isArray(leg.coords) && leg.coords.length) : [];
+      document.getElementById('map').style.display = legs.length ? 'block' : 'none';
+      document.getElementById('empty').style.display = legs.length ? 'none' : 'grid';
+      if (!legs.length) return;
+
+      const summary = data.samenvatting || {};
+      document.getElementById('title').textContent = summary.naam || 'Routepreview';
+      document.getElementById('metrics').textContent = [metric(summary.km, ' km'), metric(summary.hoogtemeters, ' hm')].filter(Boolean).join(' · ');
+      if (!map) {
+        map = L.map('map', {zoomControl: true});
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bijdragers'
+        }).addTo(map);
+      }
+      if (routeLayer) routeLayer.remove();
+      routeLayer = L.layerGroup().addTo(map);
+      const bounds = [];
+      legs.forEach((leg, index) => {
+        L.polyline(leg.coords, {color: leg.klim ? CLIMB_COLOR : COLORS[index % COLORS.length], weight: 5, opacity: .9})
+          .bindPopup(popup([`${leg.van || 'start'} → ${leg.naar || 'einde'}`, metric(leg.km, ' km'), metric(leg.hoogtemeters, ' hm')].filter(Boolean)))
+          .addTo(routeLayer);
+        bounds.push(...leg.coords);
+      });
+      const start = summary.start_coord;
+      if (Array.isArray(start) && start.every(value => value != null)) {
+        L.circleMarker(start, {radius: 7, color: '#172033', fillColor: '#fff', fillOpacity: 1, weight: 3})
+          .bindPopup(popup([summary.start || 'Start'])).addTo(routeLayer);
+      }
+      (data.klimmen || []).forEach(climb => {
+        if (!Array.isArray(climb.top)) return;
+        const stats = climb.stats || {};
+        L.circleMarker(climb.top, {radius: 7, color: CLIMB_COLOR, fillColor: CLIMB_COLOR, fillOpacity: 1})
+          .bindPopup(popup([climb.naam, `${stats.lengte_m ?? '?'} m · gem. ${stats.gemiddeld_pct ?? '?'}% · max. ${stats.max_pct ?? '?'}%`]))
+          .addTo(routeLayer);
+      });
+      map.fitBounds(bounds, {padding: [20, 20]});
+      setTimeout(() => map.invalidateSize(), 0);
+      renderProfile(legs);
+    }
+
+    document.getElementById('fullscreen').addEventListener('click', async () => {
+      if (!window.openai?.requestDisplayMode) return;
+      await window.openai.requestDisplayMode({mode: 'fullscreen'});
+      document.body.classList.add('fullscreen');
+      setTimeout(() => map?.invalidateSize(), 0);
+    });
+    window.addEventListener('openai:set_globals', event => {
+      const globals = event.detail?.globals;
+      if (globals && Object.prototype.hasOwnProperty.call(globals, 'toolOutput')) render(globals.toolOutput);
+      if (globals?.displayMode) document.body.classList.toggle('fullscreen', globals.displayMode === 'fullscreen');
+    });
+    render(window.openai?.toolOutput);
+  </script>
+</body>
+</html>

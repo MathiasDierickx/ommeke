@@ -113,6 +113,36 @@ def test_downsample_uses_one_global_point_budget():
     assert sampled[1][-1] == legs[1][-1]
 
 
+def test_component_payload_has_compact_fieldset_and_global_point_budget():
+    route = _draft()
+    route["_geometry"] = [
+        [[50.0 + index / 10000, 3.0, index] for index in range(500)],
+        [[51.0 + index / 10000, 4.0, index] for index in range(500)],
+    ]
+    climbs = _climbs()
+    climbs["testklim"]["gain_m"] = 50
+
+    payload = preview.component_payload(route, climbs)
+
+    assert set(payload) == {"legs", "klimmen", "kwaliteit", "samenvatting"}
+    assert sum(len(leg["coords"]) for leg in payload["legs"]) == 600
+    assert payload["legs"][0]["coords"][0] == route["_geometry"][0][0]
+    assert payload["legs"][1]["coords"][-1] == route["_geometry"][1][-1]
+    assert payload["klimmen"] == [
+        {
+            "naam": "Testklim",
+            "stats": {
+                "lengte_m": 1200,
+                "hoogtemeters": 50,
+                "gemiddeld_pct": 4.2,
+                "max_pct": 8.1,
+            },
+            "top": [50.983, 3.873],
+        }
+    ]
+    assert payload["samenvatting"]["start_coord"] == [50.98, 3.87]
+
+
 def test_render_adds_pois_and_knot_labels_and_caps_poi_markers():
     calls = []
 

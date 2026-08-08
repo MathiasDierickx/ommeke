@@ -10,6 +10,7 @@ from .draft import DraftError
 ROUTE_COLORS = ("#2563eb", "#f97316")
 CLIMB_COLOR = "#dc2626"
 MAX_ROUTE_POINTS = 1500
+MAX_COMPONENT_ROUTE_POINTS = 600
 MAX_POI_MARKERS = 40
 POI_ICONS = {
     "picknickbank": "🧺",
@@ -137,6 +138,67 @@ def _metric(label: str, value, suffix: str = "") -> str:
     if value is None:
         return ""
     return f'<span><strong>{html.escape(str(value))}{suffix}</strong> {label}</span>'
+
+
+def component_payload(
+    d: dict,
+    climb_db: dict,
+    *,
+    point_limit: int = MAX_COMPONENT_ROUTE_POINTS,
+) -> dict:
+    """Bouw de compacte kaartdata voor een ChatGPT Apps-component."""
+    geometry = d.get("_geometry")
+    if not geometry:
+        raise DraftError("routeer eerst: `lus draft route <id>`")
+
+    computed = d.get("computed") or {}
+    leg_meta = computed.get("legs") or []
+    sampled = _downsample(geometry, limit=point_limit)
+    legs = []
+    for index, coords in enumerate(sampled):
+        meta = leg_meta[index] if index < len(leg_meta) else {}
+        legs.append(
+            {
+                "coords": [list(point[:3]) for point in coords],
+                "van": meta.get("from"),
+                "naar": meta.get("to"),
+                "km": meta.get("km"),
+                "hoogtemeters": meta.get("ascend_m"),
+                "klim": bool(meta.get("climb")),
+            }
+        )
+
+    climb_payload = []
+    for climb_id in d.get("climbs", []):
+        climb = climb_db.get(climb_id)
+        if not climb or not climb.get("top"):
+            continue
+        climb_payload.append(
+            {
+                "naam": climb.get("name") or climb_id,
+                "stats": {
+                    "lengte_m": climb.get("length_m"),
+                    "hoogtemeters": climb.get("gain_m"),
+                    "gemiddeld_pct": climb.get("avg_pct"),
+                    "max_pct": climb.get("max_pct"),
+                },
+                "top": list(climb["top"][:2]),
+            }
+        )
+
+    start = d.get("start") or {}
+    return {
+        "legs": legs,
+        "klimmen": climb_payload,
+        "kwaliteit": computed.get("kwaliteit") or {},
+        "samenvatting": {
+            "naam": d.get("name") or "Route",
+            "start": start.get("label"),
+            "start_coord": [start.get("lat"), start.get("lon")],
+            "km": computed.get("total_km"),
+            "hoogtemeters": computed.get("ascend_m"),
+        },
+    }
 
 
 def render(
