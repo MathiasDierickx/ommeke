@@ -244,3 +244,41 @@ def test_build_without_walking_data_keeps_single_popular_area():
 
     assert [feature["id"] for feature in geojson["features"]] == ["popular"]
     assert cached["trail_cells"] == set()
+
+
+def test_features_near_route_applies_distances_and_global_poi_cap():
+    route = [(50.0, 4.0), (50.0, 4.1)]
+    pois = [
+        (50.0, 4.001 + index * 0.001, f"bank {index}")
+        for index in range(45)
+    ]
+    pois.extend(
+        [
+            (50.0008, 4.06, "nabij"),
+            (50.003, 4.06, "te ver"),
+        ]
+    )
+    knots = [
+        (50.0005, 4.05, 12, "fiets"),
+        (50.0012, 4.05, 13, "fiets"),
+    ]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            config.ensure_dirs()
+            with open(config.VLAANDEREN_ROUTES_PKL, "wb") as handle:
+                pickle.dump(
+                    {
+                        "version": 2,
+                        "pois": {"picknickbank": pois},
+                        "knopen": knots,
+                    },
+                    handle,
+                )
+            capped = heat.features_near_route(route, max_pois=40)
+            uncapped = heat.features_near_route(route)
+
+    assert len(capped["pois"]) == 40
+    assert len(uncapped["pois"]) == 46
+    assert all(poi["naam"] != "te ver" for poi in uncapped["pois"])
+    assert [knot["nummer"] for knot in uncapped["knopen"]] == [12]

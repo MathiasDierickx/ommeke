@@ -529,6 +529,102 @@ def vlaanderen_data() -> dict:
     }
 
 
+def _point_to_route_m(point, route_coords) -> float:
+    """Kleinste afstand tot een routepolyline, lokaal vlak benaderd."""
+    if not route_coords:
+        return math.inf
+    if len(route_coords) == 1:
+        return geo.haversine(*point, *route_coords[0])
+    lat, lon = point
+    lon_scale = 111_320.0 * math.cos(math.radians(lat))
+    best = math.inf
+    for start, end in zip(route_coords, route_coords[1:]):
+        ax = (start[1] - lon) * lon_scale
+        ay = (start[0] - lat) * 111_320.0
+        bx = (end[1] - lon) * lon_scale
+        by = (end[0] - lat) * 111_320.0
+        dx, dy = bx - ax, by - ay
+        length_squared = dx * dx + dy * dy
+        if length_squared:
+            fraction = max(0.0, min(1.0, -(ax * dx + ay * dy) / length_squared))
+            x, y = ax + fraction * dx, ay + fraction * dy
+        else:
+            x, y = ax, ay
+        best = min(best, math.hypot(x, y))
+    return best
+
+
+def features_near_route(
+    route_coords,
+    *,
+    poi_radius_m: float = 150.0,
+    knot_radius_m: float = 100.0,
+    max_pois: int | None = None,
+) -> dict[str, list[dict]]:
+    """Selecteer gecachete POI's en knopen binnen afstand van de route."""
+    coords = [(float(point[0]), float(point[1])) for point in route_coords]
+    if not coords:
+        return {"pois": [], "knopen": []}
+    max_radius = max(poi_radius_m, knot_radius_m)
+    expand = max(1, math.ceil(max_radius / 120.0))
+    candidate_cells = geo.cells_for_geom(coords, expand=expand)
+    data = vlaanderen_data()
+
+    pois = []
+    seen_pois = set()
+    for poi_type, points in data["pois"].items():
+        for lat, lon, name in points:
+            key = (poi_type, lat, lon, name)
+            if key in seen_pois or geo.cell(lat, lon) not in candidate_cells:
+                continue
+            distance = _point_to_route_m((lat, lon), coords)
+            if distance <= poi_radius_m:
+                seen_pois.add(key)
+                pois.append(
+                    {
+                        "type": poi_type,
+                        "lat": lat,
+                        "lon": lon,
+                        "naam": name,
+                        "afstand_m": round(distance),
+                    }
+                )
+    pois.sort(
+        key=lambda item: (
+            item["afstand_m"], item["type"], item["lat"], item["lon"],
+            item["naam"] or "",
+        )
+    )
+    if max_pois is not None:
+        pois = pois[:max(0, max_pois)]
+
+    knots = []
+    seen_knots = set()
+    for lat, lon, number, kind in data["knopen"]:
+        key = (lat, lon, number, kind)
+        if key in seen_knots or geo.cell(lat, lon) not in candidate_cells:
+            continue
+        distance = _point_to_route_m((lat, lon), coords)
+        if distance <= knot_radius_m:
+            seen_knots.add(key)
+            knots.append(
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "nummer": number,
+                    "type": kind,
+                    "afstand_m": round(distance),
+                }
+            )
+    knots.sort(
+        key=lambda item: (
+            item["afstand_m"], item["nummer"], item["type"],
+            item["lat"], item["lon"],
+        )
+    )
+    return {"pois": pois, "knopen": knots}
+
+
 def _vlaanderen_cells() -> dict[str, set]:
     routes = vlaanderen_data()
     return {
