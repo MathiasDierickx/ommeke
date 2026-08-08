@@ -211,13 +211,23 @@ async def conversation_send(request: Request) -> JSONResponse:
         return _error(str(exc), 404, "conversation_not_found")
     except ChatError as exc:
         return _error(str(exc), 422, "chat_failed")
-    except Exception:
+    except Exception as exc:
         logger.exception("chatbericht mislukt (conversation=%s)", conversation_id)
-        return _error(
-            "Claude kon dit bericht niet verwerken. Probeer het opnieuw.",
-            502,
-            "model_unavailable",
-        )
+        detail = str(exc)
+        if "Marketplace" in detail or "PAYMENT_INSTRUMENT" in detail:
+            message = (
+                "De AI-dienst is nog niet geactiveerd op dit AWS-account "
+                "(Bedrock-modeltoegang/betaalmethode). Beheerder: rond de "
+                "Marketplace-activatie af."
+            )
+        elif "Too many tokens" in detail or "ThrottlingException" in detail:
+            message = (
+                "De AI-dienst zit aan zijn (opstart)limiet. Beheerder: "
+                "Bedrock-servicequota voor het model staat mogelijk nog op 0."
+            )
+        else:
+            message = "Claude kon dit bericht niet verwerken. Probeer het opnieuw."
+        return _error(message, 502, "model_unavailable")
 
 
 async def conversation_delete(request: Request) -> Response:
