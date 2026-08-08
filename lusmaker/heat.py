@@ -428,8 +428,15 @@ def status() -> dict:
     return out
 
 
-def popular_cells() -> set | None:
+def popular_cells(profile: str = "quiet", *, fallback: bool = True) -> set | None:
     if not config.HEAT_PKL.exists():
         return None
     with open(config.HEAT_PKL, "rb") as f:
-        return pickle.load(f)["cells"]
+        heat = pickle.load(f)
+    if profile == "trail":
+        trail_cells = heat.get("trail_cells")
+        if trail_cells:
+            return trail_cells
+        if not fallback:
+            return None
+    return heat["cells"]

@@ -491,7 +491,9 @@ def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
     from . import analysis
 
     try:
-        d["computed"]["kwaliteit"] = analysis.route_stats(d["_geometry"], leg_details)
+        d["computed"]["kwaliteit"] = analysis.route_stats(
+            d["_geometry"], leg_details, profile=preferences["profile"]
+        )
     except Exception as e:  # metriek mag routeren nooit blokkeren
         d["computed"]["kwaliteit"] = {"error": str(e)}
     save(d)
@@ -682,6 +684,13 @@ def probe(d: dict, climb_db: dict, router=gh.route) -> dict:
 
     route(d, climb_db, router=router)
     quality = copy.deepcopy(d["computed"].get("kwaliteit") or {})
+    effective_profile = routing_preferences(d)["profile"]
+    from . import heat
+
+    walking_popularity_available = (
+        effective_profile == "trail"
+        and heat.popular_cells("trail", fallback=False) is not None
+    )
     nearby_climbs = {
         candidate[1]
         for candidate in _candidate_prefilter(d, climb_db, max_detour_km=5.0)
@@ -711,6 +720,7 @@ def probe(d: dict, climb_db: dict, router=gh.route) -> dict:
             "offroad_beschikbaar_pct": quality.get("offroad_pct", 0),
             "klimmen_binnen_5km": len(nearby_climbs),
             "heat_dekking_pct": quality.get("populair_pct"),
+            "wandelpopulariteit_beschikbaar": walking_popularity_available,
             "plaatskernen": place_cores,
         },
     }

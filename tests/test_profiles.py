@@ -148,6 +148,45 @@ def test_write_gh_files_adds_trail_profile_and_model():
     )
 
 
+def test_write_gh_files_adds_rules_only_for_respective_custom_areas():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            config.ensure_dirs()
+            areas = {
+                "type": "FeatureCollection",
+                "features": [
+                    {"type": "Feature", "id": "popular"},
+                    {"type": "Feature", "id": "popular_trail"},
+                ],
+            }
+            (config.CUSTOM_AREAS / "popular.geojson").write_text(
+                json.dumps(areas), encoding="utf-8"
+            )
+            files = gh_config.write_gh_files()
+            quiet = json.loads(Path(files[1]).read_text(encoding="utf-8"))
+            trail = json.loads(Path(files[2]).read_text(encoding="utf-8"))
+
+    assert quiet["priority"][-1] == gh_config.POPULAR_RULE
+    assert trail["priority"][-1] == gh_config.POPULAR_TRAIL_RULE
+
+
+def test_write_gh_files_keeps_trail_rule_off_for_popular_only():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            config.ensure_dirs()
+            areas = {
+                "type": "FeatureCollection",
+                "features": [{"type": "Feature", "id": "popular"}],
+            }
+            (config.CUSTOM_AREAS / "popular.geojson").write_text(
+                json.dumps(areas), encoding="utf-8"
+            )
+            files = gh_config.write_gh_files()
+            trail = json.loads(Path(files[2]).read_text(encoding="utf-8"))
+
+    assert trail == gh_config.TRAIL_MODEL
+
+
 def test_preference_profile_load_default_and_list_only_saved_documents():
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):

@@ -29,6 +29,7 @@ def _draft(
     main_road=0,
     offroad=0,
     heat=None,
+    walking_popularity=False,
     places=None,
 ):
     return {
@@ -51,6 +52,7 @@ def _draft(
                 "beton_m": concrete,
                 "offroad_beschikbaar_pct": offroad,
                 "heat_dekking_pct": heat,
+                "wandelpopulariteit_beschikbaar": walking_popularity,
                 "plaatskernen": places or [],
             },
         },
@@ -118,6 +120,20 @@ def test_weight_rule_requires_default_weights_and_material_route_signal():
         "kort": 0.0,
     }
     assert _question_ids(readiness.assess(_draft(offroad=80, heat=50), profile, {})) == []
+
+
+def test_trail_weight_rule_offers_popularity_only_with_walking_layer():
+    profile = profiles.default_document()
+    profile["activiteit"] = "trail"
+
+    without_walking = readiness.assess(_draft(heat=40), profile, {})
+    with_walking = readiness.assess(
+        _draft(heat=40, walking_popularity=True), profile, {}
+    )
+
+    assert _question_ids(without_walking) == []
+    assert _question_ids(with_walking) == ["gewichten"]
+    assert "populaire wandelroutes" in with_walking["vragen"][0]["vraag"]
 
 
 def test_place_rule_excludes_start_and_marks_avoid_patch_for_draft():

@@ -94,7 +94,7 @@ def count_crossings(route_coords) -> int:
     return len(merged)
 
 
-def route_stats(legs_geometry, legs_details) -> dict:
+def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     """Kwaliteitsrapport over een volledige (gerouteerde) draft."""
     all_coords = [pt for leg in legs_geometry for pt in leg]
     kassei = beton = steenweg = offroad = 0.0
@@ -120,7 +120,7 @@ def route_stats(legs_geometry, legs_details) -> dict:
     }
     from . import heat
 
-    cells = heat.popular_cells()
+    cells = heat.popular_cells(profile)
     if cells is not None:
         pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
         hits = sum(1 for p in pts if geo.cell(*p) in cells)

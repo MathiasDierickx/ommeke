@@ -20,7 +20,9 @@ def _default_weights(weights: dict) -> bool:
     )
 
 
-def _weight_question(offroad_pct: float, heat_pct: float | None) -> dict | None:
+def _weight_question(
+    offroad_pct: float, heat_pct: float | None, activity: str = "fietsen"
+) -> dict | None:
     has_offroad = offroad_pct > 20
     has_heat = heat_pct is not None
     if not has_offroad and not has_heat:
@@ -82,13 +84,16 @@ def _weight_question(offroad_pct: float, heat_pct: float | None) -> dict | None:
                 "patch": {"gewichten": {"hoogtemeters": 0.3, "populair": 0.7}}
             },
         }
+    popularity_label = (
+        "populaire wandelroutes" if activity == "trail" else "populaire fietswegen"
+    )
     return {
         "id": "gewichten",
         "prioriteit": 4,
         "reden": reason,
         "vraag": (
             "Wat weegt voor jou het zwaarst: vooral klimmen, de beschikbare "
-            "onverharde stukken, of populaire fietswegen?"
+            f"onverharde stukken, of {popularity_label}?"
         ),
         "opties": options,
     }
@@ -186,9 +191,20 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
         )
 
     if _default_weights(profiel["gewichten"]):
+        heat_pct = _metric(
+            probe, "heat_dekking_pct", "populair_pct", default=None
+        )
+        if (
+            profiel["activiteit"] == "trail"
+            and not _metric(
+                probe, "wandelpopulariteit_beschikbaar", default=False
+            )
+        ):
+            heat_pct = None
         weight_question = _weight_question(
             _metric(probe, "offroad_beschikbaar_pct", "offroad_pct"),
-            _metric(probe, "heat_dekking_pct", "populair_pct", default=None),
+            heat_pct,
+            profiel["activiteit"],
         )
         if weight_question is not None:
             questions.append(weight_question)

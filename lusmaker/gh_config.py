@@ -70,6 +70,19 @@ TRAIL_MODEL = {
 
 # relatieve boost voor bereden corridors: alles daarbuiten een zachte straf
 POPULAR_RULE = {"if": "!in_popular", "multiply_by": "0.75"}
+POPULAR_TRAIL_RULE = {"if": "!in_popular_trail", "multiply_by": "0.75"}
+
+
+def _custom_area_ids() -> set[str]:
+    path = config.CUSTOM_AREAS / "popular.geojson"
+    if not path.exists():
+        return set()
+    document = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        feature.get("id")
+        for feature in document.get("features", [])
+        if isinstance(feature, dict) and feature.get("id")
+    }
 
 
 def write_gh_files() -> list[str]:
@@ -83,11 +96,17 @@ def write_gh_files() -> list[str]:
             admin_port=region.gh_port + 1,
         )
     )
+    area_ids = _custom_area_ids()
     model = dict(QUIET_MODEL)
-    if (config.CUSTOM_AREAS / "popular.geojson").exists():
+    if "popular" in area_ids:
         model = {"priority": QUIET_MODEL["priority"] + [POPULAR_RULE]}
     quiet = config.GH_DIR / "custom_models" / "quiet.json"
     quiet.write_text(json.dumps(model, indent=2))
+    trail_model = dict(TRAIL_MODEL)
+    if "popular_trail" in area_ids:
+        trail_model = {
+            "priority": TRAIL_MODEL["priority"] + [POPULAR_TRAIL_RULE]
+        }
     trail = config.GH_DIR / "custom_models" / "trail.json"
-    trail.write_text(json.dumps(TRAIL_MODEL, indent=2))
+    trail.write_text(json.dumps(trail_model, indent=2))
     return [str(cfg), str(quiet), str(trail)]
