@@ -119,6 +119,29 @@ def test_compact_output_contract_and_summary():
     )
 
 
+def test_compact_output_adds_one_underway_line_when_pois_are_present():
+    state = _routed_draft()
+    state["_probe"] = {
+        "terrein": {
+            "pois_langs_route": {
+                "toilet": 1,
+                "uitkijktoren": 1,
+                "picknickbank": 2,
+            }
+        }
+    }
+
+    result = intents.compact_result(
+        state,
+        _climbs(),
+        {"gpx": "/tmp/test.gpx", "preview": "/tmp/test.html"},
+    )
+
+    assert result["onderweg"] == (
+        "2 picknickbanken, 1 uitkijktoren, toilet"
+    )
+
+
 def test_plan_route_injects_route_and_export_functions():
     state = {
         "id": "abc123",

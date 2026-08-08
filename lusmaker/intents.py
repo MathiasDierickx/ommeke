@@ -8,7 +8,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from . import artifacts, climbs, config, draft, gpx, preview, profiles, readiness
+from . import artifacts, climbs, config, draft, gpx, heat, preview, profiles, readiness
 
 
 class IntentError(RuntimeError):
@@ -17,6 +17,19 @@ class IntentError(RuntimeError):
 
 ACTIVITY_PROFILES = {"fietsen": "quiet", "trail": "trail"}
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+POI_NAMES = {
+    "picknickbank": ("picknickbank", "picknickbanken"),
+    "uitkijktoren": ("uitkijktoren", "uitkijktorens"),
+    "zitbank": ("zitbank", "zitbanken"),
+    "fietspomp_en_fietsherstel": (
+        "fietspomp/herstelpunt",
+        "fietspompen/herstelpunten",
+    ),
+    "fietsverhuur": ("fietsverhuurpunt", "fietsverhuurpunten"),
+    "speeltuin": ("speeltuin", "speeltuinen"),
+    "ebike": ("e-bikepunt", "e-bikepunten"),
+    "toilet": ("toilet", "toiletten"),
+}
 
 
 def _normalise(value: str) -> str:
@@ -128,6 +141,48 @@ def summary_sentence(d: dict) -> str:
     return sentence + "."
 
 
+def underway_label(poi_counts: dict) -> str:
+    """Formatteer aanwezige POI-aantallen als één compacte Nederlandse regel."""
+    parts = []
+    ordered_types = [
+        *POI_NAMES,
+        *sorted(set(poi_counts) - set(POI_NAMES), key=str.casefold),
+    ]
+    for poi_type in ordered_types:
+        count = int(poi_counts.get(poi_type, 0))
+        if count <= 0:
+            continue
+        singular, plural = POI_NAMES.get(
+            poi_type,
+            (poi_type.replace("_", " "), f"{poi_type.replace('_', ' ')}s"),
+        )
+        if poi_type == "toilet" and count == 1:
+            parts.append(singular)
+        else:
+            parts.append(f"{count} {singular if count == 1 else plural}")
+    return ", ".join(parts)
+
+
+def _route_poi_counts(d: dict, feature_selector) -> dict:
+    terrain = ((d.get("_probe") or {}).get("terrein") or {})
+    if "pois_langs_route" in terrain:
+        return terrain["pois_langs_route"] or {}
+    route_coords = [
+        (point[0], point[1])
+        for leg in d.get("_geometry", [])
+        for point in leg
+    ]
+    if not route_coords:
+        return {}
+    with draft.region_scope(d):
+        features = feature_selector(route_coords)
+    counts = {}
+    for poi in features["pois"]:
+        poi_type = poi["type"]
+        counts[poi_type] = counts.get(poi_type, 0) + 1
+    return counts
+
+
 def constraint_report(d: dict, request: dict | None = None) -> dict:
     """Maak streefafstand en hard budget expliciet controleerbaar."""
     request = request or d.get("route_request") or {}
@@ -169,12 +224,17 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
 
 
 def compact_result(
-    d: dict, climb_db: dict, files: dict, request: dict | None = None
+    d: dict,
+    climb_db: dict,
+    files: dict,
+    request: dict | None = None,
+    *,
+    feature_selector=heat.features_near_route,
 ) -> dict:
     computed = d.get("computed")
     if not computed:
         raise IntentError("route heeft nog geen berekening")
-    return {
+    result = {
         "status": "ready",
         "draft": d["id"],
         "revision": int(d.get("revision", 0)),
@@ -198,6 +258,10 @@ def compact_result(
         "artifacts": artifacts.describe_all(d["id"]),
         "constraints": constraint_report(d, request),
     }
+    underway = underway_label(_route_poi_counts(d, feature_selector))
+    if underway:
+        result["onderweg"] = underway
+    return result
 
 
 def _validate_request(
