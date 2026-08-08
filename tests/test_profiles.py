@@ -140,6 +140,7 @@ def test_write_gh_files_adds_trail_profile_and_model():
             trail = json.loads(generated[2].read_text(encoding="utf-8"))
 
     assert "foot_access, foot_priority, foot_average_speed" in config_yml
+    assert "ferry_speed, country" in config_yml
     assert "name: trail" in config_yml
     assert "custom_model_files: [foot.json, trail.json]" in config_yml
     assert generated[2].name == "trail.json"

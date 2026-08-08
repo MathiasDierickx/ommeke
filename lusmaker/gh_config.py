@@ -11,7 +11,7 @@ graphhopper:
   graph.elevation.provider: skadi
   graph.elevation.cache_dir: /lus/gh/elevation-cache
 
-  graph.encoded_values: bike_access, bike_priority, bike_average_speed, bike_road_access, foot_access, foot_priority, foot_average_speed, foot_road_access, roundabout, road_class, road_environment, surface, smoothness, max_speed, track_type, bike_network, mtb_rating, hike_rating, ferry_speed
+  graph.encoded_values: bike_access, bike_priority, bike_average_speed, bike_road_access, foot_access, foot_priority, foot_average_speed, foot_road_access, roundabout, road_class, road_environment, surface, smoothness, max_speed, track_type, bike_network, mtb_rating, hike_rating, ferry_speed, country
 
   import.osm.ignored_highways: motorway, trunk
 

@@ -7,7 +7,7 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
-from deploy.aws.prepare_region import prepare
+from deploy.aws.prepare_region import _validate_graph_compatibility, prepare
 from lusmaker import config, provision
 
 
@@ -107,11 +107,16 @@ def test_pack_contains_rebuild_outputs_but_not_pbf():
             (region.data / region.pbf_name).write_bytes(b"large-pbf")
             (region.gh_dir / "graph-cache").mkdir(parents=True)
             (region.gh_dir / "graph-cache" / "edges").write_bytes(b"graph")
+            (region.gh_dir / "graph-cache" / "properties").write_bytes(
+                b'graph.encoded_values=["{\\"name\\":\\"country\\"}"]'
+            )
             (region.gh_dir / "custom_models").mkdir()
             (region.gh_dir / "custom_models" / "quiet.json").write_text("{}")
             (region.gh_dir / "custom_areas").mkdir()
             (region.gh_dir / "custom_areas" / "popular.geojson").write_text("{}")
-            (region.gh_dir / "config.yml").write_text("graphhopper:")
+            (region.gh_dir / "config.yml").write_text(
+                "graphhopper:\n  graph.encoded_values: country\n"
+            )
 
             output = home / "pack.tar.gz"
             result = provision.create_pack("zeeland", output, home=home)
@@ -138,6 +143,26 @@ def test_pack_contains_rebuild_outputs_but_not_pbf():
         assert (
             context / "regions" / "zeeland" / "gh" / "graph-cache" / "edges"
         ).read_bytes() == b"graph"
+
+
+def test_pack_validator_rejects_config_value_missing_from_graph_cache():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        region = Path(temp_dir)
+        (region / "gh" / "graph-cache").mkdir(parents=True)
+        (region / "gh" / "config.yml").write_text(
+            "graphhopper:\n  graph.encoded_values: bike_access, country\n",
+            encoding="utf-8",
+        )
+        (region / "gh" / "graph-cache" / "properties").write_bytes(
+            b'graph.encoded_values=["{\\"name\\":\\"bike_access\\"}"]'
+        )
+
+        try:
+            _validate_graph_compatibility(region)
+        except RuntimeError as exc:
+            assert str(exc).endswith("config.yml: country")
+        else:
+            raise AssertionError("ontbrekende encoded value werd niet geweigerd")
 
 
 def test_foreground_provision_uses_injected_build_exec_and_health():
