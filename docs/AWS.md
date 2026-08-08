@@ -89,8 +89,8 @@ en de [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter).
   een URL van de vorm `https://chatgpt.com/connector/oauth/{callback_id}`.
 - een Vercel-project en zijn vaste productie-URL, bijvoorbeeld
   `https://ommeke.vercel.app/`;
-- voor automatische webdeploys: `VERCEL_TOKEN`, `VERCEL_ORG_ID` en
-  `VERCEL_PROJECT_ID` als GitHub repository secrets.
+- voor automatische webdeploys: `VERCEL_TOKEN` als GitHub repository secret
+  en `VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` als repositoryvariabelen.
 
 ## 1. Bootstrap state en GitHub OIDC
 
@@ -132,6 +132,8 @@ AWS access keys:
 | `LUSMAKER_REGION_SLUG` | nee | `vlaanderen` |
 | `OAUTH_CALLBACK_URLS_JSON` | ja | `["https://claude.ai/api/mcp/auth_callback"]` |
 | `WEB_CALLBACK_URLS_JSON` | ja | `["https://ommeke.vercel.app/","http://localhost:3000/"]` |
+| `VERCEL_ORG_ID` | voor web-CD | Vercel team- of account-ID |
+| `VERCEL_PROJECT_ID` | voor web-CD | Vercel project-ID |
 | `BILLING_EMAIL` | nee | `aws-kosten@example.com` |
 
 Met de GitHub CLI:
@@ -201,19 +203,19 @@ code-plus-pack tag wordt hergebruikt en Terraform deployt altijd de digest.
 
 ## 5. Deploy de Next.js-app naar Vercel
 
-Koppel een leeg Vercel-project aan de drie GitHub secrets. De workflow leest de
+Koppel een leeg Vercel-project aan het GitHub secret en de twee variabelen. De workflow leest de
 publieke API-, Cognito-domain- en webclientwaarden rechtstreeks uit remote
 Terraform-state, bouwt `web/` en deployt met de vastgepinde Vercel CLI:
 
 ```bash
 gh secret set VERCEL_TOKEN
-gh secret set VERCEL_ORG_ID
-gh secret set VERCEL_PROJECT_ID
+gh variable set VERCEL_ORG_ID --body 'team_...'
+gh variable set VERCEL_PROJECT_ID --body 'prj_...'
 gh workflow run deploy-vercel.yml --ref main
 ```
 
 Een push onder `web/**` start dezelfde workflow. Na een eerste AWS-deployment
-start ze ook automatisch via `workflow_run`. Zonder de drie secrets slaat de
+start ze ook automatisch via `workflow_run`. Zonder deze configuratie slaat de
 workflow de deploy bewust groen over. De Vercel production alias moet exact in
 `WEB_CALLBACK_URLS_JSON` staan; deploy AWS opnieuw wanneer die URL wijzigt.
 

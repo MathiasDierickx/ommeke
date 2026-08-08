@@ -32,8 +32,8 @@ jobs:
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       PROJECT_NAME: ${{ vars.PROJECT_NAME || 'lusmaker' }}
       DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
@@ -42,13 +42,13 @@ jobs:
       - name: Controleer Vercel-configuratie
         id: config
         env:
-          HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
+          HAS_VERCEL: ${{ secrets.VERCEL_TOKEN != '' && vars.VERCEL_ORG_ID != '' && vars.VERCEL_PROJECT_ID != '' }}
         run: |
           if [ "$HAS_VERCEL" = "true" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Vercel deploy overgeslagen: configureer VERCEL_TOKEN, VERCEL_ORG_ID en VERCEL_PROJECT_ID." >> "$GITHUB_STEP_SUMMARY"
+            echo "Vercel deploy overgeslagen: configureer VERCEL_TOKEN en de Vercel repositoryvariabelen." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - uses: actions/checkout@v7.0.1
