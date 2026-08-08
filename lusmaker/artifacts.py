@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
+from urllib.parse import quote, urlsplit
 
 from . import aws_state, config
 
@@ -19,12 +22,81 @@ _ARTIFACTS = {
     "route.gpx": ("gpx", "application/gpx+xml", "GPX-route"),
     "preview.html": ("preview", "text/html", "Routepreview"),
 }
+_http_delivery: ContextVar[bool] = ContextVar(
+    "lusmaker_http_artifact_delivery", default=False
+)
 
 
 def validate_draft_id(draft_id: str) -> str:
     if not isinstance(draft_id, str) or not _DRAFT_ID_RE.fullmatch(draft_id):
         raise ArtifactError("ongeldig draft-id voor artifact")
     return draft_id
+
+
+@contextmanager
+def delivery_mode(http: bool):
+    """Selecteer per request lokale paden of publieke HTTP-bestands-URL's."""
+    token = _http_delivery.set(bool(http))
+    try:
+        yield
+    finally:
+        _http_delivery.reset(token)
+
+
+def public_base_url(explicit: str | None = None) -> str:
+    value = (explicit or os.environ.get("LUSMAKER_PUBLIC_URL", "")).rstrip("/")
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ArtifactError(
+            "LUSMAKER_PUBLIC_URL moet een absolute HTTP(S)-basis-URL zijn"
+        )
+    return value
+
+
+def file_url(
+    draft_id: str,
+    filename: str,
+    *,
+    uid: str | None = None,
+    public_url: str | None = None,
+) -> str:
+    """Bouw een token-gebonden URL voor een canoniek route-artifact."""
+    if filename not in _ARTIFACTS:
+        raise ArtifactError(f"onbekend artifact '{filename}'")
+    user_id = config.validate_user_id(uid or config.current_user_id())
+    draft_id = validate_draft_id(draft_id)
+    return (
+        f"{public_base_url(public_url)}/files/{quote(user_id, safe='')}/"
+        f"{quote(draft_id, safe='')}/{quote(filename, safe='')}"
+    )
+
+
+def output_reference(
+    path: str | Path,
+    draft_id: str,
+    filename: str,
+    *,
+    http_mode: bool | None = None,
+    uid: str | None = None,
+    public_url: str | None = None,
+) -> str:
+    """Geef in HTTP-modus een URL en anders het ongewijzigde lokale pad."""
+    use_http = _http_delivery.get() if http_mode is None else http_mode
+    if use_http:
+        return file_url(draft_id, filename, uid=uid, public_url=public_url)
+    return str(path)
+
+
+def content_type(filename: str) -> str:
+    try:
+        return _ARTIFACTS[filename][1]
+    except KeyError as exc:
+        raise ArtifactError(f"onbekend artifact '{filename}'") from exc
 
 
 def root() -> Path:
@@ -83,7 +155,11 @@ def describe(draft_id: str, filename: str) -> dict:
     item = {
         "type": key,
         "title": title,
-        "uri": uri_for(draft_id, filename),
+        "uri": (
+            file_url(draft_id, filename)
+            if _http_delivery.get()
+            else uri_for(draft_id, filename)
+        ),
         "mime_type": mime_type,
     }
     if aws_state.enabled():

@@ -422,7 +422,14 @@ def _export_files(
     if aws_state.enabled():
         artifacts.publish(d["id"], "route.gpx")
         artifacts.publish(d["id"], "preview.html")
-    return {"gpx": str(gpx_path), "preview": str(preview_path)}
+    return {
+        "gpx": artifacts.output_reference(
+            gpx_path, d["id"], "route.gpx"
+        ),
+        "preview": artifacts.output_reference(
+            preview_path, d["id"], "preview.html"
+        ),
+    }
 
 
 def _resolve_climbs(names: list[str], climb_db: dict) -> list[dict]:
