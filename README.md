@@ -9,6 +9,9 @@ Bouw fiets- en trail-GPX-**lussen** stap voor stap, aangestuurd door een LLM
 De LLM vertaalt dat naar tool calls; de tool stelt suggesties voor ("Molenberg
 erbij voor ~9 km extra?") die de LLM aan de gebruiker terugspeelt.
 
+Voor de volledig serverless AWS-deployment, Cognito-authenticatie en GitHub
+Actions-pipeline: zie [docs/AWS.md](docs/AWS.md).
+
 ## Architectuur
 
 ```
@@ -405,6 +408,7 @@ Bekende beperkingen en volgende stappen:
 - [x] M3: lokale HTML-kaartpreview per draft met hoogteprofiel
 - [x] M4: regiopacks met eigen data, GraphHopper-graaf en draftbinding
 - [x] M5: sportprofielen met trail-lopen naast het bestaande fietsprofiel
+- [x] M6: serverless AWS Lambda-container, Cognito, S3-state en CI/CD
 - [ ] DHMV II 1 m LiDAR-DTM i.p.v. 30 m terrain tiles voor klimprofielen
 - [ ] Bosberg heet in OSM niet "Bosberg" — juiste straatnaam opzoeken
 - [ ] Corridor-penalty is zacht; bij smalle valleien kan een stukje heenweg

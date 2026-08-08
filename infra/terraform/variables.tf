@@ -165,3 +165,9 @@ variable "force_destroy_data" {
   type        = bool
   default     = false
 }
+
+variable "force_destroy_ecr" {
+  description = "Sta verwijderen van een ECR-repository met images toe."
+  type        = bool
+  default     = false
+}

@@ -87,7 +87,7 @@ resource "aws_s3_bucket_policy" "data_tls" {
 resource "aws_ecr_repository" "app" {
   name                 = local.name
   image_tag_mutability = "IMMUTABLE"
-  force_delete         = false
+  force_delete         = var.force_destroy_ecr
 
   encryption_configuration {
     encryption_type = "AES256"

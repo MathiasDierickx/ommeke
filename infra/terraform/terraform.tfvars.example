@@ -9,3 +9,5 @@ oauth_callback_urls = [
 # billing_email     = "aws-kosten@example.com"
 # monthly_budget_usd = 10
 # cors_origins       = ["https://jouw-app.example"]
+# force_destroy_data = false
+# force_destroy_ecr  = false
