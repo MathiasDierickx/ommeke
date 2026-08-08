@@ -255,6 +255,12 @@ OSM-GPS-traces en drie gecureerde datasets van
 - `hiking_node_network_v2` — wandelknooppuntnetwerken;
 - `lf_routes` — LF- en icoonroutes.
 
+Dezelfde Vlaanderen-fetch cachet daarnaast fiets- en wandelwegdek,
+verkeersintensiteit, recreatieve POI's en fiets-/wandelknooppunten. Die extra
+lagen worden niet als GraphHopper-areas ingebakken: ze vullen ontbrekende
+kassei- en onverhardgegevens aan, berekenen het autovrije aandeel en verrijken
+preview en terreinprobe met voorzieningen en knooppuntlabels.
+
 De Toerisme Vlaanderen-data vallen onder de Modellicentie Gratis Hergebruik;
 de bron en datasetnamen blijven hierboven vermeld voor naamsvermelding en
 herleidbaarheid. De WFS-download vraagt GeoJSON met een server-side bbox-filter
