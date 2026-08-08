@@ -23,6 +23,40 @@ def detail_meters(coords, detail_intervals, wanted) -> float:
     return total
 
 
+def _detail_values(coords, detail_intervals) -> list[str | None]:
+    """Vouw GH-detailintervallen uit tot één genormaliseerde waarde per segment."""
+    values = [None] * max(0, len(coords) - 1)
+    for frm, to, value in detail_intervals:
+        for index in range(max(0, frm), min(to, len(values))):
+            values[index] = str(value).lower()
+    return values
+
+
+def _fallback_meters(
+    coords,
+    detail_intervals,
+    cells: set,
+    *,
+    already_counted_intervals=(),
+    already_counted_values=frozenset(),
+) -> float:
+    """Meet segmenten met ontbrekende GH-surface via het Vlaanderen-grid."""
+    if not cells:
+        return 0.0
+    values = _detail_values(coords, detail_intervals)
+    counted = _detail_values(coords, already_counted_intervals)
+    return sum(
+        geo.haversine(coords[index][0], coords[index][1],
+                      coords[index + 1][0], coords[index + 1][1])
+        for index, value in enumerate(values)
+        if (
+            value == "missing"
+            and counted[index] not in already_counted_values
+            and geo.cell(coords[index][0], coords[index][1]) in cells
+        )
+    )
+
+
 @lru_cache(maxsize=8)
 def _big_road_grid(region_slug: str):
     """Gridindex van primaire/secundaire wegsegmenten uit het OSM-extract."""
@@ -97,14 +131,31 @@ def count_crossings(route_coords) -> int:
 def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     """Kwaliteitsrapport over een volledige (gerouteerde) draft."""
     all_coords = [pt for leg in legs_geometry for pt in leg]
-    kassei = beton = steenweg = offroad = 0.0
+    from . import heat
+
+    vlaanderen = heat.vlaanderen_data()
+    cobble_cells = vlaanderen["wegdek"].get("kassei", set())
+    unpaved_cells = vlaanderen["wegdek"].get("onverhard", set())
+    kassei = beton = steenweg = offroad = onverhard = 0.0
     for leg, det in zip(legs_geometry, legs_details):
         if not det:
             continue
-        kassei += detail_meters(leg, det.get("surface", []), COBBLE_SURFACES | {"cobblestone"})
-        beton += detail_meters(leg, det.get("surface", []), CONCRETE_SURFACES)
-        steenweg += detail_meters(leg, det.get("road_class", []), BIG_ROADS)
-        offroad += detail_meters(leg, det.get("road_class", []), OFFROAD_CLASSES)
+        surface_details = det.get("surface", [])
+        road_details = det.get("road_class", [])
+        kassei += detail_meters(leg, surface_details, COBBLE_SURFACES)
+        kassei += _fallback_meters(leg, surface_details, cobble_cells)
+        beton += detail_meters(leg, surface_details, CONCRETE_SURFACES)
+        steenweg += detail_meters(leg, road_details, BIG_ROADS)
+        leg_offroad = detail_meters(leg, road_details, OFFROAD_CLASSES)
+        offroad += leg_offroad
+        onverhard += leg_offroad
+        onverhard += _fallback_meters(
+            leg,
+            surface_details,
+            unpaved_cells,
+            already_counted_intervals=road_details,
+            already_counted_values=OFFROAD_CLASSES,
+        )
     try:
         crossings = count_crossings(all_coords)
     except FileNotFoundError:
@@ -112,17 +163,26 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         crossings = None
     out = {
         "kassei_m": round(kassei),
+        "onverhard_m": round(onverhard),
         "beton_m": round(beton),
         "steenweg_m": round(steenweg),
         "steenweg_kruisingen": crossings,
         "heen_en_weer_m": round(geo.self_retrace_m(legs_geometry)),
         "offroad_pct": round(offroad / max(geo.path_length([(c[0], c[1]) for leg in legs_geometry for c in leg]), 1) * 100, 1),
     }
-    from . import heat
-
     cells = heat.popular_cells(profile)
     if cells is not None:
         pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
         hits = sum(1 for p in pts if geo.cell(*p) in cells)
         out["populair_pct"] = round(hits / max(len(pts), 1) * 100, 1)
+    network_cells = vlaanderen["fiets"] | vlaanderen["wandel"]
+    if network_cells:
+        pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
+        network_points = [point for point in pts if geo.cell(*point) in network_cells]
+        if network_points:
+            free = sum(
+                1 for point in network_points
+                if geo.cell(*point) not in vlaanderen["druk"]
+            )
+            out["autovrij_pct"] = round(free / len(network_points) * 100, 1)
     return out
