@@ -146,6 +146,11 @@ def test_route_stats_autovrij_uses_only_route_points_with_network_coverage():
                 )
             uncovered = analysis.route_stats([coords], [{}])
 
+            with open(config.VLAANDEREN_ROUTES_PKL, "wb") as handle:
+                # Een T14-cache heeft netwerkdata, maar nog geen verkeerslaag.
+                pickle.dump({"fiets": network_cells, "wandel": set()}, handle)
+            legacy = analysis.route_stats([coords], [{}])
+
     covered_points = [
         point for point in route_points if geo.cell(*point) in network_cells
     ]
@@ -156,6 +161,7 @@ def test_route_stats_autovrij_uses_only_route_points_with_network_coverage():
         expected_free / len(covered_points) * 100, 1
     )
     assert "autovrij_pct" not in uncovered
+    assert "autovrij_pct" not in legacy
 
 
 def test_route_stats_without_vlaanderen_cache_keeps_cassette_metrics_cacheless():
