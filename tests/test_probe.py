@@ -67,6 +67,23 @@ def test_probe_routes_once_uses_prefilter_and_caches_result():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
+            config.ensure_dirs()
+            with open(config.VLAANDEREN_ROUTES_PKL, "wb") as handle:
+                pickle.dump(
+                    {
+                        "version": 2,
+                        "pois": {
+                            "picknickbank": [(50.0005, 4.005, "Rustpunt")],
+                            "toilet": [(50.0, 4.007, None)],
+                            "speeltuin": [(50.003, 4.005, "te ver")],
+                        },
+                        "knopen": [
+                            (50.0003, 4.006, 12, "fiets"),
+                            (50.002, 4.006, 13, "fiets"),
+                        ],
+                    },
+                    handle,
+                )
             d = draft.new(
                 start={"lat": 50.0, "lon": 4.0, "label": "Start"},
                 name="probe",
@@ -84,6 +101,11 @@ def test_probe_routes_once_uses_prefilter_and_caches_result():
     assert first["terrein"]["beton_m"] == first["kwaliteit"]["beton_m"]
     assert first["terrein"]["offroad_beschikbaar_pct"] == 100.0
     assert first["terrein"]["klimmen_binnen_5km"] == 1
+    assert first["terrein"]["pois_langs_route"] == {
+        "picknickbank": 1,
+        "toilet": 1,
+    }
+    assert first["terrein"]["knooppunten_langs_route"] == 1
 
 
 def test_probe_empty_loop_uses_exploratory_round_trip_without_mutating_route():

@@ -823,6 +823,11 @@ def probe(
         }
     from . import heat
 
+    route_features = heat.features_near_route(route_coords)
+    poi_counts = {}
+    for poi in route_features["pois"]:
+        poi_type = poi["type"]
+        poi_counts[poi_type] = poi_counts.get(poi_type, 0) + 1
     walking_popularity_available = (
         effective_profile == "trail"
         and heat.popular_cells("trail", fallback=False) is not None
@@ -848,6 +853,8 @@ def probe(
             "heat_dekking_pct": quality.get("populair_pct"),
             "wandelpopulariteit_beschikbaar": walking_popularity_available,
             "plaatskernen": place_cores,
+            "pois_langs_route": dict(sorted(poi_counts.items())),
+            "knooppunten_langs_route": len(route_features["knopen"]),
         },
     }
     d["_probe"] = result
