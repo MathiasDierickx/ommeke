@@ -8,8 +8,9 @@ REGION_HOME="$STATIC_HOME/regions/$REGION_SLUG"
 GRAPH_SOURCE="$REGION_HOME/gh/graph-cache"
 GRAPH_TARGET="$WRITABLE_HOME/gh/graph-cache"
 GRAPH_CONFIG="$REGION_HOME/gh/config.yml"
+GRAPH_JAR="$(find /opt/graphhopper -maxdepth 1 -type f -name 'graphhopper*.jar' -print -quit)"
 
-if [ ! -f "$GRAPH_CONFIG" ] || [ ! -d "$GRAPH_SOURCE" ]; then
+if [ ! -f "$GRAPH_CONFIG" ] || [ ! -d "$GRAPH_SOURCE" ] || [ -z "$GRAPH_JAR" ]; then
   echo "Lusmaker Lambda-image mist een voorbereid GraphHopper-regiopack" >&2
   exit 1
 fi
@@ -17,7 +18,7 @@ fi
 mkdir -p "$GRAPH_TARGET"
 cp -a "$GRAPH_SOURCE/." "$GRAPH_TARGET/"
 
-JAVA_OPTS="${JAVA_OPTS:--Xms512m -Xmx7g}" \
+JAR="$GRAPH_JAR" JAVA_OPTS="${JAVA_OPTS:--Xms256m -Xmx2g}" \
   /opt/graphhopper/graphhopper.sh \
   -c "$GRAPH_CONFIG" \
   -o "$GRAPH_TARGET" \

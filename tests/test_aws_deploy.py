@@ -34,12 +34,16 @@ def test_terraform_has_scale_to_zero_without_fixed_network_compute():
 
 def test_container_and_pack_pin_the_same_graphhopper_release():
     dockerfile = _read("deploy/aws/Dockerfile")
+    entrypoint = _read("deploy/aws/entrypoint.sh")
     compose = _read("docker-compose.yml")
     config = _read("lusmaker/config.py")
     assert "israelhikingmap/graphhopper:11.0" in dockerfile
     assert "israelhikingmap/graphhopper:11.0" in compose
     assert "israelhikingmap/graphhopper:11.0" in config
     assert "AWS_LWA_ASYNC_INIT=true" in dockerfile
+    assert "find /opt/graphhopper" in entrypoint
+    assert 'JAR="$GRAPH_JAR"' in entrypoint
+    assert "-Xms256m -Xmx2g" in entrypoint
 
 
 def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
