@@ -60,6 +60,16 @@ SERVER_INSTRUCTIONS = (
     "aan de gebruiker."
 )
 
+HOSTED_SERVER_INSTRUCTIONS = (
+    "Gebruik plan_route voor een nieuwe routewens en adjust_route voor een "
+    "bestaande draft. Deze hosted server bevat een vooraf gebouwde regio: "
+    "vraag de gebruiker om een startplaats binnen die regio wanneer de route "
+    "erbuiten valt. Vraag ontbrekende keuzes uit bij status needs_input. "
+    "Hergebruik bij retries dezelfde request_id en stuur bij mutaties de laatst "
+    "ontvangen revision mee. Geef GPX en preview via de artifact-URI's aan de "
+    "gebruiker."
+)
+
 READ_ONLY_CLOSED = ToolAnnotations(
     readOnlyHint=True,
     destructiveHint=False,
@@ -98,12 +108,12 @@ ENSURE_EXTERNAL = ToolAnnotations(
 )
 
 
-def _server(name: str):
+def _server(name: str, *, instructions: str = SERVER_INSTRUCTIONS):
     return FastMCP(
         name,
         title="Lusmaker",
         description="Bouw en verfijn fiets- en traillussen met GPX-export.",
-        instructions=SERVER_INSTRUCTIONS,
+        instructions=instructions,
         version=__version__,
     )
 
@@ -512,6 +522,22 @@ for _lite_tool, _lite_annotations in (
     lite_mcp.tool(annotations=_lite_annotations)(_lite_tool)
 
 
+hosted_mcp = _server(
+    "lusmaker-hosted", instructions=HOSTED_SERVER_INSTRUCTIONS
+)
+for _hosted_tool, _hosted_annotations in (
+    (plan_route, MUTATING_ROUTER),
+    (adjust_route, MUTATING_ROUTER),
+    (suggest_climbs, READ_ONLY_ROUTER),
+    (route_details, READ_ONLY_CLOSED),
+    (route_readiness, MUTATING_ROUTER),
+    (get_profile, READ_ONLY_CLOSED),
+    (update_profile, MUTATING_CLOSED),
+    (list_drafts, READ_ONLY_CLOSED),
+):
+    hosted_mcp.tool(annotations=_hosted_annotations)(_hosted_tool)
+
+
 RESOURCE_ANNOTATIONS = Annotations(audience=["user"], priority=1.0)
 
 
@@ -525,7 +551,7 @@ def route_preview_resource(draft_id: NonEmptyString) -> bytes:
     return artifacts.read(draft_id, "preview.html")
 
 
-for _resource_server in (mcp, lite_mcp):
+for _resource_server in (mcp, lite_mcp, hosted_mcp):
     _resource_server.resource(
         "lusmaker://drafts/{draft_id}/route.gpx",
         name="route-gpx",

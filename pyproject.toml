@@ -10,6 +10,9 @@ dependencies = [
     "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+aws = ["boto3>=1.40,<2"]
+
 [project.scripts]
 lus = "lusmaker.cli:main"
 lus-mcp = "lusmaker.mcp_server:main"

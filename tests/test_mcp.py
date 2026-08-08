@@ -50,6 +50,8 @@ EXPECTED_LITE_TOOLS = {
     "list_drafts",
 }
 
+EXPECTED_HOSTED_TOOLS = EXPECTED_LITE_TOOLS - {"ensure_region", "region_status"}
+
 
 def _require_mcp() -> None:
     if importlib.util.find_spec("mcp") is None:
@@ -144,6 +146,32 @@ else:
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
 assert len(actual) == 10
+""",
+            Path(temp_dir),
+        )
+
+
+def test_hosted_server_has_exact_immutable_toolset():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        expected = repr(EXPECTED_HOSTED_TOOLS)
+        _run_isolated(
+            f"""
+from lusmaker import mcp_server
+
+expected = {expected}
+server = mcp_server.hosted_mcp
+if hasattr(server, "_tool_manager"):
+    actual = set(server._tool_manager._tools)
+else:
+    import asyncio
+
+    async def tool_names():
+        return {{tool.name for tool in await server.list_tools()}}
+
+    actual = asyncio.run(tool_names())
+assert actual == expected, (actual, expected)
+assert "vooraf gebouwde regio" in server.instructions
 """,
             Path(temp_dir),
         )
