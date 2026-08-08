@@ -21,10 +21,16 @@ def main() -> None:
         scenario_draft, climb_db = scenarios[name]
         fixture_draft = copy.deepcopy(scenario_draft)
         recorder = RecordingPost(gh._post)
+
+        def recording_route(points, **kwargs):
+            # zelfde gepinde capability-set als de replay-tests: cassettes
+            # blijven deterministisch, area-regels worden apart unit-getest
+            return gh.route(points, area_evs=set(), **kwargs)
+
         draft.route(
             scenario_draft,
             climb_db,
-            router=gh.route,
+            router=recording_route,
             post_fn=recorder,
         )
         values = metrics(name, scenario_draft)
