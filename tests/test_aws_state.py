@@ -1,5 +1,6 @@
 """Pure S3-adaptertests zonder boto3 of netwerk."""
 
+import hashlib
 import io
 import os
 import tempfile
@@ -84,7 +85,10 @@ def test_s3_json_state_is_tenant_scoped_and_conditional():
         aws_state.put_json("drafts/a.json", {"id": "a"}, create_only=True, client=client)
         loaded, etag = aws_state.get_json("drafts/a.json", client=client)
         assert loaded == {"id": "a"}
-        assert list(client.objects) == ["tenants/user-one/drafts/a.json"]
+        digest = hashlib.sha256(b"user/one").hexdigest()[:20]
+        assert list(client.objects) == [
+            f"tenants/user-one-{digest}/drafts/a.json"
+        ]
 
         aws_state.put_json(
             "drafts/a.json", {"id": "a", "revision": 2}, etag=etag, client=client
@@ -99,6 +103,17 @@ def test_s3_json_state_is_tenant_scoped_and_conditional():
             raise AssertionError("stale conditional write werd aanvaard")
 
         assert aws_state.list_json("drafts", client=client)[0]["revision"] == 2
+
+
+def test_unsafe_and_already_safe_tenant_ids_cannot_collide():
+    client = _FakeS3()
+    with _aws_bucket(), tenant.use("auth0|user-one"):
+        aws_state.put_json("drafts/a.json", {"id": "unsafe"}, client=client)
+    with _aws_bucket(), tenant.use("auth0-user-one"):
+        aws_state.put_json("drafts/a.json", {"id": "safe"}, client=client)
+
+    assert len(client.objects) == 2
+    assert len({key.split("/")[1] for key in client.objects}) == 2
 
 
 def test_artifact_metadata_contains_hash_and_size():
