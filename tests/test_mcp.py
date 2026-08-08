@@ -165,6 +165,14 @@ async def inspect_contract():
     ]
     max_km = plan.input_schema["properties"]["max_km"]["anyOf"][0]
     assert max_km["exclusiveMinimum"] == 0
+    target_km = plan.input_schema["properties"]["target_km"]["anyOf"][0]
+    assert target_km["exclusiveMinimum"] == 0
+    assert plan.input_schema["properties"]["tolerance_km"]["minimum"] == 0
+    assert plan.input_schema["properties"]["profiel_naam"]["default"] == "standaard"
+    assert plan.input_schema["properties"]["kasseien"]["default"] is None
+    assert plan.output_schema["properties"]["status"]["enum"] == [
+        "ready", "needs_input"
+    ]
     assert plan.output_schema["properties"]["draft"]["type"] == "string"
     assert plan.annotations.read_only_hint is False
     assert plan.annotations.open_world_hint is True

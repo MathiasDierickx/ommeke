@@ -147,12 +147,20 @@ def test_place_rule_excludes_start_and_marks_avoid_patch_for_draft():
     question = result["vragen"][0]
 
     assert question["id"] == "vermijd_plaatsen"
+    assert question["opties"]["ok"] == {
+        "doel": "draft",
+        "patch": {"allow_place": "Doordorp"},
+    }
     assert question["opties"]["vermijd"] == {
         "doel": "draft",
         "patch": {"avoid_place": "Doordorp"},
     }
     profile["voorkeuren"]["vermijd_plaatsen"] = ["Doordorp"]
     assert _question_ids(readiness.assess(_draft(places=places), profile, {})) == []
+
+    allowed = _draft(places=places)
+    allowed["route_request"] = {"toegestane_plaatsen": ["Doordorp"]}
+    assert _question_ids(readiness.assess(allowed, profiles.default_document(), {})) == []
 
 
 def test_priority_max_three_unknown_and_ready_logic():
@@ -183,7 +191,7 @@ def test_priority_max_three_unknown_and_ready_logic():
 
     optional_only = readiness.assess(_draft(crossings=10, offroad=30), profile, {})
     assert _question_ids(optional_only) == ["steenwegen", "gewichten"]
-    assert optional_only["klaar"] is True
+    assert optional_only["klaar"] is False
 
     resolved = profiles.default_document()
     resolved["voorkeuren"].update(

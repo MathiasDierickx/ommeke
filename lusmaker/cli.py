@@ -390,6 +390,8 @@ def cmd_plan_route(args):
         start=args.start,
         region=args.region,
         max_km=args.max_km,
+        target_km=args.target_km,
+        tolerance_km=args.tolerance_km,
         doel=args.doel,
         via_klimmen=args.via_klim,
         vermijd_plaatsen=args.vermijd_plaats,
@@ -412,7 +414,13 @@ def cmd_adjust_route(args):
         verwijder_klimmen=args.verwijder_klim,
         vermijd_plaatsen=args.vermijd_plaats,
         niet_meer_vermijden=args.niet_meer_vermijden,
+        sta_plaatsen_toe=args.sta_plaatsen_toe,
         max_km=args.max_km,
+        target_km=args.target_km,
+        tolerance_km=args.tolerance_km,
+        doel=args.doel,
+        geen_opvulling=args.geen_opvulling,
+        profiel_naam=args.profiel_naam,
     )
 
 
@@ -503,6 +511,13 @@ def main(argv=None):
         default="fietsen",
     )
     s.add_argument("--max-km", type=float)
+    s.add_argument("--target-km", type=float, help="gewenste routeafstand")
+    s.add_argument(
+        "--tolerance-km",
+        type=float,
+        default=2.5,
+        help="toegestane afwijking van target-km",
+    )
     s.add_argument(
         "--doel",
         choices=("hoogtemeters", "kort", "toeren"),
@@ -534,7 +549,16 @@ def main(argv=None):
     s.add_argument("--verwijder-klim", action="append", default=[])
     s.add_argument("--vermijd-plaats", action="append", default=[])
     s.add_argument("--niet-meer-vermijden", action="append", default=[])
+    s.add_argument("--sta-plaats-toe", action="append", default=[])
     s.add_argument("--max-km", type=float)
+    s.add_argument("--target-km", type=float)
+    s.add_argument("--tolerance-km", type=float)
+    s.add_argument("--profiel-naam")
+    s.add_argument(
+        "--doel",
+        choices=("hoogtemeters", "kort", "toeren"),
+    )
+    s.add_argument("--geen-opvulling", action="store_true", default=None)
     s.set_defaults(func=cmd_adjust_route)
 
     c = sub.add_parser("climbs", help="klim-database")

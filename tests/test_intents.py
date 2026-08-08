@@ -84,6 +84,7 @@ def test_compact_output_contract_and_summary():
     )
 
     assert set(result) == {
+        "status",
         "draft",
         "km",
         "hoogtemeters",
@@ -93,7 +94,10 @@ def test_compact_output_contract_and_summary():
         "samenvatting",
         "vervolg",
         "artifacts",
+        "constraints",
     }
+    assert result["status"] == "ready"
+    assert result["constraints"]["voldaan"] is None
     assert result["klimmen"] == [
         "Diepestraat (1.1 km @ 3.5%)",
         "Kampenheuvel (0.6 km @ 4.3%)",
@@ -152,6 +156,7 @@ def test_plan_route_injects_route_and_export_functions():
             route_fn=route_fn,
             export_gpx_fn=export_fn,
             export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
             exports_root=Path(temp_dir),
         )
 
@@ -184,6 +189,7 @@ def test_plan_route_passes_no_fill_to_optimizer():
             climbs_fn=_climbs,
             export_gpx_fn=export_fn,
             export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
             exports_root=Path(temp_dir),
         )
 
@@ -215,6 +221,7 @@ def test_plan_route_passes_named_preference_profile_to_draft():
             climbs_fn=_climbs,
             export_gpx_fn=export_fn,
             export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
             exports_root=Path(temp_dir),
         )
 
@@ -269,6 +276,7 @@ def test_adjust_route_batches_edits_before_one_reroute():
             climbs_fn=_climbs,
             export_gpx_fn=export_fn,
             export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
             exports_root=Path(temp_dir),
         )
 
@@ -279,6 +287,148 @@ def test_adjust_route_batches_edits_before_one_reroute():
         ("avoid", "Zottegem"),
         ("unavoid", "Oudenaarde"),
     ]
+
+
+def test_plan_route_stops_at_needs_input_before_optimization_and_export():
+    state = {
+        "id": "ask123",
+        "name": "vraaglus",
+        "start": {"label": "Wetteren", "lat": 50.0, "lon": 4.0},
+        "end": None,
+        "loop": True,
+        "climbs": [],
+        "avoid_places": [],
+        "computed": None,
+    }
+    calls = []
+
+    def probe_fn(d, _db):
+        calls.append("probe")
+        d["_probe"] = {"km": 15, "kwaliteit": {}, "terrein": {}}
+
+    def assess_fn(_d, profile, _db):
+        assert profile["voorkeuren"]["kasseien"] is None
+        return {
+            "profiel": profile["naam"],
+            "onbekend": ["kasseien"],
+            "vragen": [{"id": "kasseien", "vraag": "Kasseien?"}],
+            "klaar": False,
+            "advies": "stel de kasseivraag eerst",
+        }
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("needs_input mag nog niet routeeren of exporteren")
+
+    result = intents.plan_route(
+        "Wetteren",
+        target_km=50,
+        profiel_naam="standaard",
+        check_readiness=True,
+        kasseien=None,
+        beton_vermijden=None,
+        strict=None,
+        create_fn=lambda **_kwargs: {"id": state["id"]},
+        load_fn=lambda _draft_id: state,
+        climbs_fn=_climbs,
+        save_fn=lambda _d: None,
+        probe_fn=probe_fn,
+        assess_fn=assess_fn,
+        profile_load_fn=lambda name: {
+            "naam": name,
+            "activiteit": "fietsen",
+            "gewichten": {},
+            "voorkeuren": {
+                "kasseien": None,
+                "beton": None,
+                "steenwegen": None,
+                "vermijd_plaatsen": [],
+            },
+        },
+        route_fn=unexpected,
+        optimize_fn=unexpected,
+        export_gpx_fn=unexpected,
+        export_preview_fn=unexpected,
+    )
+
+    assert calls == ["probe"]
+    assert result["status"] == "needs_input"
+    assert result["draft"] == "ask123"
+    assert result["constraints"]["doel_km"] == 50
+    assert result["constraints"]["maximum_km"] == 52.5
+    assert result["next_action"]["ga_daarna_verder_met"] == "adjust_route"
+
+
+def test_plan_route_targets_tour_distance_and_reports_constraints():
+    state = {
+        "id": "tour50",
+        "name": "toerlus",
+        "start": {"label": "Wetteren", "lat": 50.0, "lon": 4.0},
+        "end": None,
+        "loop": True,
+        "climbs": [],
+        "avoid_places": [],
+        "computed": None,
+    }
+    optimize_calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        optimize_calls.append(kwargs)
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 49.0}
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        result = intents.plan_route(
+            "Wetteren",
+            target_km=50,
+            doel="toeren",
+            profiel_naam="standaard",
+            check_readiness=True,
+            kasseien=None,
+            beton_vermijden=None,
+            strict=None,
+            create_fn=lambda **_kwargs: {"id": state["id"]},
+            load_fn=lambda _draft_id: state,
+            climbs_fn=_climbs,
+            save_fn=lambda _d: None,
+            probe_fn=lambda d, _db: d.update({"_probe": {}}),
+            assess_fn=lambda _d, profile, _db: {
+                "profiel": profile["naam"],
+                "onbekend": [],
+                "vragen": [],
+                "klaar": True,
+                "advies": "klaar",
+            },
+            profile_load_fn=lambda name: {
+                "naam": name,
+                "activiteit": "fietsen",
+                "gewichten": {},
+                "voorkeuren": {
+                    "kasseien": "ok",
+                    "beton": "ok",
+                    "steenwegen": "ok",
+                    "vermijd_plaatsen": [],
+                },
+            },
+            optimize_fn=optimize_fn,
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            exports_root=Path(temp_dir),
+        )
+
+    assert optimize_calls == [
+        {
+            "max_km": 52.5,
+            "fill": True,
+            "objective": "toeren",
+            "fill_target_km": 50,
+        }
+    ]
+    assert result["status"] == "ready"
+    assert result["constraints"]["binnen_doelbereik"] is True
+    assert result["constraints"]["binnen_maximum"] is True
+    assert result["constraints"]["voldaan"] is True
 
 
 def test_route_details_without_computed_is_clear_error():

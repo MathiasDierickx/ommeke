@@ -11,7 +11,7 @@ from typing_extensions import NotRequired, TypedDict
 Activity = Literal["fietsen", "trail"]
 Goal = Literal["hoogtemeters", "kort", "toeren"]
 GraphProfile = Literal["quiet", "trail"]
-Objective = Literal["hm", "hm-per-km", "offroad"]
+Objective = Literal["hm", "hm-per-km", "offroad", "toeren"]
 Preference = Literal["vermijd", "ok", "graag"] | None
 MainRoadPreference = Literal["vermijd", "ok"] | None
 
@@ -22,6 +22,10 @@ NonEmptyString = Annotated[
 PositiveKm = Annotated[
     float,
     Field(gt=0, le=1000, description="Afstand in kilometer; groter dan nul."),
+]
+ToleranceKm = Annotated[
+    float,
+    Field(ge=0, le=100, description="Toegestane afwijking van de doelafstand."),
 ]
 RadiusKm = Annotated[
     float,
@@ -94,6 +98,7 @@ class ArtifactDescriptor(TypedDict):
 
 
 class CompactRouteResult(TypedDict):
+    status: Literal["ready"]
     draft: str
     km: float
     hoogtemeters: float
@@ -103,6 +108,28 @@ class CompactRouteResult(TypedDict):
     samenvatting: str
     vervolg: list[str]
     artifacts: NotRequired[list[ArtifactDescriptor]]
+    constraints: dict[str, Any]
+
+
+class RouteWorkflowResult(TypedDict, total=False):
+    """Objectvorm die zowel ``ready`` als ``needs_input`` kan dragen."""
+
+    status: Literal["ready", "needs_input"]
+    draft: str
+    km: float
+    hoogtemeters: float
+    klimmen: list[str]
+    kwaliteit: str
+    bestanden: ArtifactFiles
+    samenvatting: str
+    vervolg: list[str]
+    artifacts: list[ArtifactDescriptor]
+    constraints: dict[str, Any]
+    profiel: str
+    onbekend: list[str]
+    vragen: list[dict[str, Any]]
+    advies: str
+    next_action: dict[str, Any]
 
 
 class RouteDetailsResult(TypedDict):

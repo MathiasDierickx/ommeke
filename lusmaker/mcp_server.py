@@ -29,7 +29,6 @@ from .mcp_contracts import (
     AvoidFactor,
     ClimbListResult,
     ClimbSuggestionResult,
-    CompactRouteResult,
     DraftListResult,
     GeocodeResult,
     Goal,
@@ -44,6 +43,8 @@ from .mcp_contracts import (
     RadiusKm,
     ResultLimit,
     RouteDetailsResult,
+    RouteWorkflowResult,
+    ToleranceKm,
 )
 
 
@@ -327,22 +328,26 @@ def plan_route(
     start: NonEmptyString,
     region: NonEmptyString | None = None,
     max_km: PositiveKm | None = None,
+    target_km: PositiveKm | None = None,
+    tolerance_km: ToleranceKm = 2.5,
     doel: Goal = "hoogtemeters",
     via_klimmen: list[str] = [],
     vermijd_plaatsen: list[str] = [],
-    kasseien: bool = False,
-    beton_vermijden: bool = True,
-    strict: bool = False,
+    kasseien: bool | None = None,
+    beton_vermijden: bool | None = None,
+    strict: bool | None = None,
     naam: NonEmptyString | None = None,
     activiteit: Activity = "fietsen",
     geen_opvulling: bool = False,
-    profiel_naam: NonEmptyString | None = None,
-) -> CompactRouteResult:
-    """Gebruik voor een nieuwe routewens; retourneert routecijfers en artifacts."""
+    profiel_naam: NonEmptyString = "standaard",
+) -> RouteWorkflowResult:
+    """Start een routeworkflow; kan eerst gerichte ``needs_input``-vragen geven."""
     return intents.plan_route(
         start=start,
         region=region,
         max_km=max_km,
+        target_km=target_km,
+        tolerance_km=tolerance_km,
         doel=doel,
         via_klimmen=via_klimmen,
         vermijd_plaatsen=vermijd_plaatsen,
@@ -353,6 +358,7 @@ def plan_route(
         activiteit=activiteit,
         geen_opvulling=geen_opvulling,
         profiel_naam=profiel_naam,
+        check_readiness=True,
     )
 
 
@@ -363,16 +369,29 @@ def adjust_route(
     verwijder_klimmen: list[str] = [],
     vermijd_plaatsen: list[str] = [],
     niet_meer_vermijden: list[str] = [],
+    sta_plaatsen_toe: list[str] = [],
     max_km: PositiveKm | None = None,
-) -> CompactRouteResult:
-    """Gebruik voor gebundelde wijzigingen aan een bestaande route-draft."""
+    target_km: PositiveKm | None = None,
+    tolerance_km: ToleranceKm | None = None,
+    doel: Goal | None = None,
+    geen_opvulling: bool | None = None,
+    profiel_naam: NonEmptyString | None = None,
+) -> RouteWorkflowResult:
+    """Vervolg of wijzig een routeworkflow; kan opnieuw om input vragen."""
     return intents.adjust_route(
         draft_id=draft_id,
         voeg_klimmen_toe=voeg_klimmen_toe,
         verwijder_klimmen=verwijder_klimmen,
         vermijd_plaatsen=vermijd_plaatsen,
         niet_meer_vermijden=niet_meer_vermijden,
+        sta_plaatsen_toe=sta_plaatsen_toe,
         max_km=max_km,
+        target_km=target_km,
+        tolerance_km=tolerance_km,
+        doel=doel,
+        geen_opvulling=geen_opvulling,
+        profiel_naam=profiel_naam,
+        check_readiness=True,
     )
 
 
@@ -383,6 +402,7 @@ def optimize_draft(
     objective: Objective | None = None,
     min_ratio: NonNegativeRatio = 8.0,
     geen_opvulling: bool = False,
+    target_km: PositiveKm | None = None,
 ) -> dict[str, Any]:
     """Vul de route greedy met klimmen binnen een hard afstandsbudget."""
     d = draft.load(draft_id)
@@ -394,6 +414,7 @@ def optimize_draft(
             objective=objective,
             min_ratio=min_ratio,
             fill=not geen_opvulling,
+            fill_target_km=target_km,
         )
 
 

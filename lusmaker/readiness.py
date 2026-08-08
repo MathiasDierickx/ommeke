@@ -109,6 +109,12 @@ def _passed_place(d: dict, probe: dict) -> dict | None:
         str(point.get("label", "")).casefold()
         for point in d.get("avoid_places", [])
     )
+    excluded.update(
+        str(label).casefold()
+        for label in (d.get("route_request") or {}).get(
+            "toegestane_plaatsen", []
+        )
+    )
     for place in (probe.get("terrein") or {}).get("plaatskernen", []):
         if str(place.get("label", "")).casefold() not in excluded:
             return place
@@ -220,7 +226,10 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
                     "reden": f"de verkenningsroute passeert de plaatskern van {label}",
                     "vraag": f"Is de doorgang door {label} oké, of wil je die plaats vermijden?",
                     "opties": {
-                        "ok": {"doel": "draft", "patch": {}},
+                        "ok": {
+                            "doel": "draft",
+                            "patch": {"allow_place": label},
+                        },
                         "vermijd": {
                             "doel": "draft",
                             "patch": {"avoid_place": label},
@@ -231,7 +240,9 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
 
     questions.sort(key=lambda question: (question["prioriteit"], question["id"]))
     unknown = [question["id"] for question in questions]
-    ready = not any(question["prioriteit"] <= 2 for question in questions)
+    # ``klaar`` is een workflowbeslissing: zolang we nog een concrete vraag
+    # teruggeven moet een MCP-client niet alvast gaan optimaliseren.
+    ready = not questions
     visible = questions[:3]
     if not visible:
         advice = "profiel is klaar; routeer nu met optimize"
@@ -248,8 +259,6 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             advice += "; " + ", ".join(
                 f"{labels[question['id']]} daarna" for question in visible[1:]
             )
-        if ready:
-            advice += "; het profiel is al klaar voor optimize"
 
     return {
         "profiel": profiel["naam"],
