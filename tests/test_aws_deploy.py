@@ -59,10 +59,9 @@ def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
     assert "provenance: false" in deploy
     assert "lusmaker.tfplan" in deploy
 
-    vercel = _read(".github/workflows/deploy-vercel.yml")
-    assert "vercel@58.9.0" in vercel
-    assert "NEXT_PUBLIC_COGNITO_CLIENT_ID" in vercel
-    assert "VERCEL_TOKEN" in vercel
+    assert not (workflows / "deploy-vercel.yml").exists()
+    vercel = _read("web/vercel.json")
+    assert '"outputDirectory": "out"' in vercel
 
     pack = _read(".github/workflows/build-region-pack.yml")
     assert "workflow_dispatch:" in pack

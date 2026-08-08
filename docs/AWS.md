@@ -89,15 +89,15 @@ goedgekeurd.
   bootstrap;
 - Terraform 1.10 of nieuwer;
 - een GitHub-repository waarvan `main` de deploymentbranch is;
-- GitHub Actions op een runner met voldoende disk en geheugen om één keer de
-  regiograph te bouwen;
+- een lokale machine of GitHub Actions-runner met voldoende disk en geheugen
+  om een regiograph te bouwen;
 - een concrete OAuth callback. Voor Claude is dit
   `https://claude.ai/api/mcp/auth_callback`. ChatGPT toont per pluginverbinding
   een URL van de vorm `https://chatgpt.com/connector/oauth/{callback_id}`.
 - een Vercel-project en zijn vaste productie-URL, bijvoorbeeld
   `https://ommeke.vercel.app/`;
-- voor automatische webdeploys: `VERCEL_TOKEN` als GitHub repository secret
-  en `VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` als repositoryvariabelen.
+- toegang van de Vercel GitHub App tot de repository voor automatische
+  frontenddeploys.
 
 ## 1. Bootstrap state en GitHub OIDC
 
@@ -139,8 +139,6 @@ AWS access keys:
 | `LUSMAKER_REGION_SLUG` | nee | `vlaanderen` |
 | `OAUTH_CALLBACK_URLS_JSON` | ja | `["https://claude.ai/api/mcp/auth_callback"]` |
 | `WEB_CALLBACK_URLS_JSON` | ja | `["https://ommeke.vercel.app/","http://localhost:3000/"]` |
-| `VERCEL_ORG_ID` | voor web-CD | Vercel team- of account-ID |
-| `VERCEL_PROJECT_ID` | voor web-CD | Vercel project-ID |
 | `BILLING_EMAIL` | nee | `aws-kosten@example.com` |
 
 Met de GitHub CLI:
@@ -184,6 +182,22 @@ Een GitHub-hosted runner kan voor een grotere regio onvoldoende geheugen of
 disk hebben. Gebruik dan dezelfde workflow op een grotere self-hosted runner;
 de uiteindelijke AWS-runtime blijft volledig serverless.
 
+Wanneer de regio lokaal al volledig en compatibel gebouwd is, kan de zware
+stap zonder GitHub Action-minuten gebeuren. Maak en valideer de pack lokaal en
+upload hem daarna naar de canonieke, geversioneerde S3-locatie:
+
+```bash
+.venv/bin/lus region pack vlaanderen -o /tmp/vlaanderen.tar.gz
+.venv/bin/python deploy/aws/prepare_region.py \
+  /tmp/vlaanderen.tar.gz vlaanderen /tmp/lusmaker-pack-check
+aws s3 cp /tmp/vlaanderen.tar.gz \
+  s3://<TF_STATE_BUCKET>/region-packs/vlaanderen.tar.gz \
+  --sse AES256
+```
+
+S3 is hier bewust het deploymentartifact: GitHub Actions-artifacts verlopen en
+zouden voor elke imagebuild opnieuw via GitHub moeten worden opgehaald.
+
 ## 4. Deploy AWS
 
 Een push naar `main` met relevante code start deployment automatisch. Voor de
@@ -210,21 +224,34 @@ code-plus-pack tag wordt hergebruikt en Terraform deployt altijd de digest.
 
 ## 5. Deploy de Next.js-app naar Vercel
 
-Koppel een leeg Vercel-project aan het GitHub secret en de twee variabelen. De workflow leest de
-publieke API-, Cognito-domain- en webclientwaarden rechtstreeks uit remote
-Terraform-state, bouwt `web/` en deployt met de vastgepinde Vercel CLI:
+Gebruik Vercels native GitHub-integratie voor frontend-CD. Zo hoeft een lokaal
+Vercel-token niet als GitHub secret te worden gekopieerd en verbruikt een
+frontenddeploy geen GitHub Action-minuten. Configureer het project als volgt:
+
+| Instelling | Waarde |
+|---|---|
+| Git repository | de Lusmaker-repository |
+| Production branch | `main` |
+| Root Directory | `web` |
+| Framework Preset | `Next.js` |
+| Output Directory | `out` |
+
+Zet de drie waarden uit Terraform-output `vercel_environment` als Vercel
+Production Environment Variables. Het zijn publieke buildwaarden, geen
+secrets:
 
 ```bash
-gh secret set VERCEL_TOKEN
-gh variable set VERCEL_ORG_ID --body 'team_...'
-gh variable set VERCEL_PROJECT_ID --body 'prj_...'
-gh workflow run deploy-vercel.yml --ref main
+terraform -chdir=infra/terraform output -json vercel_environment
+vercel env add NEXT_PUBLIC_API_URL production
+vercel env add NEXT_PUBLIC_COGNITO_DOMAIN production
+vercel env add NEXT_PUBLIC_COGNITO_CLIENT_ID production
+vercel git connect https://github.com/owner/repository.git --yes
 ```
 
-Een push onder `web/**` start dezelfde workflow. Na een eerste AWS-deployment
-start ze ook automatisch via `workflow_run`. Zonder deze configuratie slaat de
-workflow de deploy bewust groen over. De Vercel production alias moet exact in
-`WEB_CALLBACK_URLS_JSON` staan; deploy AWS opnieuw wanneer die URL wijzigt.
+Vercel bouwt voortaan pushes naar `main`; `web/vercel.json` zorgt dat de
+statische Next.js-export volledig wordt gepubliceerd. De production alias moet
+exact in `WEB_CALLBACK_URLS_JSON` staan; deploy AWS opnieuw wanneer die URL
+wijzigt.
 
 Lokaal:
 
