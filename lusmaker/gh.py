@@ -40,22 +40,40 @@ def info() -> dict:
         raise GhError(f"GraphHopper niet bereikbaar op {config.GH_URL}: {e}") from e
 
 
-@lru_cache(maxsize=1)
-def available_area_evs() -> frozenset[str]:
-    """Lees eenmalig welke ingebakken ``in_<area>`` encoded values bestaan."""
+@lru_cache(maxsize=8)
+def _area_ev_works(name: str, probe_post=None) -> bool:
+    """Probeer of een ingebakken ``in_<area>`` encoded value bestaat.
+
+    GH's /info toont area-EV's niet, dus we proben met een minimaal
+    routeverzoek: onbekende variabele -> foutmelding met de naam erin.
+    """
+    post = probe_post or _post
+    body = {
+        "points": [[3.883, 51.006], [3.8835, 51.0065]],
+        "profile": config.GH_PROFILE,
+        "points_encoded": False,
+        "instructions": False,
+        "ch.disable": True,
+        "custom_model": {"priority": [{"if": name, "multiply_by": "0.9"}]},
+    }
     try:
-        encoded_values = info().get("encoded_values", [])
-        if isinstance(encoded_values, str):
-            encoded_values = encoded_values.split(",")
-        return frozenset(
-            str(value).strip()
-            for value in encoded_values
-            if str(value).strip().startswith("in_")
-        )
+        post("/route", body)
+        return True
+    except GhError as e:
+        if name in str(e):
+            return False
+        # andere fout (bv. geen route): variabele zelf werd geaccepteerd
+        return True
     except Exception:
-        # Een oude graaf of onbereikbare GraphHopper mag request-side routing
-        # niet laten falen op een onbekende area-variabele.
-        return frozenset()
+        return False
+
+
+def available_area_evs(probe_post=None) -> frozenset[str]:
+    """Welke ingebakken area-EV's bruikbaar zijn (probe-gebaseerd, gecachet)."""
+    return frozenset(
+        name for name in ("in_kassei_tvl", "in_druk_tvl")
+        if _area_ev_works(name, probe_post)
+    )
 
 
 # "zo weinig mogelijk steenwegen": milde extra nudge — het quiet-profiel straft
