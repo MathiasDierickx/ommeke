@@ -17,9 +17,9 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-python@v6.2.0
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -41,9 +41,9 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
-      - uses: hashicorp/setup-terraform@v3.1.2
+      - uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: "1.14.9"
           terraform_wrapper: false
@@ -69,9 +69,9 @@ jobs:
         working-directory: web
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-node@v6.0.2
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: "22"
           cache: npm

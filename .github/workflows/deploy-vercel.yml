@@ -51,19 +51,19 @@ jobs:
             echo "Vercel deploy overgeslagen: configureer VERCEL_TOKEN, VERCEL_ORG_ID en VERCEL_PROJECT_ID." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
         if: steps.config.outputs.ready == 'true'
         with:
           ref: main
 
-      - uses: actions/setup-node@v6.0.2
+      - uses: actions/setup-node@v7.0.0
         if: steps.config.outputs.ready == 'true'
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: hashicorp/setup-terraform@v3.1.2
+      - uses: hashicorp/setup-terraform@v4.0.1
         if: steps.config.outputs.ready == 'true'
         with:
           terraform_version: "1.14.9"
@@ -71,7 +71,7 @@ jobs:
 
       - name: Neem tijdelijke AWS-credentials via OIDC
         if: steps.config.outputs.ready == 'true'
-        uses: aws-actions/configure-aws-credentials@v6.1.3
+        uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
