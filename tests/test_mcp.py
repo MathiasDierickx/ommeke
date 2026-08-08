@@ -357,3 +357,67 @@ assert result["klaar"] is False
 """,
             home,
         )
+
+
+def test_main_selects_stdio_or_streamable_http_without_starting_server():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+from lusmaker import mcp_server
+
+calls = []
+mcp_server.mcp.run = lambda **kwargs: calls.append(("full", kwargs))
+mcp_server.lite_mcp.run = lambda **kwargs: calls.append(("lite", kwargs))
+
+mcp_server.main([])
+mcp_server.main([
+    "--lite",
+    "--transport", "streamable-http",
+    "--host", "127.0.0.1",
+    "--port", "8123",
+    "--path", "/routes",
+    "--stateless-http",
+    "--json-response",
+])
+
+assert calls == [
+    ("full", {"transport": "stdio"}),
+    (
+        "lite",
+        {
+            "transport": "streamable-http",
+            "host": "127.0.0.1",
+            "port": 8123,
+            "streamable_http_path": "/routes",
+            "stateless_http": True,
+            "json_response": True,
+        },
+    ),
+]
+""",
+            Path(temp_dir),
+        )
+
+
+def test_http_transport_refuses_unauthenticated_remote_bind_by_default():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+from lusmaker import mcp_server
+
+mcp_server.mcp.run = lambda **_kwargs: (_ for _ in ()).throw(
+    AssertionError("server had niet mogen starten")
+)
+try:
+    mcp_server.main([
+        "--transport", "streamable-http", "--host", "0.0.0.0"
+    ])
+except SystemExit as exc:
+    assert exc.code == 2
+else:
+    raise AssertionError("publieke bind zonder opt-in werd aanvaard")
+""",
+            Path(temp_dir),
+        )

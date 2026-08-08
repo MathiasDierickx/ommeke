@@ -1,6 +1,7 @@
 """MCP-server bovenop de Lusmaker-domeinfuncties."""
 
 import argparse
+import ipaddress
 from typing import Any
 
 try:
@@ -542,15 +543,64 @@ for _resource_server in (mcp, lite_mcp):
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Start de Lusmaker MCP-server via stdio."""
+    """Start lokaal via stdio of als Streamable HTTP endpoint."""
     parser = argparse.ArgumentParser(prog="lus-mcp")
     parser.add_argument(
         "--lite",
         action="store_true",
         help="exposeer alleen de tien token-zuinige tools",
     )
+    parser.add_argument(
+        "--transport",
+        choices=("stdio", "streamable-http"),
+        default="stdio",
+        help="MCP-transport (standaard: stdio)",
+    )
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--path", default="/mcp", help="HTTP-pad voor MCP")
+    parser.add_argument(
+        "--stateless-http",
+        action="store_true",
+        help="bewaar geen MCP-sessie tussen HTTP-requests",
+    )
+    parser.add_argument(
+        "--json-response",
+        action="store_true",
+        help="antwoord via JSON in plaats van een SSE-stream",
+    )
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="sta een niet-lokale bind toe; zet authenticatie/TLS ervoor",
+    )
     args = parser.parse_args(argv)
-    (lite_mcp if args.lite else mcp).run(transport="stdio")
+    server = lite_mcp if args.lite else mcp
+    if args.transport == "stdio":
+        server.run(transport="stdio")
+        return
+
+    if not 1 <= args.port <= 65535:
+        parser.error("--port moet tussen 1 en 65535 liggen")
+    if not args.path.startswith("/"):
+        parser.error("--path moet met '/' beginnen")
+    try:
+        is_loopback = ipaddress.ip_address(args.host).is_loopback
+    except ValueError:
+        is_loopback = args.host.casefold() == "localhost"
+    if not is_loopback and not args.allow_remote:
+        parser.error(
+            "een niet-lokale --host vereist --allow-remote; gebruik bovendien "
+            "een authenticatie- en TLS-proxy"
+        )
+    server.run(
+        transport="streamable-http",
+        host=args.host,
+        port=args.port,
+        streamable_http_path=args.path,
+        stateless_http=args.stateless_http,
+        json_response=args.json_response,
+    )
 
 
 if __name__ == "__main__":
