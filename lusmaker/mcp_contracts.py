@@ -10,6 +10,28 @@ from pydantic import ConfigDict, Field
 from typing_extensions import NotRequired, TypedDict
 
 
+# Versiegevoelige OpenAI Apps SDK-wirevelden. Bron (geraadpleegd voor T18):
+# https://developers.openai.com/apps-sdk/build/mcp-server/
+# ``meta`` wordt op de MCP-wire als ``_meta`` geserialiseerd; toolresultaten
+# gebruiken daar ``structuredContent`` en bereiken de component als
+# ``window.openai.toolOutput``.
+APPS_PREVIEW_URI = "ui://widget/lusmaker-preview.html"
+APPS_OUTPUT_TEMPLATE_META_KEY = "openai/outputTemplate"
+APPS_STRUCTURED_CONTENT_KEY = "preview"
+APPS_COMPONENT_MIME_TYPE = "text/html+skybridge"
+APPS_PREVIEW_TOOLS = frozenset({"plan_route", "preview_draft"})
+APPS_RESOURCE_META = {
+    "openai/widgetPrefersBorder": True,
+    "openai/widgetCSP": {
+        "connect_domains": [],
+        "resource_domains": [
+            "https://unpkg.com",
+            "https://tile.openstreetmap.org",
+        ],
+    },
+}
+
+
 @dataclass(frozen=True)
 class ToolContract:
     title: str
@@ -59,9 +81,14 @@ TOOL_CONTRACTS = {
 }
 
 
-def tool_contract(name: str) -> dict[str, Any]:
+def tool_contract(name: str, *, apps_sdk: bool = False) -> dict[str, Any]:
     contract = TOOL_CONTRACTS[name]
-    return {"title": contract.title, "annotations": contract.annotations}
+    result = {"title": contract.title, "annotations": contract.annotations}
+    if apps_sdk and name in APPS_PREVIEW_TOOLS:
+        result["meta"] = {
+            APPS_OUTPUT_TEMPLATE_META_KEY: APPS_PREVIEW_URI,
+        }
+    return result
 
 
 Activity = Literal["fietsen", "trail"]

@@ -541,6 +541,91 @@ asyncio.run(inspect())
         )
 
 
+def test_apps_sdk_metadata_resource_and_payload_are_http_opt_in():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+import asyncio
+import os
+from lusmaker import mcp_server
+from lusmaker.mcp_contracts import (
+    APPS_COMPONENT_MIME_TYPE,
+    APPS_OUTPUT_TEMPLATE_META_KEY,
+    APPS_PREVIEW_URI,
+    APPS_RESOURCE_META,
+    APPS_STRUCTURED_CONTENT_KEY,
+)
+
+os.environ.pop("LUSMAKER_APPS_SDK", None)
+plain = mcp_server.build_http_server(
+    auth_disabled=True, public_url="http://127.0.0.1:8123"
+)
+os.environ["LUSMAKER_APPS_SDK"] = "1"
+apps = mcp_server.build_http_server(
+    auth_disabled=True, public_url="http://127.0.0.1:8123"
+)
+full_apps = mcp_server.build_http_server(
+    full=True, auth_disabled=True, public_url="http://127.0.0.1:8123"
+)
+
+route = {
+    "id": "abc123",
+    "name": "Testroute",
+    "start": {"lat": 50.8, "lon": 3.7, "label": "Start"},
+    "climbs": [],
+    "computed": {
+        "total_km": 1.2,
+        "ascend_m": 10,
+        "legs": [{"from": "Start", "to": "Start", "km": 1.2, "ascend_m": 10}],
+        "kwaliteit": {},
+    },
+    "_geometry": [[[50.8, 3.7, 10], [50.81, 3.71, 20]]],
+}
+mcp_server.intents.plan_route = lambda **kwargs: {
+    "status": "ready", "draft": "abc123", "samenvatting": "compact"
+}
+mcp_server.draft.load = lambda _draft_id: route
+mcp_server.climbs.all_climbs = lambda: {}
+
+async def inspect():
+    stdio_tools = {tool.name: tool for tool in await mcp_server.lite_mcp.list_tools()}
+    plain_tools = {tool.name: tool for tool in await plain.list_tools()}
+    apps_tools = {tool.name: tool for tool in await apps.list_tools()}
+    full_tools = {tool.name: tool for tool in await full_apps.list_tools()}
+    assert stdio_tools["plan_route"].meta is None
+    assert plain_tools["plan_route"].meta is None
+    assert apps_tools["plan_route"].meta == {
+        APPS_OUTPUT_TEMPLATE_META_KEY: APPS_PREVIEW_URI
+    }
+    assert apps_tools["adjust_route"].meta is None
+    assert full_tools["preview_draft"].meta == {
+        APPS_OUTPUT_TEMPLATE_META_KEY: APPS_PREVIEW_URI
+    }
+
+    plain_resources = {str(resource.uri) for resource in await plain.list_resources()}
+    apps_resources = {str(resource.uri): resource for resource in await apps.list_resources()}
+    assert APPS_PREVIEW_URI not in plain_resources
+    assert APPS_PREVIEW_URI in apps_resources
+    assert apps_resources[APPS_PREVIEW_URI].mime_type == APPS_COMPONENT_MIME_TYPE
+    assert apps_resources[APPS_PREVIEW_URI].meta == APPS_RESOURCE_META
+    contents = await apps.read_resource(APPS_PREVIEW_URI)
+    assert "window.openai?.toolOutput" in contents[0].content
+    assert contents[0].mime_type == APPS_COMPONENT_MIME_TYPE
+    assert contents[0].meta == APPS_RESOURCE_META
+
+    result = await apps.call_tool("plan_route", {"start": "Start", "max_km": 10})
+    assert APPS_STRUCTURED_CONTENT_KEY in result.structured_content
+    assert len(result.structured_content[APPS_STRUCTURED_CONTENT_KEY]["legs"]) == 1
+    assert '"preview"' not in result.content[0].text
+    assert '"samenvatting":"compact"' in result.content[0].text
+
+asyncio.run(inspect())
+""",
+            Path(temp_dir),
+        )
+
+
 def test_remote_middleware_uses_token_subject_for_tool_storage_and_urls():
     _require_mcp()
     with tempfile.TemporaryDirectory() as temp_dir:

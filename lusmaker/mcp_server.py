@@ -1,6 +1,10 @@
 """MCP-server bovenop de Lusmaker-domeinfuncties."""
 
 import argparse
+import functools
+import json
+import os
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -8,7 +12,7 @@ try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
-from mcp.types import Annotations
+from mcp.types import Annotations, CallToolResult, TextContent
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from starlette.requests import Request
@@ -33,6 +37,11 @@ from . import (
 )
 from .mcp_contracts import (
     Activity,
+    APPS_COMPONENT_MIME_TYPE,
+    APPS_PREVIEW_TOOLS,
+    APPS_PREVIEW_URI,
+    APPS_RESOURCE_META,
+    APPS_STRUCTURED_CONTENT_KEY,
     AvoidFactor,
     ClimbListResult,
     ClimbSuggestionResult,
@@ -541,9 +550,54 @@ FULL_TOOLS = (
 )
 
 
-def _register_tools(server, tools) -> None:
+def _apps_sdk_enabled() -> bool:
+    return os.environ.get("LUSMAKER_APPS_SDK") == "1"
+
+
+def _apps_tool_result(result: dict, draft_id: str | None) -> CallToolResult:
+    """Splits compacte modeltekst en de uitgebreidere componentdata."""
+    structured = dict(result)
+    if draft_id and result.get("status") != "needs_input":
+        d = draft.load(draft_id)
+        with draft.region_scope(d):
+            structured[APPS_STRUCTURED_CONTENT_KEY] = preview.component_payload(
+                d, climbs.all_climbs()
+            )
+    return CallToolResult(
+        content=[
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    result,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            )
+        ],
+        structured_content=structured,
+    )
+
+
+def _apps_tool(tool):
+    @functools.wraps(tool)
+    def wrapped(*args, **kwargs):
+        result = tool(*args, **kwargs)
+        draft_id = result.get("draft")
+        if tool.__name__ == "preview_draft":
+            draft_id = kwargs.get("draft_id") or (args[0] if args else None)
+        return _apps_tool_result(result, draft_id)
+
+    return wrapped
+
+
+def _register_tools(server, tools, *, apps_sdk: bool = False) -> None:
     for tool in tools:
-        server.tool(**tool_contract(tool.__name__))(tool)
+        handler = (
+            _apps_tool(tool)
+            if apps_sdk and tool.__name__ in APPS_PREVIEW_TOOLS
+            else tool
+        )
+        server.tool(**tool_contract(tool.__name__, apps_sdk=apps_sdk))(handler)
 
 
 lite_mcp = _server("lusmaker-lite")
@@ -580,6 +634,13 @@ def route_preview_resource(draft_id: NonEmptyString) -> bytes:
     return artifacts.read(draft_id, "preview.html")
 
 
+def preview_component_resource() -> str:
+    """Lees het statische ChatGPT-componentdocument uit het Pythonpakket."""
+    return (
+        Path(__file__).with_name("appsdk") / "preview-component.html"
+    ).read_text(encoding="utf-8")
+
+
 def _register_resources(server) -> None:
     server.resource(
         "lusmaker://drafts/{draft_id}/route.gpx",
@@ -597,6 +658,18 @@ def _register_resources(server) -> None:
         mime_type="text/html",
         annotations=RESOURCE_ANNOTATIONS,
     )(route_preview_resource)
+
+
+def _register_apps_resource(server) -> None:
+    server.resource(
+        APPS_PREVIEW_URI,
+        name="lusmaker-preview-component",
+        title="Lusmaker-routepreview",
+        description="Interactieve kaart, klimmen en hoogteprofiel in ChatGPT.",
+        mime_type=APPS_COMPONENT_MIME_TYPE,
+        annotations=RESOURCE_ANNOTATIONS,
+        meta=APPS_RESOURCE_META,
+    )(preview_component_resource)
 
 
 for _resource_server in (mcp, lite_mcp, hosted_mcp):
@@ -690,6 +763,7 @@ def build_http_server(
     oauth_config: oauth.OAuthConfig | None = None,
     token_verifier=None,
     public_url: str | None = None,
+    apps_sdk: bool | None = None,
 ):
     """Bouw de remote FastMCP-app met auth, scoping en bestandsdownloads."""
     base_url = artifacts.public_base_url(public_url)
@@ -698,6 +772,7 @@ def build_http_server(
     auth_disabled = (
         oauth.auth_disabled() if auth_disabled is None else auth_disabled
     )
+    apps_sdk = _apps_sdk_enabled() if apps_sdk is None else apps_sdk
     kwargs = {
         "middleware": [
             _RemoteUserScopeMiddleware(
@@ -719,8 +794,14 @@ def build_http_server(
         instructions=REMOTE_SERVER_INSTRUCTIONS,
         **kwargs,
     )
-    _register_tools(server, FULL_TOOLS if full else LITE_TOOLS)
+    _register_tools(
+        server,
+        FULL_TOOLS if full else LITE_TOOLS,
+        apps_sdk=apps_sdk,
+    )
     _register_resources(server)
+    if apps_sdk:
+        _register_apps_resource(server)
     _register_file_route(
         server, auth_disabled=auth_disabled, public_url=base_url
     )

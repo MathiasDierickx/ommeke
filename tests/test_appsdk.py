@@ -15,6 +15,6 @@ def test_component_uses_openai_globals_without_embedded_route_data():
     assert "openai:set_globals" in document
     assert "window.openai.requestDisplayMode({mode: 'fullscreen'})" in document
     assert "https://unpkg.com/leaflet@1.9.4" in document
-    assert "https://{s}.tile.openstreetmap.org" in document
+    assert "https://tile.openstreetmap.org" in document
     assert "_geometry" not in document
     assert "const data = {" not in document

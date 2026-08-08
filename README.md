@@ -257,6 +257,22 @@ LUSMAKER_PUBLIC_URL=http://127.0.0.1:8123 \
 ChatGPT en Claude verbinden met een publiek bereikbare HTTPS-server, niet
 rechtstreeks met localhost. TLS wordt door de deploymentlaag afgehandeld.
 
+Voor ChatGPT kan de HTTP-server optioneel een inline Apps SDK-kaart aanbieden:
+
+```bash
+LUSMAKER_APPS_SDK=1 .venv/bin/lus-mcp --http
+```
+
+In die modus verwijzen `plan_route` en `preview_draft` via
+`_meta["openai/outputTemplate"]` naar een `ui://`-resource. De tool houdt zijn
+compacte `content` voor het model; alleen `structuredContent` bevat onder
+`preview` de gedownsamplede kaartdata die de component als
+`window.openai.toolOutput` ontvangt. Zonder de omgevingsvariabele blijven de
+HTTP-toolbeschrijvingen en resources ongewijzigd, net als stdio voor Claude.
+De component-CSP staat uitsluitend Leaflet op unpkg en OpenStreetMap-tegels
+toe; voeg nieuwe externe componentresources dus ook expliciet aan
+`APPS_RESOURCE_META` toe.
+
 ### Evals
 
 `evals/route_intents.json` bevat netwerkloze prompt→tool-acceptatiecases voor
