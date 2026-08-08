@@ -210,6 +210,37 @@ asyncio.run(call_profile())
         )
 
 
+def test_lite_server_exposes_route_artifact_resources():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        home = Path(temp_dir)
+        artifact_dir = home / "exports" / "abc123"
+        artifact_dir.mkdir(parents=True)
+        (artifact_dir / "route.gpx").write_text("<gpx/>", encoding="utf-8")
+        (artifact_dir / "preview.html").write_text("<html></html>", encoding="utf-8")
+        _run_isolated(
+            """
+import asyncio
+from lusmaker import mcp_server
+
+async def inspect_resources():
+    templates = await mcp_server.lite_mcp.list_resource_templates()
+    uris = {str(template.uri_template) for template in templates}
+    assert "lusmaker://drafts/{draft_id}/route.gpx" in uris
+    assert "lusmaker://drafts/{draft_id}/preview.html" in uris
+
+    contents = await mcp_server.lite_mcp.read_resource(
+        "lusmaker://drafts/abc123/route.gpx"
+    )
+    assert contents[0].content == b"<gpx/>"
+    assert contents[0].mime_type == "application/gpx+xml"
+
+asyncio.run(inspect_resources())
+""",
+            home,
+        )
+
+
 def test_draft_tools_use_isolated_home_and_validate_climbs():
     _require_mcp()
     with tempfile.TemporaryDirectory() as temp_dir:

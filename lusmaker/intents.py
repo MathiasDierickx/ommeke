@@ -7,7 +7,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from . import climbs, config, draft, gpx, preview
+from . import artifacts, climbs, config, draft, gpx, preview
 
 
 class IntentError(RuntimeError):
@@ -146,6 +146,7 @@ def compact_result(d: dict, climb_db: dict, files: dict) -> dict:
             "suggest_climbs voor extra klimmen (tot +8 km)",
             "adjust_route om te wijzigen",
         ],
+        "artifacts": artifacts.describe_all(d["id"]),
     }
 
 
@@ -157,7 +158,7 @@ def _export_files(
     export_preview_fn=preview.export,
     exports_root: Path | None = None,
 ) -> dict:
-    output_dir = (exports_root or config.home_path() / "exports") / d["id"]
+    output_dir = (exports_root or artifacts.root()) / d["id"]
     output_dir.mkdir(parents=True, exist_ok=True)
     gpx_path = output_dir / "route.gpx"
     preview_path = output_dir / "preview.html"

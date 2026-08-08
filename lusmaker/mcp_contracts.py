@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 
 Activity = Literal["fietsen", "trail"]
@@ -84,6 +84,15 @@ class ArtifactFiles(TypedDict):
     preview: str
 
 
+class ArtifactDescriptor(TypedDict):
+    type: Literal["gpx", "preview"]
+    title: str
+    uri: str
+    mime_type: str
+    bytes: NotRequired[int]
+    sha256: NotRequired[str]
+
+
 class CompactRouteResult(TypedDict):
     draft: str
     km: float
@@ -93,6 +102,7 @@ class CompactRouteResult(TypedDict):
     bestanden: ArtifactFiles
     samenvatting: str
     vervolg: list[str]
+    artifacts: NotRequired[list[ArtifactDescriptor]]
 
 
 class RouteDetailsResult(TypedDict):

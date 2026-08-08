@@ -92,6 +92,7 @@ def test_compact_output_contract_and_summary():
         "bestanden",
         "samenvatting",
         "vervolg",
+        "artifacts",
     }
     assert result["klimmen"] == [
         "Diepestraat (1.1 km @ 3.5%)",
@@ -103,6 +104,10 @@ def test_compact_output_contract_and_summary():
     assert result["samenvatting"] == (
         "Lus vanuit Wetteren: 44,0 km / +559 hm langs 2 klimmen; "
         "kasseien vermeden."
+    )
+    assert [item["type"] for item in result["artifacts"]] == ["gpx", "preview"]
+    assert result["artifacts"][0]["uri"] == (
+        "lusmaker://drafts/abc123/route.gpx"
     )
 
 

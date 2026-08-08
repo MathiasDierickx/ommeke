@@ -7,11 +7,12 @@ try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
-from mcp.types import ToolAnnotations
+from mcp.types import Annotations, ToolAnnotations
 
 from . import __version__
 from . import (
     climbs,
+    artifacts,
     config,
     draft,
     geocode as geocode_mod,
@@ -402,9 +403,14 @@ def export_gpx(
 ) -> dict[str, Any]:
     """Exporteer een gerouteerde draft als GPX-bestand."""
     d = draft.load(draft_id)
-    path = output_path or f"{d['name']}.gpx"
+    path = artifacts.safe_output_path(draft_id, "route.gpx", output_path)
     with draft.region_scope(d):
-        return gpx.export(d, climbs.all_climbs(), path)
+        result = gpx.export(d, climbs.all_climbs(), str(path))
+        canonical = artifacts.safe_output_path(draft_id, "route.gpx")
+        if canonical != path:
+            gpx.export(d, climbs.all_climbs(), str(canonical))
+    result["artifact"] = artifacts.describe(draft_id, "route.gpx")
+    return result
 
 
 @mcp.tool(annotations=MUTATING_CLOSED)
@@ -413,9 +419,14 @@ def preview_draft(
 ) -> dict[str, Any]:
     """Schrijf een HTML-kaartpreview van een gerouteerde draft."""
     d = draft.load(draft_id)
-    path = output_path or f"{d['name']}-preview.html"
+    path = artifacts.safe_output_path(draft_id, "preview.html", output_path)
     with draft.region_scope(d):
-        return preview.export(d, climbs.all_climbs(), path)
+        result = preview.export(d, climbs.all_climbs(), str(path))
+        canonical = artifacts.safe_output_path(draft_id, "preview.html")
+        if canonical != path:
+            preview.export(d, climbs.all_climbs(), str(canonical))
+    result["artifact"] = artifacts.describe(draft_id, "preview.html")
+    return result
 
 
 def route_details(draft_id: NonEmptyString) -> RouteDetailsResult:
@@ -437,6 +448,38 @@ for _lite_tool, _lite_annotations in (
     (list_drafts, READ_ONLY_CLOSED),
 ):
     lite_mcp.tool(annotations=_lite_annotations)(_lite_tool)
+
+
+RESOURCE_ANNOTATIONS = Annotations(audience=["user"], priority=1.0)
+
+
+def route_gpx_resource(draft_id: NonEmptyString) -> bytes:
+    """Lees het GPX-bestand van een gerouteerde draft."""
+    return artifacts.read(draft_id, "route.gpx")
+
+
+def route_preview_resource(draft_id: NonEmptyString) -> bytes:
+    """Lees de zelfstandige HTML-preview van een gerouteerde draft."""
+    return artifacts.read(draft_id, "preview.html")
+
+
+for _resource_server in (mcp, lite_mcp):
+    _resource_server.resource(
+        "lusmaker://drafts/{draft_id}/route.gpx",
+        name="route-gpx",
+        title="GPX-route",
+        description="Downloadbare GPX van een gerouteerde Lusmaker-draft.",
+        mime_type="application/gpx+xml",
+        annotations=RESOURCE_ANNOTATIONS,
+    )(route_gpx_resource)
+    _resource_server.resource(
+        "lusmaker://drafts/{draft_id}/preview.html",
+        name="route-preview",
+        title="Routepreview",
+        description="Zelfstandige HTML-kaart en hoogtepreview van een draft.",
+        mime_type="text/html",
+        annotations=RESOURCE_ANNOTATIONS,
+    )(route_preview_resource)
 
 
 def main(argv: list[str] | None = None) -> None:
