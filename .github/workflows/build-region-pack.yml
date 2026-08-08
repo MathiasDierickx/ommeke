@@ -36,7 +36,7 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
       AWS_ROLE_TO_ASSUME: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-      LUSMAKER_HOME: ${{ runner.temp }}/lusmaker
+      LUSMAKER_HOME: /tmp/lusmaker
       LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
 
     steps:
