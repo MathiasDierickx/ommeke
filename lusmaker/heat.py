@@ -316,6 +316,35 @@ def _osm_cells(min_points: int) -> set:
     return {c for c, n in counts.items() if n >= min_points}
 
 
+def _vlaanderen_cells() -> dict[str, set]:
+    if not config.VLAANDEREN_ROUTES_PKL.exists():
+        return {"fiets": set(), "wandel": set()}
+    with open(config.VLAANDEREN_ROUTES_PKL, "rb") as handle:
+        routes = pickle.load(handle)
+    return {
+        "fiets": set(routes.get("fiets", set())),
+        "wandel": set(routes.get("wandel", set())),
+    }
+
+
+def _area_feature(area_id: str, cells: set) -> dict:
+    rects = _rects(cells)
+    return {
+        "type": "Feature",
+        "id": area_id,
+        "properties": {},
+        "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    [[round(x, 6), round(y, 6)] for x, y in ring]
+                ]
+                for ring in rects
+            ],
+        },
+    }
+
+
 def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
     config.ensure_dirs()
     files = sorted(config.HEAT_DIR.glob("*.gpx"))
@@ -330,40 +359,54 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
 
     own = {c for c, srcs in cell_sources.items() if len(srcs) >= min_passes}
     osm = _osm_cells(osm_min_points)
-    popular = own | osm
-    if not popular:
+    vlaanderen = _vlaanderen_cells()
+    popular = own | osm | vlaanderen["fiets"]
+    # Eigen tracks tellen mee voor trail zodra de gecureerde wandellaag bestaat.
+    popular_trail = (own | vlaanderen["wandel"]) if vlaanderen["wandel"] else set()
+    if not popular and not popular_trail:
         raise RuntimeError(
-            f"geen data: drop GPX-ritten in {config.HEAT_DIR} en/of draai `lus heat fetch-osm`"
+            f"geen data: drop GPX-ritten in {config.HEAT_DIR}, draai "
+            "`lus heat fetch-osm` en/of `lus heat fetch-vlaanderen`"
         )
-    rects = _rects(popular)
+    rects = _rects(popular) if popular else []
+    trail_rects = _rects(popular_trail) if popular_trail else []
 
     geojson = {
         "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "id": "popular",
-                "properties": {},
-                "geometry": {
-                    "type": "MultiPolygon",
-                    "coordinates": [[[[round(x, 6), round(y, 6)] for x, y in ring]] for ring in rects],
-                },
-            }
-        ],
+        "features": [],
     }
+    if popular:
+        geojson["features"].append(_area_feature("popular", popular))
+    if popular_trail:
+        geojson["features"].append(_area_feature("popular_trail", popular_trail))
     (config.CUSTOM_AREAS / "popular.geojson").write_text(json.dumps(geojson))
     with open(config.HEAT_PKL, "wb") as f:
-        pickle.dump({"cells": popular, "files": len(files), "min_passes": min_passes,
-                     "own_cells": len(own), "osm_cells": len(osm),
-                     "osm_min_points": osm_min_points}, f)
-    gh_config.write_gh_files()  # quiet.json krijgt nu de !in_popular-regel
+        pickle.dump(
+            {
+                "cells": popular,
+                "trail_cells": popular_trail,
+                "files": len(files),
+                "min_passes": min_passes,
+                "own_cells": len(own),
+                "osm_cells": len(osm),
+                "vlaanderen_fiets_cells": len(vlaanderen["fiets"]),
+                "vlaanderen_wandel_cells": len(vlaanderen["wandel"]),
+                "osm_min_points": osm_min_points,
+            },
+            f,
+        )
+    gh_config.write_gh_files()
 
     return {
         "gpx_bestanden": len(files),
         "eigen_cellen": len(own),
         "osm_cellen": len(osm),
+        "vlaanderen_fiets_cellen": len(vlaanderen["fiets"]),
+        "vlaanderen_wandel_cellen": len(vlaanderen["wandel"]),
         "cellen": len(popular),
         "polygonen": len(rects),
+        "trail_cellen": len(popular_trail),
+        "trail_polygonen": len(trail_rects),
         "km_corridor": round(len(popular) * 0.13 * 0.13 / 0.13, 1),
         "toepassen": "rm -rf ~/.lusmaker/gh/graph-cache && docker compose restart graphhopper (herimport ~5 min)",
     }
@@ -375,7 +418,11 @@ def status() -> dict:
     if config.HEAT_PKL.exists():
         with open(config.HEAT_PKL, "rb") as f:
             h = pickle.load(f)
-        out["actief"] = {"cellen": len(h["cells"]), "min_passes": h["min_passes"]}
+        out["actief"] = {
+            "cellen": len(h["cells"]),
+            "trail_cellen": len(h.get("trail_cells", set())),
+            "min_passes": h["min_passes"],
+        }
     else:
         out["actief"] = None
     return out
