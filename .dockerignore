@@ -8,4 +8,5 @@ __pycache__
 tests
 docs
 infra
+web
 .aws/region/pack.json

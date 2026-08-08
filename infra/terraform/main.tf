@@ -7,6 +7,11 @@ locals {
   data_bucket_name      = "${local.name}-${local.account_id}-${var.aws_region}-data"
   cognito_domain_prefix = coalesce(var.cognito_domain_prefix, "${local.name}-${local.account_id}")
   oauth_issuer          = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}"
+  cognito_domain        = "https://${aws_cognito_user_pool_domain.users.domain}.auth.${var.aws_region}.amazoncognito.com"
+  web_logout_urls       = length(var.web_logout_urls) > 0 ? var.web_logout_urls : var.web_callback_urls
+  web_origins           = [for url in var.web_callback_urls : regex("^https?://[^/]+", url)]
+  cors_origins          = distinct(concat(var.cors_origins, local.web_origins))
+  bedrock_foundation_id = trimprefix(var.bedrock_model_id, "eu.")
 }
 
 resource "aws_s3_bucket" "data" {
@@ -131,9 +136,15 @@ resource "aws_cognito_user_pool" "users" {
   name                     = "${local.name}-users"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
+  deletion_protection      = var.protect_user_data ? "ACTIVE" : "INACTIVE"
+  mfa_configuration        = "OPTIONAL"
 
   admin_create_user_config {
-    allow_admin_create_user_only = true
+    allow_admin_create_user_only = false
+  }
+
+  software_token_mfa_configuration {
+    enabled = true
   }
 
   password_policy {
@@ -187,6 +198,62 @@ resource "aws_cognito_user_pool_client" "mcp" {
   }
 }
 
+resource "aws_cognito_user_pool_client" "web" {
+  name                                 = "${local.name}-web"
+  user_pool_id                         = aws_cognito_user_pool.users.id
+  generate_secret                      = false
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes = [
+    "openid",
+    "email",
+    "profile",
+    "aws.cognito.signin.user.admin"
+  ]
+  callback_urls                 = var.web_callback_urls
+  logout_urls                   = local.web_logout_urls
+  supported_identity_providers  = ["COGNITO"]
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+
+  access_token_validity  = 1
+  id_token_validity      = 1
+  refresh_token_validity = 30
+
+  token_validity_units {
+    access_token  = "hours"
+    id_token      = "hours"
+    refresh_token = "days"
+  }
+}
+
+resource "aws_dynamodb_table" "chat" {
+  name         = "${local.name}-chat"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "pk"
+  range_key    = "sk"
+
+  deletion_protection_enabled = var.protect_user_data
+
+  attribute {
+    name = "pk"
+    type = "S"
+  }
+
+  attribute {
+    name = "sk"
+    type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = var.chat_point_in_time_recovery
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+}
+
 data "aws_iam_policy_document" "lambda_assume_role" {
   statement {
     effect  = "Allow"
@@ -222,6 +289,31 @@ data "aws_iam_policy_document" "lambda" {
       "s3:PutObject"
     ]
     resources = ["${aws_s3_bucket.data.arn}/tenants/*"]
+  }
+
+  statement {
+    sid = "ReadWriteOwnChatPartitions"
+    actions = [
+      "dynamodb:BatchWriteItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem"
+    ]
+    resources = [aws_dynamodb_table.chat.arn]
+  }
+
+  statement {
+    sid = "InvokeClaudeViaBedrock"
+    actions = [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:bedrock:${var.aws_region}:${local.account_id}:inference-profile/${var.bedrock_model_id}",
+      "arn:${data.aws_partition.current.partition}:bedrock:*::foundation-model/${local.bedrock_foundation_id}"
+    ]
   }
 
   statement {
@@ -263,8 +355,12 @@ resource "aws_lambda_function" "app" {
       AWS_LWA_ASYNC_INIT          = "true"
       AWS_LWA_INVOKE_MODE         = "response_stream"
       JAVA_OPTS                   = var.java_opts
+      LUSMAKER_BEDROCK_MODEL_ID   = var.bedrock_model_id
+      LUSMAKER_BEDROCK_REGION     = var.aws_region
+      LUSMAKER_CHAT_TABLE         = aws_dynamodb_table.chat.name
       LUSMAKER_AUTH_MODE          = "cognito"
       LUSMAKER_OAUTH_CLIENT_ID    = aws_cognito_user_pool_client.mcp.id
+      LUSMAKER_OAUTH_CLIENT_IDS   = join(",", [aws_cognito_user_pool_client.mcp.id, aws_cognito_user_pool_client.web.id])
       LUSMAKER_OAUTH_ISSUER       = local.oauth_issuer
       LUSMAKER_OAUTH_SCOPE        = "aws.cognito.signin.user.admin"
       LUSMAKER_REGION             = var.region_slug
@@ -298,8 +394,8 @@ resource "aws_lambda_function_url" "app" {
 
   cors {
     allow_credentials = false
-    allow_origins     = var.cors_origins
-    allow_methods     = ["GET", "POST", "DELETE", "OPTIONS"]
+    allow_origins     = local.cors_origins
+    allow_methods     = ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
     allow_headers = [
       "accept",
       "authorization",

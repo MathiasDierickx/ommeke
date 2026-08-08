@@ -19,6 +19,9 @@ def test_terraform_has_scale_to_zero_without_fixed_network_compute():
     assert "reserved_concurrent_executions = var.max_concurrency" in terraform
     assert 'invoke_mode        = "RESPONSE_STREAM"' in terraform
     assert "provisioned_concurrent_executions" not in terraform
+    assert 'billing_mode = "PAY_PER_REQUEST"' in terraform
+    assert 'resource "aws_dynamodb_table" "chat"' in terraform
+    assert 'bedrock:InvokeModel' in terraform
     for fixed_cost_resource in (
         'resource "aws_nat_gateway"',
         'resource "aws_ecs_service"',
@@ -51,6 +54,11 @@ def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
     assert "imageDigest" in deploy
     assert "provenance: false" in deploy
     assert "lusmaker.tfplan" in deploy
+
+    vercel = _read(".github/workflows/deploy-vercel.yml")
+    assert "vercel@58.9.0" in vercel
+    assert "NEXT_PUBLIC_COGNITO_CLIENT_ID" in vercel
+    assert "VERCEL_TOKEN" in vercel
 
     pack = _read(".github/workflows/build-region-pack.yml")
     assert "workflow_dispatch:" in pack

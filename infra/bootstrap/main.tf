@@ -187,6 +187,14 @@ data "aws_iam_policy_document" "github_deploy" {
   }
 
   statement {
+    sid     = "DynamoDbChatTables"
+    actions = ["dynamodb:*"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/${var.project_name}*"
+    ]
+  }
+
+  statement {
     sid     = "Budgets"
     actions = ["budgets:*"]
     resources = [

@@ -107,6 +107,24 @@ variable "oauth_generate_secret" {
   default     = true
 }
 
+variable "web_callback_urls" {
+  description = "Cognito callbacks voor de publieke Next.js-app, inclusief trailing slash."
+  type        = list(string)
+
+  validation {
+    condition = length(var.web_callback_urls) > 0 && alltrue([
+      for url in var.web_callback_urls : can(regex("^https://|^http://localhost(?::[0-9]+)?/", url))
+    ])
+    error_message = "Geef minstens één HTTPS webcallback (of localhost voor development)."
+  }
+}
+
+variable "web_logout_urls" {
+  description = "Optionele logout redirects; leeg hergebruikt web_callback_urls."
+  type        = list(string)
+  default     = []
+}
+
 variable "cognito_domain_prefix" {
   description = "Globaal unieke Cognito domainprefix; null gebruikt project-account."
   type        = string
@@ -123,9 +141,32 @@ variable "cognito_domain_prefix" {
 }
 
 variable "cors_origins" {
-  description = "Browser origins voor de Function URL."
+  description = "Extra browser origins naast de origins uit web_callback_urls."
   type        = list(string)
-  default     = ["*"]
+  default     = []
+}
+
+variable "bedrock_model_id" {
+  description = "EU cross-region inference profile voor Claude in Amazon Bedrock."
+  type        = string
+  default     = "eu.anthropic.claude-sonnet-4-6"
+
+  validation {
+    condition     = can(regex("^eu\\.anthropic\\.claude-[a-z0-9.-]+$", var.bedrock_model_id))
+    error_message = "bedrock_model_id moet een Europees Anthropic Claude inference profile zijn."
+  }
+}
+
+variable "chat_point_in_time_recovery" {
+  description = "Schakel betaalde DynamoDB point-in-time recovery in voor chatgeschiedenis."
+  type        = bool
+  default     = false
+}
+
+variable "protect_user_data" {
+  description = "Bescherm Cognito en DynamoDB tegen een onbedoelde Terraform destroy."
+  type        = bool
+  default     = true
 }
 
 variable "log_retention_days" {

@@ -32,6 +32,7 @@ jobs:
       DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
       REGION_SLUG: ${{ vars.LUSMAKER_REGION_SLUG || 'vlaanderen' }}
       OAUTH_CALLBACK_URLS_JSON: ${{ vars.OAUTH_CALLBACK_URLS_JSON }}
+      WEB_CALLBACK_URLS_JSON: ${{ vars.WEB_CALLBACK_URLS_JSON }}
       BILLING_EMAIL: ${{ vars.BILLING_EMAIL }}
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
@@ -40,6 +41,7 @@ jobs:
       TF_VAR_environment: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
       TF_VAR_region_slug: ${{ vars.LUSMAKER_REGION_SLUG || 'vlaanderen' }}
       TF_VAR_oauth_callback_urls: ${{ vars.OAUTH_CALLBACK_URLS_JSON }}
+      TF_VAR_web_callback_urls: ${{ vars.WEB_CALLBACK_URLS_JSON }}
       LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
 
     steps:
@@ -50,8 +52,11 @@ jobs:
           test -n "$AWS_ROLE_TO_ASSUME"
           test -n "$TF_STATE_BUCKET"
           test -n "$OAUTH_CALLBACK_URLS_JSON"
+          test -n "$WEB_CALLBACK_URLS_JSON"
           jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' \
             <<< "$OAUTH_CALLBACK_URLS_JSON" >/dev/null
+          jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' \
+            <<< "$WEB_CALLBACK_URLS_JSON" >/dev/null
 
       - uses: actions/setup-python@v6.2.0
         with:
@@ -175,11 +180,16 @@ jobs:
         run: |
           HEALTH=$(terraform -chdir=infra/terraform output -raw health_endpoint)
           MCP=$(terraform -chdir=infra/terraform output -raw mcp_endpoint)
+          API=$(terraform -chdir=infra/terraform output -raw api_endpoint)
           curl --fail --show-error --max-time 900 "$HEALTH"
           STATUS=$(curl --silent --show-error --output "$RUNNER_TEMP/mcp-body.json" \
             --write-out '%{http_code}' --request POST "$MCP")
           test "$STATUS" = "401"
           jq -e '.error | type == "string"' "$RUNNER_TEMP/mcp-body.json" >/dev/null
+          API_STATUS=$(curl --silent --show-error --output "$RUNNER_TEMP/api-body.json" \
+            --write-out '%{http_code}' "$API/api/routes")
+          test "$API_STATUS" = "401"
           echo "### Lusmaker AWS" >> "$GITHUB_STEP_SUMMARY"
           echo "MCP endpoint: \`$MCP\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Web API: \`$API/api\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Image: \`${{ steps.digest.outputs.uri }}\`" >> "$GITHUB_STEP_SUMMARY"

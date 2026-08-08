@@ -60,3 +60,28 @@ jobs:
         run: |
           terraform -chdir=infra/terraform init -backend=false -input=false -lockfile=readonly
           terraform -chdir=infra/terraform validate
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: actions/setup-node@v6.0.2
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Installeer vastgepinde frontenddependencies
+        run: npm ci
+
+      - name: Controleer TypeScript
+        run: npm run typecheck
+
+      - name: Bouw statische Next.js-app
+        run: npm run build
