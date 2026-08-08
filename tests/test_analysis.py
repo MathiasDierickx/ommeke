@@ -121,9 +121,9 @@ def test_route_stats_uses_vlaanderen_surface_only_for_missing_gh_segments():
 
 def test_route_stats_autovrij_uses_only_route_points_with_network_coverage():
     coords = [[50.0, 4.000 + index * 0.002, 0] for index in range(5)]
-    sampled = geo.resample([(point[0], point[1]) for point in coords], 60.0)
-    network_cells = {geo.cell(*point) for point in sampled[:-2]}
-    busy_cells = {geo.cell(*sampled[1])}
+    route_points = [(point[0], point[1]) for point in coords]
+    network_cells = {geo.cell(*point) for point in route_points[:-2]}
+    busy_cells = {geo.cell(*route_points[1])}
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
@@ -147,7 +147,7 @@ def test_route_stats_autovrij_uses_only_route_points_with_network_coverage():
             uncovered = analysis.route_stats([coords], [{}])
 
     covered_points = [
-        point for point in sampled if geo.cell(*point) in network_cells
+        point for point in route_points if geo.cell(*point) in network_cells
     ]
     expected_free = sum(
         1 for point in covered_points if geo.cell(*point) not in busy_cells

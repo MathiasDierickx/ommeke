@@ -177,7 +177,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         out["populair_pct"] = round(hits / max(len(pts), 1) * 100, 1)
     network_cells = vlaanderen["fiets"] | vlaanderen["wandel"]
     if network_cells:
-        pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
+        pts = [(coordinate[0], coordinate[1]) for coordinate in all_coords]
         network_points = [point for point in pts if geo.cell(*point) in network_cells]
         if network_points:
             free = sum(
