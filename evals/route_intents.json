@@ -1,0 +1,101 @@
+[
+  {
+    "id": "heuvelrit-wetteren-50",
+    "prompt": "Maak een heuvelachtige fietsroute van ongeveer 50 km, startend in Wetteren.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 50,
+      "doel": "hoogtemeters",
+      "activiteit": "fietsen",
+      "profiel_naam": "standaard"
+    },
+    "required_arguments": ["request_id"]
+  },
+  {
+    "id": "hard-budget-via-klim",
+    "prompt": "Vertrek in Oudenaarde, rij via de Berendries, absoluut maximaal 45 km en liever geen kasseien.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Oudenaarde",
+      "max_km": 45,
+      "via_klimmen": ["Berendries"],
+      "kasseien": false
+    },
+    "required_arguments": ["request_id"]
+  },
+  {
+    "id": "gewone-toer-30",
+    "prompt": "Ik wil gewoon een mooie lus van 30 km vanuit Wetteren, geen specifieke klimmen.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 30,
+      "doel": "toeren"
+    },
+    "required_arguments": ["request_id"]
+  },
+  {
+    "id": "trail-15",
+    "prompt": "Maak een traillus van circa 15 km vanuit Ronse.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Ronse",
+      "target_km": 15,
+      "activiteit": "trail"
+    },
+    "required_arguments": ["request_id"]
+  },
+  {
+    "id": "route-inkorten",
+    "prompt": "Maak draft abc123 korter: mik op 40 km met 2 km speling.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "target_km": 40,
+      "tolerance_km": 2
+    },
+    "required_arguments": ["expected_revision"]
+  },
+  {
+    "id": "kassei-antwoord",
+    "prompt": "Op de readiness-vraag antwoordt de gebruiker: kasseien zijn graag gezien. Profiel: standaard.",
+    "expected_tool": "update_profile",
+    "expected_arguments": {
+      "naam": "standaard",
+      "patch": {"voorkeuren": {"kasseien": "graag"}}
+    }
+  },
+  {
+    "id": "plaats-ok",
+    "prompt": "De gebruiker vindt de passage door Doordorp oké voor draft abc123.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "sta_plaatsen_toe": ["Doordorp"]
+    },
+    "required_arguments": ["expected_revision"]
+  },
+  {
+    "id": "plaats-vermijden",
+    "prompt": "Vermijd Zottegem in draft abc123 en behoud de eerdere routewens.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "vermijd_plaatsen": ["Zottegem"]
+    },
+    "required_arguments": ["expected_revision"]
+  },
+  {
+    "id": "regio-maken",
+    "prompt": "De route kan niet omdat de regio rond Maastricht nog ontbreekt. Zorg dat die beschikbaar wordt.",
+    "expected_tool": "ensure_region",
+    "expected_arguments": {"place": "Maastricht"}
+  },
+  {
+    "id": "regio-pollen",
+    "prompt": "Provisioning van regio limburg-nl loopt nog; controleer de voortgang.",
+    "expected_tool": "region_status",
+    "expected_arguments": {"slug": "limburg-nl"}
+  }
+]
