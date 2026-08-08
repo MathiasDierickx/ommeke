@@ -7,18 +7,21 @@ Bouw fiets- en trail-GPX-**lussen** stap voor stap, aangestuurd door een LLM
 > weinig omweg vragen erbij, en een lus — geen twee keer dezelfde baan."
 
 De LLM vertaalt dat naar tool calls; de tool stelt suggesties voor ("Molenberg
-erbij voor ~9 km extra?") die de LLM aan de gebruiker terugspeelt.
+erbij voor ~9 km extra?") die de LLM aan de gebruiker terugspeelt. De hosted
+versie heeft daarnaast een Next.js-routeatelier met Cognito-login,
+routebibliotheek, GPX-downloads en chatgeschiedenis via Claude op Bedrock.
 
-Voor de volledig serverless AWS-deployment, Cognito-authenticatie en GitHub
-Actions-pipeline: zie [docs/AWS.md](docs/AWS.md).
+Voor de serverless AWS-backend, Vercel-frontend, Cognito-authenticatie en
+GitHub Actions-pipeline: zie [docs/AWS.md](docs/AWS.md).
 
 ## Architectuur
 
 ```
 Claude / ChatGPT ──MCP stdio of Streamable HTTP──> Lusmaker-domeinlaag
 scripts          ──CLI met JSON─────────────────>     ├── GraphHopper-routing
+Next.js          ──Cognito + JSON API───────────>     ├── Bedrock Claude-chat
                                                        ├── klim- en geodata
-                                                       ├── stateful drafts
+                                                       ├── S3-drafts + DynamoDB-chat
                                                        └── GPX + HTML-resources
 ```
 

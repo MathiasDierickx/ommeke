@@ -1,11 +1,8 @@
 aws_region       = "eu-west-1"
 project_name     = "lusmaker"
-github_repository = "jouw-organisatie/lusmaker"
+github_repository = "MathiasDierickx/ommeke"
 
-# Voor repositories gemaakt na 15 juli 2026 is de immutable sub-vorm vereist.
-# github_oidc_subjects = [
-#   "repo:jouw-organisatie@123456/lusmaker@789012:ref:refs/heads/main"
-# ]
-
-# Hergebruik wanneer GitHub OIDC al in deze AWS-account bestaat.
-# github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+# Immutable GitHub OIDC subject voor deze repository en main.
+github_oidc_subjects = [
+  "repo:MathiasDierickx@5112406/ommeke@1327666928:ref:refs/heads/main"
+]

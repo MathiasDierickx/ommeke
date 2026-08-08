@@ -1,13 +1,19 @@
 aws_region  = "eu-west-1"
+project_name = "lusmaker"
 environment = "prod"
 region_slug = "vlaanderen"
 
 oauth_callback_urls = [
-  "https://jouw-mcp-client.example/oauth/callback"
+  "https://claude.ai/api/mcp/auth_callback"
 ]
 
-# billing_email     = "aws-kosten@example.com"
-# monthly_budget_usd = 10
-# cors_origins       = ["https://jouw-app.example"]
-# force_destroy_data = false
-# force_destroy_ecr  = false
+web_callback_urls = [
+  "https://ommeke.vercel.app/",
+  "http://localhost:3000/"
+]
+
+# billing_email       = "aws-kosten@example.com"
+# monthly_budget_usd  = 10
+# force_destroy_data  = false
+# force_destroy_ecr   = false
+# protect_user_data   = true

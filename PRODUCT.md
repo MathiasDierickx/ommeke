@@ -8,7 +8,8 @@
 routing-engines. De LLM voert het gesprek ("max 45 km, zoveel mogelijk
 hoogtemeters, geen kasseien, vermijd Zottegem"); de tool-laag bezit de
 domeinkennis: drafts, klim-database, optimalisatie, kwaliteitsmetrieken,
-GPX-export. Geen chat-app, geen kaart-app — de ontbrekende middenlaag.
+GPX-export. Die middenlaag blijft de kern; de hosted versie biedt nu ook een
+eigen chat- en routebibliotheek als eerste distributiekanaal.
 
 De generieke kern is regio- en sport-agnostisch: OSM + open DEM + GraphHopper
 werken overal; de klimdetectie is een DEM-sweep zonder namenlijst; voorkeuren
@@ -23,9 +24,9 @@ zijn custom-model-regels. Vlaanderen is launch-regio, geen beperking.
 2. **Open data volstaat.** De klim-DB (716 hellingen, cijfers ≈ Climbfinder)
    kost 4,5 s rekentijd. Persoonlijke heatmap uit eigen ritten is legaal én
    persoonlijker dan de (juridisch gesloten) Strava-heatmap.
-3. **MCP als distributie.** Geen eigen chat-UI bouwen: Claude/ChatGPT is de
-   interface. Eén `docker compose up` + MCP-config = installatie. De
-   MCP-directories zijn jong; "prompt-to-GPX" is daar nu nog een leeg vak.
+3. **MCP én eigen app als distributie.** Claude/ChatGPT blijven zero-install
+   interfaces; de Next.js-app geeft niet-MCP-gebruikers registratie,
+   chatgeschiedenis en een blijvende GPX-bibliotheek.
 
 ## Wat we geleerd hebben (PoC-sessies, augustus 2026)
 
@@ -48,7 +49,8 @@ zijn custom-model-regels. Vlaanderen is launch-regio, geen beperking.
 | M4 ✅ | Regiopacks: `lus region add <slug>` → extract, DEM-tegels uit bbox, eigen GH-graaf | Regio-agnostisch |
 | M5 ✅ | Sportprofielen: trail-lopen naast het rustige fietsprofiel | Sport-agnostisch |
 | M6 | Strava/Garmin OAuth-sync voor eigen-ritten-heat | Frictie weg bij de saus |
-| M7 | Hosted multi-tenant + betaald plan | Pas na pilotvalidatie |
+| M7 ✅ | Hosted multi-tenant + webapp | Cognito, Bedrock-chat, S3-routes en DynamoDB-historiek |
+| M8 | Betaalplan, quota en abuse-controls | Na pilotvalidatie |
 
 **Noot bij M4:** ad-hoc provisioning is toegevoegd: een plaatsnaam wordt via
 Nominatim en de Geofabrik-index naar de kleinste regio vertaald. Provisioning

@@ -1,30 +1,29 @@
-# Lusmaker op AWS
+# Lusmaker op AWS en Vercel
 
-Deze stack deployt Lusmaker als een authenticated remote MCP-app. De productie-
-compute bestaat uit één Lambda-container met twee processen: GraphHopper op
-localhost en de Lusmaker ASGI/MCP-server via de AWS Lambda Web Adapter.
-GraphHopper en de routegegevens zijn vooraf in het image gebouwd; een request
-downloadt of importeert nooit kaartdata.
+Deze stack deployt Lusmaker als webapp én authenticated remote MCP-app. De
+statische React/Next.js-interface draait op Vercel. De AWS-compute bestaat uit
+één Lambda-container met GraphHopper op localhost en de Lusmaker ASGI/API/MCP-
+server via de AWS Lambda Web Adapter. GraphHopper en routegegevens zijn vooraf
+in het image gebouwd; een request downloadt of importeert nooit kaartdata.
 
 ## Architectuur
 
 ```text
-ChatGPT / Claude / MCP-client
-              │ HTTPS + OAuth access token
-              ▼
-      Lambda Function URL              Cognito hosted OAuth
-              │                              │
-              ▼                              │ GetUser
- AWS Lambda Web Adapter                      │
-              │                              │
-              ▼                              ▼
-      Lusmaker ASGI/MCP ─────────────── tenant = Cognito sub
-              │
-       ┌──────┴───────────┐
-       ▼                  ▼
- GraphHopper         S3 tenant-state
- in hetzelfde        drafts, profielen,
- Lambda-image        GPX en previews
+Browser ──> Vercel static Next.js ──┐
+                                    │ HTTPS + Cognito access token
+ChatGPT / Claude / MCP-client ──────┤
+                                    ▼
+                           Lambda Function URL <── Cognito managed login
+                                    │
+                           Lusmaker ASGI/API/MCP
+                                    │ tenant = Cognito sub
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+               GraphHopper      S3 routes       DynamoDB chat
+               in Lambda        GPX/preview     PAY_PER_REQUEST
+                                    │
+                                    ▼
+                            Claude via Bedrock
 ```
 
 Terraform maakt aan:
@@ -33,15 +32,20 @@ Terraform maakt aan:
 - één Lambda zonder provisioned concurrency, maximaal vijftien minuten per
   request en standaard maximaal één gelijktijdige execution;
 - een Function URL met response streaming;
-- een Cognito user pool, hosted OAuth-domain en vooraf geregistreerde client;
+- een Cognito user pool met self-service registratie, optionele TOTP-MFA,
+  managed login, een confidential MCP-client en publieke webclient met PKCE;
 - een private, versleutelde en geversioneerde S3-bucket voor tenant-state;
+- een versleutelde DynamoDB on-demand tabel voor gesprekken en berichten;
+- IAM-rechten voor uitsluitend het gekozen Europese Claude-model in Bedrock;
 - een CloudWatch-loggroep met korte retentie;
 - optioneel een maandelijks AWS Budget met e-mailmeldingen;
 - in de bootstrap-stack: een private Terraform-statebucket en een branch-
   gebonden GitHub OIDC-deployrol.
 
-Er zijn bewust geen VPC, NAT Gateway, API Gateway, EFS, EC2, ECS/Fargate of
-provisioned Lambda instances.
+Er zijn bewust geen CloudFront, VPC, NAT Gateway, API Gateway, EFS, EC2,
+ECS/Fargate of provisioned Lambda instances. Vercel levert de CDN/HTTPS-laag
+voor de frontend; een extra CloudFront-distributie zou dubbelop zijn. De
+Function URL vermijdt de API Gateway-timeout voor lange route- en modelcalls.
 
 ## Wat “scale to zero” hier betekent
 
@@ -52,11 +56,19 @@ GraphHopper en opent daarna pas de MCP-server. `AWS_LWA_ASYNC_INIT` laat die
 opstart binnen de Lambda-timeout doorlopen.
 
 AWS wordt niet letterlijk kosteloos wanneer de app idle is. ECR bewaart het
-containerimage, S3 bewaart Terraform-state, het regiopack en gebruikersdata, en
-CloudWatch bewaart logs. Dat zijn doorgaans kleine opslagkosten, maar geen
-vaste compute-kosten. Een invocation met 10 GB geheugen die lang loopt kan wel
-materieel kosten; de concurrency-cap en het optionele budget begrenzen en
-signaleren dat risico. Een AWS Budget is een alarm, geen harde spend-stop.
+containerimage, S3 bewaart Terraform-state, regiopack en gebruikersdata,
+DynamoDB bewaart chatitems en CloudWatch bewaart logs. ECR rekent bijvoorbeeld
+per opgeslagen GB-maand. Er zijn geen vaste servers of gereserveerde compute,
+maar persistente opslag maakt “uitsluitend per invocation” technisch
+onmogelijk. DynamoDB rekent in `PAY_PER_REQUEST` geen idle throughput aan.
+
+De Next.js-app gebruikt geen Vercel Functions. Vercel Hobby is $0/maand binnen
+de limieten, maar is uitsluitend bedoeld voor persoonlijk, niet-commercieel
+gebruik. Voor een commerciële hosted Lusmaker is Vercel Pro een vaste
+abonnementskost; host de statische `web/out` dan desgewenst op een usage-based
+object/CDN-platform. Zie [Vercel Hobby](https://vercel.com/docs/plans/hobby),
+[DynamoDB on-demand](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/on-demand-capacity-mode.html)
+en [ECR-prijzen](https://aws.amazon.com/ecr/pricing/).
 
 Relevante harde AWS-grenzen zijn een containerimage van maximaal 10 GB
 uncompressed, maximaal 10 GB `/tmp` en een Lambda-timeout van 15 minuten. Maak
@@ -75,6 +87,10 @@ en de [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter).
 - een concrete OAuth callback. Voor Claude is dit
   `https://claude.ai/api/mcp/auth_callback`. ChatGPT toont per pluginverbinding
   een URL van de vorm `https://chatgpt.com/connector/oauth/{callback_id}`.
+- een Vercel-project en zijn vaste productie-URL, bijvoorbeeld
+  `https://ommeke.vercel.app/`;
+- voor automatische webdeploys: `VERCEL_TOKEN`, `VERCEL_ORG_ID` en
+  `VERCEL_PROJECT_ID` als GitHub repository secrets.
 
 ## 1. Bootstrap state en GitHub OIDC
 
@@ -115,6 +131,7 @@ AWS access keys:
 | `DEPLOY_ENVIRONMENT` | nee | `prod` |
 | `LUSMAKER_REGION_SLUG` | nee | `vlaanderen` |
 | `OAUTH_CALLBACK_URLS_JSON` | ja | `["https://claude.ai/api/mcp/auth_callback"]` |
+| `WEB_CALLBACK_URLS_JSON` | ja | `["https://ommeke.vercel.app/","http://localhost:3000/"]` |
 | `BILLING_EMAIL` | nee | `aws-kosten@example.com` |
 
 Met de GitHub CLI:
@@ -126,6 +143,8 @@ gh variable set AWS_REGION --body 'eu-west-1'
 gh variable set LUSMAKER_REGION_SLUG --body 'vlaanderen'
 gh variable set OAUTH_CALLBACK_URLS_JSON \
   --body '["https://claude.ai/api/mcp/auth_callback"]'
+gh variable set WEB_CALLBACK_URLS_JSON \
+  --body '["https://ommeke.vercel.app/","http://localhost:3000/"]'
 ```
 
 De workflows gebruiken uitsluitend kortlevende OIDC-credentials. Er horen geen
@@ -156,7 +175,7 @@ Een GitHub-hosted runner kan voor een grotere regio onvoldoende geheugen of
 disk hebben. Gebruik dan dezelfde workflow op een grotere self-hosted runner;
 de uiteindelijke AWS-runtime blijft volledig serverless.
 
-## 4. Deploy
+## 4. Deploy AWS
 
 Een push naar `main` met relevante code start deployment automatisch. Voor de
 eerste of een handmatige deployment:
@@ -174,13 +193,44 @@ De workflow voert in volgorde uit:
 4. een linux/amd64 Lambda-image zonder multi-platform manifest;
 5. push onder een immutable code-plus-pack tag;
 6. resolve van de ECR digest en Terraform-plan op `repository@sha256:...`;
-7. apply, gevolgd door een echte `/health` cold-start en een verwachte 401 op
-   een MCP-call zonder token.
+7. apply, gevolgd door een echte `/health` cold-start en verwachte 401's op
+   MCP en web-API zonder token.
 
 Een afgebroken deployment is retry-safe. ECR-tags zijn immutable; een bestaande
 code-plus-pack tag wordt hergebruikt en Terraform deployt altijd de digest.
 
-## 5. Maak een gebruiker
+## 5. Deploy de Next.js-app naar Vercel
+
+Koppel een leeg Vercel-project aan de drie GitHub secrets. De workflow leest de
+publieke API-, Cognito-domain- en webclientwaarden rechtstreeks uit remote
+Terraform-state, bouwt `web/` en deployt met de vastgepinde Vercel CLI:
+
+```bash
+gh secret set VERCEL_TOKEN
+gh secret set VERCEL_ORG_ID
+gh secret set VERCEL_PROJECT_ID
+gh workflow run deploy-vercel.yml --ref main
+```
+
+Een push onder `web/**` start dezelfde workflow. Na een eerste AWS-deployment
+start ze ook automatisch via `workflow_run`. Zonder de drie secrets slaat de
+workflow de deploy bewust groen over. De Vercel production alias moet exact in
+`WEB_CALLBACK_URLS_JSON` staan; deploy AWS opnieuw wanneer die URL wijzigt.
+
+Lokaal:
+
+```bash
+cd web
+cp .env.example .env.local
+npm ci
+npm run dev
+```
+
+De webclient bewaart tokens alleen in `sessionStorage`, gebruikt OAuth
+authorization code + PKCE en ververst access tokens met de Cognito token-
+endpoint. Publieke `NEXT_PUBLIC_*`-waarden zijn configuratie, geen secrets.
+
+## 6. Registreer en meld aan
 
 Initialiseer de applicatiestack lokaal tegen dezelfde backend wanneer je de
 outputs of Cognito pool-ID buiten Actions nodig hebt:
@@ -192,20 +242,25 @@ terraform -chdir=infra/terraform init -reconfigure \
   -backend-config="region=eu-west-1" \
   -backend-config="use_lockfile=true"
 
-POOL_ID=$(terraform -chdir=infra/terraform output -raw cognito_user_pool_id)
-aws cognito-idp admin-create-user \
-  --user-pool-id "$POOL_ID" \
-  --username fietser@example.com \
-  --user-attributes Name=email,Value=fietser@example.com Name=email_verified,Value=true \
-  --desired-delivery-mediums EMAIL
+terraform -chdir=infra/terraform output -json vercel_environment
 ```
 
-Zelfregistratie staat uit. Iedere geauthenticeerde gebruiker krijgt een eigen
-S3-prefix op basis van Cognito `sub`; drafts, profielen en artifacts worden dus
-niet tussen accounts gedeeld. Writes gebruiken S3 preconditions om verloren
-updates door gelijktijdige tool calls te voorkomen.
+Open de Vercel-app en kies **Account maken**. Cognito verzorgt registratie,
+e-mailverificatie, login, wachtwoordreset en optionele authenticator-MFA.
+Iedere gebruiker krijgt op basis van Cognito `sub` een eigen S3-prefix én
+afgeschermde DynamoDB-conversaties. S3-writes gebruiken preconditions om
+verloren updates door gelijktijdige calls te voorkomen.
 
-## 6. Koppel Claude, ChatGPT of een API-client
+## 7. Bedrock-modeltoegang
+
+De runtime gebruikt standaard het EU inference profile
+`eu.anthropic.claude-sonnet-4-6`. Controleer vóór de eerste chat in de Bedrock-
+console van `eu-west-1` of Anthropic model access en de use-casegegevens voor
+het account voltooid zijn. De Lambda-rol kan alleen dit inference profile en
+het bijbehorende foundation model aanroepen. Het Converse-contract en tool use
+volgen de [officiële Bedrock Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
+
+## 8. Koppel Claude, ChatGPT of een API-client
 
 Haal de publieke configuratie op:
 
@@ -249,10 +304,16 @@ MCP-resource- en tenantlaag hoeft daarvoor niet te veranderen.
 ## Security en beheer
 
 - De Function URL is op AWS-niveau `NONE`, omdat ChatGPT en Claude geen SigV4
-  spreken. Alle paden behalve health, OAuth-metadata en CORS preflight worden
-  in de app met Cognito bearer tokens afgeschermd.
+  spreken en de browser een Cognito JWT gebruikt. Alle paden behalve health,
+  OAuth-metadata en CORS preflight worden in de app met Cognito bearer tokens
+  afgeschermd. CORS accepteert alleen origins uit de webcallbacks en expliciete
+  extra origins.
 - S3 blokkeert public access, vereist TLS en versleutelt server-side. De Lambda-
   rol mag alleen onder `tenants/*` lezen en schrijven.
+- DynamoDB gebruikt on-demand billing en server-side encryption. API-queries
+  controleren gesprekseigenaarschap vóór ze de message-partitie lezen.
+- Bedrock krijgt maximaal twintig historische berichten, 4.000 tekens per
+  prompt, 1.400 outputtokens en vijf toolrondes per request.
 - De GitHub-rol is aan de exacte repository/branch-subjects gebonden. De rol
   heeft deploymentrechten, maar geen statische sleutels.
 - De hosted MCP exposeert geen `ensure_region`: een Lambda-image is immutable.
@@ -284,8 +345,10 @@ die destroy op `true`:
 ```bash
 terraform -chdir=infra/terraform destroy \
   -var='oauth_callback_urls=["https://claude.ai/api/mcp/auth_callback"]' \
+  -var='web_callback_urls=["https://ommeke.vercel.app/"]' \
   -var=force_destroy_data=true \
-  -var=force_destroy_ecr=true
+  -var=force_destroy_ecr=true \
+  -var=protect_user_data=false
 ```
 
 Dit verwijdert gebruikersdata en images permanent. Verwijder de bootstrap pas
