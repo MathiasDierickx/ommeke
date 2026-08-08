@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from lusmaker.provision import _unpack
@@ -12,6 +13,14 @@ from lusmaker.provision import _unpack
 def prepare(pack: Path, slug: str, destination: Path) -> dict:
     region_root = destination / "regions" / slug
     manifest = _unpack(pack, region_root, slug)
+    expected_image = os.environ.get(
+        "LUSMAKER_GH_IMAGE", "israelhikingmap/graphhopper:11.0"
+    )
+    if manifest.get("gh_image") != expected_image:
+        raise RuntimeError(
+            "regiopack gebruikt GraphHopper "
+            f"{manifest.get('gh_image')!r}; verwacht {expected_image!r}"
+        )
     required = [
         region_root / "cache",
         region_root / "gh" / "config.yml",

@@ -117,6 +117,7 @@ def test_pack_contains_rebuild_outputs_but_not_pbf():
             result = provision.create_pack("zeeland", output, home=home)
 
         assert result["manifest"]["geofabrik"] == "europe/netherlands/zeeland"
+        assert result["manifest"]["gh_image"] == "israelhikingmap/graphhopper:11.0"
         with tarfile.open(output, "r:gz") as archive:
             names = set(archive.getnames())
             manifest = json.load(archive.extractfile("pack.json"))

@@ -121,7 +121,7 @@ def write_compose(
     for region in config.registered_regions(home):
         root = f"${{LUSMAKER_HOME:-~/.lusmaker}}/regions/{region.slug}"
         services[f"graphhopper-{region.slug}"] = {
-            "image": "israelhikingmap/graphhopper:latest",
+            "image": config.GRAPH_HOPPER_IMAGE,
             "container_name": f"lusmaker-gh-{region.slug}",
             "command": ["-c", "/lus/gh/config.yml"],
             "environment": {"JAVA_OPTS": "-Xmx6g -Xms1g"},

@@ -305,7 +305,7 @@ resource "aws_lambda_function_url" "app" {
       "last-event-id",
       "mcp-protocol-version"
     ]
-    expose_headers = ["mcp-session-id"]
+    expose_headers = ["mcp-session-id", "www-authenticate"]
     max_age        = 3600
   }
 }

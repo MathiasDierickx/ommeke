@@ -1,0 +1,84 @@
+name: Build region pack
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: Regioslug in de Lambda-image
+        required: true
+        default: vlaanderen
+        type: string
+      geofabrik:
+        description: Geofabrik-pad zonder -latest.osm.pbf
+        required: true
+        default: europe/belgium
+        type: string
+      bbox:
+        description: minlat,minlon,maxlat,maxlon
+        required: true
+        default: 50.68,3.35,51.10,4.20
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lusmaker-region-pack
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      LUSMAKER_HOME: ${{ runner.temp }}/lusmaker
+      LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Controleer repositoryvariabelen
+        run: |
+          test -n "$AWS_ROLE_TO_ASSUME"
+          test -n "$TF_STATE_BUCKET"
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installeer Lusmaker
+        run: python -m pip install --disable-pip-version-check -e .
+
+      - name: Neem tijdelijke AWS-credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Bouw graph, caches en regiopack
+        env:
+          LUSMAKER_PACK_UPLOAD: s3://${{ env.TF_STATE_BUCKET }}/region-packs
+        run: |
+          python -m lusmaker.provision \
+            "${{ inputs.slug }}" \
+            --pbf-url "https://download.geofabrik.de/${{ inputs.geofabrik }}-latest.osm.pbf" \
+            --bbox "${{ inputs.bbox }}"
+
+      - name: Verifieer geüploade pack
+        run: |
+          aws s3api head-object \
+            --bucket "$TF_STATE_BUCKET" \
+            --key "region-packs/${{ inputs.slug }}.tar.gz"
+          echo "### Regiopack" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`s3://$TF_STATE_BUCKET/region-packs/${{ inputs.slug }}.tar.gz\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop tijdelijke GraphHopper
+        if: always()
+        run: docker compose -f docker-compose.regions.yml down || true

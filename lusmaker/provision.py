@@ -21,7 +21,6 @@ from . import __version__, config
 from .discover import geofabrik_path_from_url
 
 
-GH_IMAGE = "israelhikingmap/graphhopper:latest"
 PHASES = ("downloaden", "bouwen", "gh-import", "klaar")
 
 
@@ -134,7 +133,7 @@ def create_pack(
         "bbox": list(region.bbox),
         "geofabrik": region.geofabrik,
         "lusmaker_version": __version__,
-        "gh_image": GH_IMAGE,
+        "gh_image": config.GRAPH_HOPPER_IMAGE,
     }
     with tarfile.open(destination, "w:gz") as archive:
         _tar_add_path(archive, region.cache, "cache")

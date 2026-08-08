@@ -1,6 +1,6 @@
 services:
   graphhopper:
-    image: israelhikingmap/graphhopper:latest
+    image: israelhikingmap/graphhopper:11.0
     container_name: lusmaker-graphhopper
     command: ["-c", "/lus/gh/config.yml"]
     environment:

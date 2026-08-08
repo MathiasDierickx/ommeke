@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installeer project
+        run: python -m pip install --disable-pip-version-check -e '.[aws]'
+
+      - name: Controleer CLI-contract
+        run: lus --help >/dev/null
+
+      - name: Draai offline tests
+        run: python -m tests.run
+
+      - name: Controleer Lambda-startscript
+        run: sh -n deploy/aws/entrypoint.sh
+
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: "1.14.9"
+          terraform_wrapper: false
+
+      - name: Controleer Terraform-formattering
+        run: terraform fmt -check -recursive infra
+
+      - name: Valideer bootstrap-stack
+        run: |
+          terraform -chdir=infra/bootstrap init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/bootstrap validate
+
+      - name: Valideer applicatiestack
+        run: |
+          terraform -chdir=infra/terraform init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/terraform validate

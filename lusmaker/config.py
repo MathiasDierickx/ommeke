@@ -20,6 +20,9 @@ REGION_ENV = "LUSMAKER_REGION"
 # AWS Terrain Tiles (open data, skadi/SRTM-formaat, geen auth)
 DEM_URL = "https://elevation-tiles-prod.s3.amazonaws.com/skadi/{ns}/{name}.hgt.gz"
 GH_PROFILE = "quiet"
+GRAPH_HOPPER_IMAGE = os.environ.get(
+    "LUSMAKER_GH_IMAGE", "israelhikingmap/graphhopper:11.0"
+)
 CLIMBS_YAML_BUILTIN = Path(__file__).with_name("climbs.yaml")
 
 _active_region: ContextVar[str | None] = ContextVar(

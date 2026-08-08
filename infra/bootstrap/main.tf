@@ -102,6 +102,7 @@ data "aws_iam_policy_document" "github_deploy" {
     sid = "TerraformState"
     actions = [
       "s3:ListBucket",
+      "s3:GetBucketLocation",
       "s3:GetBucketVersioning"
     ]
     resources = [aws_s3_bucket.terraform_state.arn]
@@ -156,6 +157,7 @@ data "aws_iam_policy_document" "github_deploy" {
       "iam:GetRole",
       "iam:ListRolePolicies",
       "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole",
       "iam:ListRoleTags",
       "iam:PassRole",
       "iam:PutRolePolicy",

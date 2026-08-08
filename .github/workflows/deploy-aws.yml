@@ -1,0 +1,185 @@
+name: Deploy AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-aws.yml
+      - deploy/aws/**
+      - infra/**
+      - lusmaker/**
+      - pyproject.toml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lusmaker-aws-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      PROJECT_NAME: ${{ vars.PROJECT_NAME || 'lusmaker' }}
+      DEPLOY_ENVIRONMENT: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
+      REGION_SLUG: ${{ vars.LUSMAKER_REGION_SLUG || 'vlaanderen' }}
+      OAUTH_CALLBACK_URLS_JSON: ${{ vars.OAUTH_CALLBACK_URLS_JSON }}
+      BILLING_EMAIL: ${{ vars.BILLING_EMAIL }}
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_aws_region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'lusmaker' }}
+      TF_VAR_environment: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
+      TF_VAR_region_slug: ${{ vars.LUSMAKER_REGION_SLUG || 'vlaanderen' }}
+      TF_VAR_oauth_callback_urls: ${{ vars.OAUTH_CALLBACK_URLS_JSON }}
+      LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Controleer deploymentconfiguratie
+        run: |
+          test -n "$AWS_ROLE_TO_ASSUME"
+          test -n "$TF_STATE_BUCKET"
+          test -n "$OAUTH_CALLBACK_URLS_JSON"
+          jq -e 'type == "array" and length > 0 and all(.[]; type == "string")' \
+            <<< "$OAUTH_CALLBACK_URLS_JSON" >/dev/null
+
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installeer pack-validator
+        run: python -m pip install --disable-pip-version-check -e .
+
+      - name: Neem tijdelijke AWS-credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.3
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Download en valideer regiopack
+        id: pack
+        run: |
+          PACK="$RUNNER_TEMP/${REGION_SLUG}.tar.gz"
+          aws s3 cp \
+            "s3://${TF_STATE_BUCKET}/region-packs/${REGION_SLUG}.tar.gz" \
+            "$PACK"
+          python deploy/aws/prepare_region.py "$PACK" "$REGION_SLUG" .aws/region
+          PACK_SHA=$(sha256sum "$PACK" | cut -d ' ' -f 1)
+          echo "sha=$PACK_SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA}-${PACK_SHA:0:12}" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: "1.14.9"
+          terraform_wrapper: false
+
+      - name: Initialiseer remote Terraform-state
+        run: |
+          terraform -chdir=infra/terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$PROJECT_NAME/$DEPLOY_ENVIRONMENT/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="use_lockfile=true"
+
+      - name: Maak ECR-repository indien nodig
+        run: |
+          terraform -chdir=infra/terraform apply -auto-approve \
+            -target=aws_ecr_repository.app \
+            -target=aws_ecr_lifecycle_policy.app
+
+      - name: Bepaal immutable image-tag
+        id: image
+        run: |
+          ECR_URL=$(terraform -chdir=infra/terraform output -raw ecr_repository_url)
+          REPOSITORY_NAME=${ECR_URL#*/}
+          IMAGE_TAG="${{ steps.pack.outputs.tag }}"
+          if aws ecr describe-images \
+            --repository-name "$REPOSITORY_NAME" \
+            --image-ids "imageTag=$IMAGE_TAG" >/dev/null 2>&1; then
+            EXISTS=true
+          else
+            EXISTS=false
+          fi
+          echo "ecr_url=$ECR_URL" >> "$GITHUB_OUTPUT"
+          echo "repository=$REPOSITORY_NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "uri=$ECR_URL:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
+
+      - name: Login bij ECR
+        if: steps.image.outputs.exists != 'true'
+        run: |
+          REGISTRY=${{ steps.image.outputs.ecr_url }}
+          REGISTRY=${REGISTRY%%/*}
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$REGISTRY"
+
+      - name: Activeer Docker Buildx
+        if: steps.image.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Bouw en push Lambda-image
+        if: steps.image.outputs.exists != 'true'
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: .
+          file: deploy/aws/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.uri }}
+          build-args: |
+            GRAPH_HOPPER_IMAGE=israelhikingmap/graphhopper:11.0
+            REGION_SLUG=${{ env.REGION_SLUG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Resolve image digest
+        id: digest
+        run: |
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "${{ steps.image.outputs.repository }}" \
+            --image-ids "imageTag=${{ steps.image.outputs.tag }}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          test "${DIGEST#sha256:}" != "$DIGEST"
+          echo "uri=${{ steps.image.outputs.ecr_url }}@$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Plan applicatiestack
+        run: |
+          PLAN_ARGS=(-var="image_uri=${{ steps.digest.outputs.uri }}")
+          if [ -n "$BILLING_EMAIL" ]; then
+            PLAN_ARGS+=(-var="billing_email=$BILLING_EMAIL")
+          fi
+          terraform -chdir=infra/terraform plan \
+            -out="$RUNNER_TEMP/lusmaker.tfplan" \
+            "${PLAN_ARGS[@]}"
+
+      - name: Deploy applicatiestack
+        run: terraform -chdir=infra/terraform apply -auto-approve "$RUNNER_TEMP/lusmaker.tfplan"
+
+      - name: Smoke-test publieke rand en Cognito-gate
+        run: |
+          HEALTH=$(terraform -chdir=infra/terraform output -raw health_endpoint)
+          MCP=$(terraform -chdir=infra/terraform output -raw mcp_endpoint)
+          curl --fail --show-error --max-time 900 "$HEALTH"
+          STATUS=$(curl --silent --show-error --output "$RUNNER_TEMP/mcp-body.json" \
+            --write-out '%{http_code}' --request POST "$MCP")
+          test "$STATUS" = "401"
+          jq -e '.error | type == "string"' "$RUNNER_TEMP/mcp-body.json" >/dev/null
+          echo "### Lusmaker AWS" >> "$GITHUB_STEP_SUMMARY"
+          echo "MCP endpoint: \`$MCP\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image: \`${{ steps.digest.outputs.uri }}\`" >> "$GITHUB_STEP_SUMMARY"
