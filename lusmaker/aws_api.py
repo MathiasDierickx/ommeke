@@ -8,6 +8,8 @@ import re
 from typing import Any
 from urllib.parse import quote
 
+import logging
+
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
@@ -20,6 +22,9 @@ _DRAFT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 def _error(message: str, status: int = 400, code: str = "bad_request") -> JSONResponse:
     return JSONResponse({"error": message, "code": code}, status_code=status)
+
+
+logger = logging.getLogger(__name__)
 
 
 async def _json_body(request: Request, *, max_bytes: int = 16_384) -> dict[str, Any]:
@@ -207,6 +212,7 @@ async def conversation_send(request: Request) -> JSONResponse:
     except ChatError as exc:
         return _error(str(exc), 422, "chat_failed")
     except Exception:
+        logger.exception("chatbericht mislukt (conversation=%s)", conversation_id)
         return _error(
             "Claude kon dit bericht niet verwerken. Probeer het opnieuw.",
             502,
