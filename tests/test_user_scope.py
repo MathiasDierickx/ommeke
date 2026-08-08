@@ -89,3 +89,10 @@ def test_user_and_draft_path_traversal_are_rejected():
             assert "ongeldig draft-id" in str(exc)
         else:
             raise AssertionError(f"ongeldig draft-id werd aanvaard: {draft_id!r}")
+
+    try:
+        draft.save({"id": "../alice"})
+    except draft.DraftError as exc:
+        assert "ongeldig draft-id" in str(exc)
+    else:
+        raise AssertionError("draft met ongeldig id werd opgeslagen")

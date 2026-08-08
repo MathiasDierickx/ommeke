@@ -61,6 +61,7 @@ def require_revision(d: dict, expected_revision: int | None) -> None:
 
 def save(d: dict, expected_revision: int | None = None) -> None:
     """Schrijf een draft atomisch en verhoog zijn monotone revisie."""
+    validate_draft_id(d.get("id"))
     if aws_state.enabled():
         relative = f"drafts/{d['id']}.json"
         current, etag = aws_state.get_json(relative)
