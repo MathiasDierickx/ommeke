@@ -60,8 +60,8 @@ def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
     assert "lusmaker.tfplan" in deploy
 
     assert not (workflows / "deploy-vercel.yml").exists()
-    vercel = _read("web/vercel.json")
-    assert '"outputDirectory": "out"' in vercel
+    next_config = _read("web/next.config.ts")
+    assert 'output: "export"' in next_config
 
     pack = _read(".github/workflows/build-region-pack.yml")
     assert "workflow_dispatch:" in pack

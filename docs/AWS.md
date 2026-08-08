@@ -234,7 +234,7 @@ frontenddeploy geen GitHub Action-minuten. Configureer het project als volgt:
 | Production branch | `main` |
 | Root Directory | `web` |
 | Framework Preset | `Next.js` |
-| Output Directory | `out` |
+| Output Directory | leeg (Vercel-default) |
 
 Zet de drie waarden uit Terraform-output `vercel_environment` als Vercel
 Production Environment Variables. Het zijn publieke buildwaarden, geen
@@ -248,10 +248,11 @@ vercel env add NEXT_PUBLIC_COGNITO_CLIENT_ID production
 vercel git connect https://github.com/owner/repository.git --yes
 ```
 
-Vercel bouwt voortaan pushes naar `main`; `web/vercel.json` zorgt dat de
-statische Next.js-export volledig wordt gepubliceerd. De production alias moet
-exact in `WEB_CALLBACK_URLS_JSON` staan; deploy AWS opnieuw wanneer die URL
-wijzigt.
+Vercel bouwt voortaan pushes naar `main`. `next.config.ts` zet
+`output: "export"`; laat de Vercel Output Directory toch leeg, zodat de
+Next.js-builder zijn vereiste `.next`-metadata kan verwerken en de statische
+export publiceert. De production alias moet exact in `WEB_CALLBACK_URLS_JSON`
+staan; deploy AWS opnieuw wanneer die URL wijzigt.
 
 Lokaal:
 
