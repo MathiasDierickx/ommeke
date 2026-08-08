@@ -72,6 +72,8 @@ def test_probe_routes_once_uses_prefilter_and_caches_result():
                 pickle.dump(
                     {
                         "version": 2,
+                        "druk": {geo.cell(50.0, 4.0)},
+                        "fiets": {geo.cell(50.0, 4.0)},
                         "pois": {
                             "picknickbank": [(50.0005, 4.005, "Rustpunt")],
                             "toilet": [(50.0, 4.007, None)],
@@ -101,6 +103,8 @@ def test_probe_routes_once_uses_prefilter_and_caches_result():
     assert first["terrein"]["beton_m"] == first["kwaliteit"]["beton_m"]
     assert first["terrein"]["offroad_beschikbaar_pct"] == 100.0
     assert first["terrein"]["klimmen_binnen_5km"] == 1
+    assert first["terrein"]["druk_data_beschikbaar"] is True
+    assert first["terrein"]["autovrij_pct"] == first["kwaliteit"]["autovrij_pct"]
     assert first["terrein"]["pois_langs_route"] == {
         "picknickbank": 1,
         "toilet": 1,

@@ -163,6 +163,7 @@ def region_scope(d: dict):
 
 def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: bool = False,
         avoid_cobbles: bool = False, avoid_concrete: bool = False,
+        avoid_busy: bool = False,
         profile: str = config.GH_PROFILE, profile_doc: str | None = None) -> dict:
     profile_override = profile_doc is None or profile != config.GH_PROFILE
     if profile_doc is not None:
@@ -186,6 +187,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "strict": strict,
         "avoid_cobbles": avoid_cobbles,
         "avoid_concrete": avoid_concrete,
+        "avoid_busy": avoid_busy,
         "avoid_places": [],  # [{label, lat, lon, radius_km, factor}]
         "climbs": [],    # geordende lijst klim-ids
         "opvullingen": [],  # persistente round_trip-legs met via-punten
@@ -198,6 +200,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
 def create(start: str, name: str | None = None, loop: bool = True,
            end: str | None = None, strict: bool = False,
            avoid_cobbles: bool = False, avoid_concrete: bool = False,
+           avoid_busy: bool = False,
            region: str | None = None, profile: str = config.GH_PROFILE,
            profile_doc: str | None = None) -> dict:
     """Maak een draft vanuit gebruikersgerichte plaatsnamen of coördinaten."""
@@ -214,6 +217,7 @@ def create(start: str, name: str | None = None, loop: bool = True,
             strict=strict,
             avoid_cobbles=avoid_cobbles,
             avoid_concrete=avoid_concrete,
+            avoid_busy=avoid_busy,
             profile=profile,
             profile_doc=profile_doc,
         )
@@ -486,6 +490,7 @@ def routing_preferences(d: dict) -> dict:
         "strict": False,
         "avoid_cobbles": False,
         "avoid_concrete": False,
+        "avoid_busy": False,
     }
     if d.get("profile_doc"):
         effective.update(profiles.routing_prefs(profiles.load(d["profile_doc"])))
@@ -493,7 +498,7 @@ def routing_preferences(d: dict) -> dict:
         # afgeleid; een expliciet afwijkend draftprofiel blijft leidend.
         if d.get("profile_override", False):
             effective["profile"] = d.get("profile", effective["profile"])
-    for key in ("strict", "avoid_cobbles", "avoid_concrete"):
+    for key in ("strict", "avoid_cobbles", "avoid_concrete", "avoid_busy"):
         if d.get(key, False):
             effective[key] = True
     return effective
@@ -571,6 +576,7 @@ def _route(
             "strict": preferences["strict"],
             "avoid_cobbles": preferences["avoid_cobbles"],
             "avoid_concrete": preferences["avoid_concrete"],
+            "avoid_busy": preferences["avoid_busy"],
             "details": True,
             "profile": preferences["profile"],
         }
@@ -643,6 +649,7 @@ def summary(d: dict) -> dict:
         "strict": effective["strict"],
         "avoid_cobbles": effective["avoid_cobbles"],
         "avoid_concrete": effective["avoid_concrete"],
+        "avoid_busy": effective["avoid_busy"],
         "avoid_places": d.get("avoid_places", []),
         "climbs": d["climbs"],
         "computed": d.get("computed"),
@@ -686,12 +693,36 @@ def _popular_share(routes: list[dict], cells=_LOAD_HEAT) -> float:
     return hits / max(len(points), 1)
 
 
-def _candidate_surface_components(routes: list[dict], popular_cells=_LOAD_HEAT) -> dict:
+def _quiet_share(routes: list[dict], busy_cells=_LOAD_HEAT) -> float:
+    """Aandeel routepunten buiten drukke TVL-cellen, of nul zonder drukdata."""
+    if busy_cells is _LOAD_HEAT:
+        from . import heat
+
+        busy_cells = heat.vlaanderen_data()["druk"]
+    if not busy_cells:
+        return 0.0
+    points = []
+    for routed in routes:
+        coords = [(point[0], point[1]) for point in routed.get("coords", [])]
+        if coords:
+            points.extend(geo.resample(coords, 60.0))
+    if not points:
+        return 0.0
+    busy = sum(1 for point in points if geo.cell(*point) in busy_cells)
+    return 1.0 - busy / len(points)
+
+
+def _candidate_surface_components(
+    routes: list[dict],
+    popular_cells=_LOAD_HEAT,
+    busy_cells=_LOAD_HEAT,
+) -> dict:
     from . import analysis
 
     return {
         "offroad": _route_share(routes, "road_class", analysis.OFFROAD_CLASSES),
         "populair": _popular_share(routes, popular_cells),
+        "autovrij": _quiet_share(routes, busy_cells),
         "kassei": _route_share(routes, "surface", analysis.COBBLE_SURFACES),
     }
 
@@ -831,6 +862,7 @@ def probe(
             strict=preferences["strict"],
             avoid_cobbles=preferences["avoid_cobbles"],
             avoid_concrete=preferences["avoid_concrete"],
+            avoid_busy=preferences["avoid_busy"],
             profile=preferences["profile"],
             details=True,
         )
@@ -885,6 +917,7 @@ def probe(
         effective_profile == "trail"
         and heat.popular_cells("trail", fallback=False) is not None
     )
+    busy_data_available = bool(heat.vlaanderen_data()["druk"])
     try:
         from . import geocode
 
@@ -905,6 +938,8 @@ def probe(
             "klimmen_binnen_5km": len(nearby_climbs),
             "heat_dekking_pct": quality.get("populair_pct"),
             "wandelpopulariteit_beschikbaar": walking_popularity_available,
+            "autovrij_pct": quality.get("autovrij_pct"),
+            "druk_data_beschikbaar": busy_data_available,
             "plaatskernen": place_cores,
             "pois_langs_route": dict(sorted(poi_counts.items())),
             "knooppunten_langs_route": len(route_features["knopen"]),
@@ -1004,6 +1039,7 @@ def _score_components(candidate: dict, budget_km: float) -> dict:
         "hoogtemeters": min(1.0, max(0.0, gain / max(extra_km, 0.3) / 20.0)),
         "offroad": min(1.0, max(0.0, surface.get("offroad", 0.0))),
         "populair": min(1.0, max(0.0, surface.get("populair", 0.0))),
+        "autovrij": min(1.0, max(0.0, surface.get("autovrij", 0.0))),
         "kort": min(1.0, max(0.0, 1.0 - extra_km / max(budget_km, 0.001))),
         "kassei": min(1.0, max(0.0, surface.get("kassei", 0.0))),
     }

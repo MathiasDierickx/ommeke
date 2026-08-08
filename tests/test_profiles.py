@@ -202,9 +202,11 @@ def test_preference_profile_load_default_and_list_only_saved_documents():
         "hoogtemeters": 1.0,
         "offroad": 0.0,
         "populair": 0.0,
+        "autovrij": 0.0,
         "kort": 0.0,
     }
     assert default["voorkeuren"]["kasseien"] is None
+    assert default["voorkeuren"]["autovrij"] is None
     assert before == []
     assert [profile["naam"] for profile in after] == ["toerist"]
 
@@ -262,12 +264,18 @@ def test_preference_validation_and_routing_mapping_keep_graag_scoring_only():
     profile = profiles.default_document("trailfan")
     profile["activiteit"] = "trail"
     profile["voorkeuren"].update(
-        {"kasseien": "graag", "beton": "vermijd", "steenwegen": "vermijd"}
+        {
+            "kasseien": "graag",
+            "beton": "vermijd",
+            "steenwegen": "vermijd",
+            "autovrij": "belangrijk",
+        }
     )
 
     assert profiles.routing_prefs(profile) == {
         "avoid_cobbles": False,
         "avoid_concrete": True,
+        "avoid_busy": True,
         "strict": True,
         "profile": "trail",
     }
@@ -288,7 +296,10 @@ def test_draft_profile_preferences_apply_and_explicit_true_flags_override():
                 "trailfan",
                 {
                     "activiteit": "trail",
-                    "voorkeuren": {"beton": "vermijd"},
+                    "voorkeuren": {
+                        "beton": "vermijd",
+                        "autovrij": "belangrijk",
+                    },
                 },
                 bron="test",
             )
@@ -309,6 +320,7 @@ def test_draft_profile_preferences_apply_and_explicit_true_flags_override():
         "strict": True,
         "avoid_cobbles": False,
         "avoid_concrete": True,
+        "avoid_busy": True,
     }
 
 
@@ -317,6 +329,7 @@ def test_cli_weight_parser_accepts_ratios_and_rejects_bad_input():
         "hoogtemeters": 0.5,
         "offroad": 1.5,
         "populair": 0.0,
+        "autovrij": 0.0,
         "kort": 0.0,
     }
     for value in ("hoogtemeters", "onbekend=1", "offroad=veel"):

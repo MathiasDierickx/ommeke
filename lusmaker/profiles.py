@@ -11,8 +11,9 @@ from datetime import datetime
 from . import aws_state, config
 
 
-WEIGHT_KEYS = ("hoogtemeters", "offroad", "populair", "kort")
+WEIGHT_KEYS = ("hoogtemeters", "offroad", "populair", "autovrij", "kort")
 PREFERENCE_VALUES = {None, "vermijd", "ok", "graag"}
+AUTOVRIJ_VALUES = {None, "belangrijk", "ok"}
 _NAME_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
 
@@ -35,12 +36,14 @@ def default_document(name: str = "standaard") -> dict:
             "hoogtemeters": 1.0,
             "offroad": 0.0,
             "populair": 0.0,
+            "autovrij": 0.0,
             "kort": 0.0,
         },
         "voorkeuren": {
             "kasseien": None,
             "beton": None,
             "steenwegen": None,
+            "autovrij": None,
             "vermijd_plaatsen": [],
         },
         "historiek": [],
@@ -76,6 +79,13 @@ def normalize_weights(weights: dict) -> dict:
 def _validate(profile: dict, expected_name: str | None = None) -> dict:
     if not isinstance(profile, dict):
         raise ProfileError("profiel moet een object zijn")
+    # T16 voegt velden toe aan bestaande profielbestanden. Vul uitsluitend
+    # deze nieuwe defaults aan; de overige exacte-schema-validatie blijft.
+    profile = copy.deepcopy(profile)
+    if isinstance(profile.get("gewichten"), dict):
+        profile["gewichten"].setdefault("autovrij", 0.0)
+    if isinstance(profile.get("voorkeuren"), dict):
+        profile["voorkeuren"].setdefault("autovrij", None)
     required = {"naam", "activiteit", "gewichten", "voorkeuren", "historiek"}
     if set(profile) != required:
         raise ProfileError("profiel bevat ontbrekende of onbekende velden")
@@ -88,7 +98,7 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
     normalized = normalize_weights(profile["gewichten"])
     preferences = profile["voorkeuren"]
     if not isinstance(preferences, dict) or set(preferences) != {
-        "kasseien", "beton", "steenwegen", "vermijd_plaatsen"
+        "kasseien", "beton", "steenwegen", "autovrij", "vermijd_plaatsen"
     }:
         raise ProfileError("voorkeuren bevatten ontbrekende of onbekende velden")
     for key in ("kasseien", "beton", "steenwegen"):
@@ -96,6 +106,8 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
             raise ProfileError(f"{key} moet null, 'vermijd', 'ok' of 'graag' zijn")
     if preferences["steenwegen"] == "graag":
         raise ProfileError("steenwegen ondersteunt 'graag' niet")
+    if preferences["autovrij"] not in AUTOVRIJ_VALUES:
+        raise ProfileError("autovrij moet null, 'belangrijk' of 'ok' zijn")
     places = preferences["vermijd_plaatsen"]
     if not isinstance(places, list) or not all(
         isinstance(place, str) and place.strip() for place in places
@@ -216,6 +228,7 @@ def routing_prefs(profile: dict) -> dict:
     return {
         "avoid_cobbles": preferences["kasseien"] == "vermijd",
         "avoid_concrete": preferences["beton"] == "vermijd",
+        "avoid_busy": preferences["autovrij"] == "belangrijk",
         "strict": preferences["steenwegen"] == "vermijd",
         "profile": "trail" if checked["activiteit"] == "trail" else config.GH_PROFILE,
     }

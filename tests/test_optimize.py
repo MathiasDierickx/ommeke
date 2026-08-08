@@ -113,6 +113,23 @@ def test_weighted_mix_normalizes_and_can_choose_differently():
     assert mixed["score_componenten"]["kort"] == 0.6
 
 
+def test_autovrij_component_measures_share_outside_busy_cells():
+    coords = [(50.0, 4.0, 0), (50.0, 4.001, 0), (50.0, 4.002, 0)]
+    routes = [{"coords": coords, "distance_m": 150, "details": {}}]
+    sampled = geo.resample([(point[0], point[1]) for point in coords], 60.0)
+    busy_cells = {geo.cell(*sampled[0])}
+
+    available = draft._candidate_surface_components(
+        routes, popular_cells=set(), busy_cells=busy_cells
+    )
+    unavailable = draft._candidate_surface_components(
+        routes, popular_cells=set(), busy_cells=set()
+    )
+
+    assert 0 < available["autovrij"] < 1
+    assert unavailable["autovrij"] == 0
+
+
 def test_weighted_objective_rejects_negative_unknown_and_zero_sum():
     invalid = (
         {"hoogtemeters": -1},
