@@ -14,6 +14,7 @@ GraphProfile = Literal["quiet", "trail"]
 Objective = Literal["hm", "hm-per-km", "offroad", "toeren"]
 Preference = Literal["vermijd", "ok", "graag"] | None
 MainRoadPreference = Literal["vermijd", "ok"] | None
+QuietPreference = Literal["belangrijk", "ok"] | None
 
 NonEmptyString = Annotated[
     str,
@@ -76,6 +77,7 @@ class WeightPatch(TypedDict, total=False):
     hoogtemeters: NonNegativeWeight
     offroad: NonNegativeWeight
     populair: NonNegativeWeight
+    autovrij: NonNegativeWeight
     kort: NonNegativeWeight
 
 
@@ -85,6 +87,7 @@ class PreferencePatch(TypedDict, total=False):
     kasseien: Preference
     beton: Preference
     steenwegen: MainRoadPreference
+    autovrij: QuietPreference
     vermijd_plaatsen: list[str]
 
 

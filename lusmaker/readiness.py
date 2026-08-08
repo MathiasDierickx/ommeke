@@ -16,6 +16,7 @@ def _default_weights(weights: dict) -> bool:
         weights.get("hoogtemeters") == 1.0
         and weights.get("offroad") == 0.0
         and weights.get("populair") == 0.0
+        and weights.get("autovrij", 0.0) == 0.0
         and weights.get("kort") == 0.0
     )
 
@@ -196,6 +197,34 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             }
         )
 
+    autovrij_pct = _metric(
+        probe, "autovrij_pct", "autovrij_pct", default=None
+    )
+    if (
+        preferences["autovrij"] is None
+        and _metric(probe, "druk_data_beschikbaar", default=False)
+        and autovrij_pct is not None
+        and autovrij_pct < 40
+    ):
+        questions.append(
+            {
+                "id": "autovrij",
+                "prioriteit": 3,
+                "reden": (
+                    f"de verkenningsroute is {autovrij_pct:g}% autovrij; "
+                    "autovrije voorkeur onbekend"
+                ),
+                "vraag": (
+                    "Wil je autovrije/verkeersarme wegen prioriteren? "
+                    f"De verkenning zit op {autovrij_pct:g}% autovrij."
+                ),
+                "opties": {
+                    value: {"patch": {"voorkeuren": {"autovrij": value}}}
+                    for value in ("belangrijk", "ok")
+                },
+            }
+        )
+
     if _default_weights(profiel["gewichten"]):
         heat_pct = _metric(
             probe, "heat_dekking_pct", "populair_pct", default=None
@@ -251,6 +280,7 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             "kasseien": "kasseivraag",
             "beton": "betonvraag",
             "steenwegen": "steenwegvraag",
+            "autovrij": "autovrijvraag",
             "gewichten": "gewichten",
             "vermijd_plaatsen": "plaatsvraag",
         }

@@ -233,6 +233,22 @@ def test_preference_profile_patch_records_history_and_normalizes_weights():
     assert stored["historiek"][0]["timestamp"]
 
 
+def test_loading_pre_t16_profile_adds_autovrij_defaults():
+    legacy = profiles.default_document("oud")
+    legacy["gewichten"].pop("autovrij")
+    legacy["voorkeuren"].pop("autovrij")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            path = config.home_path() / "profiles" / "oud.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(legacy), encoding="utf-8")
+            loaded = profiles.load("oud")
+
+    assert loaded["gewichten"]["autovrij"] == 0.0
+    assert loaded["voorkeuren"]["autovrij"] is None
+
+
 def test_profile_patch_invalidates_computed_route_and_probe_on_linked_drafts():
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):

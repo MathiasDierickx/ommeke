@@ -30,6 +30,8 @@ def _draft(
     offroad=0,
     heat=None,
     walking_popularity=False,
+    autovrij=None,
+    busy_data=False,
     places=None,
 ):
     return {
@@ -53,6 +55,8 @@ def _draft(
                 "offroad_beschikbaar_pct": offroad,
                 "heat_dekking_pct": heat,
                 "wandelpopulariteit_beschikbaar": walking_popularity,
+                "autovrij_pct": autovrij,
+                "druk_data_beschikbaar": busy_data,
                 "plaatskernen": places or [],
             },
         },
@@ -102,6 +106,33 @@ def test_main_road_rule_uses_crossings_or_distance_threshold():
     ) == []
     profile["voorkeuren"]["steenwegen"] = "ok"
     assert _question_ids(readiness.assess(_draft(crossings=20), profile, {})) == []
+
+
+def test_autovrij_rule_requires_busy_data_low_share_and_unknown_preference():
+    profile = profiles.default_document()
+
+    result = readiness.assess(
+        _draft(autovrij=39.9, busy_data=True), profile, {}
+    )
+    question = result["vragen"][0]
+    assert question["id"] == "autovrij"
+    assert "39.9% autovrij" in question["vraag"]
+    assert question["opties"] == {
+        "belangrijk": {
+            "patch": {"voorkeuren": {"autovrij": "belangrijk"}}
+        },
+        "ok": {"patch": {"voorkeuren": {"autovrij": "ok"}}},
+    }
+    assert _question_ids(
+        readiness.assess(_draft(autovrij=40, busy_data=True), profile, {})
+    ) == []
+    assert _question_ids(
+        readiness.assess(_draft(autovrij=20, busy_data=False), profile, {})
+    ) == []
+    profile["voorkeuren"]["autovrij"] = "ok"
+    assert _question_ids(
+        readiness.assess(_draft(autovrij=20, busy_data=True), profile, {})
+    ) == []
 
 
 def test_weight_rule_requires_default_weights_and_material_route_signal():
@@ -213,6 +244,7 @@ def test_all_profile_option_patches_round_trip_through_apply_patch():
         _draft(cobble=500),
         _draft(concrete=1200),
         _draft(crossings=10),
+        _draft(autovrij=20, busy_data=True),
         _draft(offroad=30, heat=40),
     ]
     patches = []

@@ -299,6 +299,7 @@ def _route_request(
     activiteit: str,
     kasseien: bool | None,
     beton_vermijden: bool | None,
+    autovrij: bool | None,
     strict: bool | None,
     request_id: str | None,
     input_signature: dict,
@@ -311,6 +312,8 @@ def _route_request(
         explicit_preferences["kasseien"] = "ok" if kasseien else "vermijd"
     if beton_vermijden is not None:
         explicit_preferences["beton"] = "vermijd" if beton_vermijden else "ok"
+    if autovrij is not None:
+        explicit_preferences["autovrij"] = "belangrijk" if autovrij else "ok"
     if strict is not None:
         explicit_preferences["steenwegen"] = "vermijd" if strict else "ok"
     return {
@@ -444,6 +447,7 @@ def plan_route(
     vermijd_plaatsen: list[str] = [],
     kasseien: bool | None = False,
     beton_vermijden: bool | None = True,
+    autovrij: bool | None = None,
     strict: bool | None = False,
     naam: str | None = None,
     activiteit: str = "fietsen",
@@ -503,6 +507,7 @@ def plan_route(
         "activiteit": activiteit,
         "kasseien": kasseien,
         "beton_vermijden": beton_vermijden,
+        "autovrij": autovrij,
         "strict": strict,
     }
     request = _route_request(
@@ -515,6 +520,7 @@ def plan_route(
         activiteit=activiteit,
         kasseien=kasseien,
         beton_vermijden=beton_vermijden,
+        autovrij=autovrij,
         strict=strict,
         request_id=request_id,
         input_signature=input_signature,
@@ -522,7 +528,21 @@ def plan_route(
     existing = find_request_fn(request_id) if request_id is not None else None
     if existing is not None:
         stored_request = existing.get("route_request") or {}
-        if stored_request.get("input_signature") != input_signature:
+        stored_signature = stored_request.get("input_signature")
+        comparable_signature = input_signature
+        if (
+            isinstance(stored_signature, dict)
+            and "autovrij" not in stored_signature
+            and input_signature["autovrij"] is None
+        ):
+            # Bestaande T15-workflows blijven idempotent hervatbaar zolang de
+            # nieuwe voorkeur niet expliciet werd opgegeven.
+            comparable_signature = {
+                key: value
+                for key, value in input_signature.items()
+                if key != "autovrij"
+            }
+        if stored_signature != comparable_signature:
             raise IntentError(
                 f"request-id '{request_id}' is al gebruikt voor een andere routewens"
             )
@@ -564,6 +584,7 @@ def plan_route(
         strict=bool(strict),
         avoid_cobbles=kasseien is False,
         avoid_concrete=beton_vermijden is True,
+        avoid_busy=autovrij is True,
         region=region,
         profile=ACTIVITY_PROFILES[activiteit],
     )

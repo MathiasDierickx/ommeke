@@ -150,12 +150,14 @@ def test_plan_route_injects_route_and_export_functions():
         "loop": True,
         "climbs": [],
         "avoid_cobbles": False,
+        "avoid_busy": False,
         "computed": None,
     }
     calls = []
 
     def create_fn(**kwargs):
         state["avoid_cobbles"] = kwargs["avoid_cobbles"]
+        state["avoid_busy"] = kwargs["avoid_busy"]
         state["profile"] = kwargs["profile"]
         return {"id": state["id"]}
 
@@ -175,6 +177,7 @@ def test_plan_route_injects_route_and_export_functions():
             "Wetteren",
             doel="kort",
             activiteit="trail",
+            autovrij=True,
             via_klimmen=["Diepestraat"],
             create_fn=create_fn,
             load_fn=lambda _draft_id: state,
@@ -189,6 +192,7 @@ def test_plan_route_injects_route_and_export_functions():
 
     assert calls == ["route", ".gpx", ".html"]
     assert state["avoid_cobbles"] is True
+    assert state["avoid_busy"] is True
     assert state["profile"] == "trail"
     assert result["draft"] == "abc123"
 
@@ -368,6 +372,7 @@ def test_plan_route_stops_at_needs_input_before_optimization_and_export():
                 "kasseien": None,
                 "beton": None,
                 "steenwegen": None,
+                "autovrij": None,
                 "vermijd_plaatsen": [],
             },
         },

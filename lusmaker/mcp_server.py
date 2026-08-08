@@ -220,6 +220,7 @@ def new_draft(
     strict: bool = False,
     vermijd_kasseien: bool = False,
     vermijd_beton: bool = False,
+    autovrij: bool = False,
     region: NonEmptyString | None = None,
     profiel_naam: NonEmptyString | None = None,
 ) -> dict[str, Any]:
@@ -233,6 +234,7 @@ def new_draft(
         strict=strict,
         avoid_cobbles=vermijd_kasseien,
         avoid_concrete=vermijd_beton,
+        avoid_busy=autovrij,
         region=region,
         profile_doc=profiel_naam,
     )
@@ -378,6 +380,7 @@ def plan_route(
     vermijd_plaatsen: list[str] = [],
     kasseien: bool | None = None,
     beton_vermijden: bool | None = None,
+    autovrij: bool | None = None,
     strict: bool | None = None,
     naam: NonEmptyString | None = None,
     activiteit: Activity = "fietsen",
@@ -397,6 +400,7 @@ def plan_route(
         vermijd_plaatsen=vermijd_plaatsen,
         kasseien=kasseien,
         beton_vermijden=beton_vermijden,
+        autovrij=autovrij,
         strict=strict,
         naam=naam,
         activiteit=activiteit,

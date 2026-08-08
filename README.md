@@ -70,7 +70,7 @@ Voorkeuren kunnen regio-onafhankelijk in een benoemd profiel worden bewaard:
 ```bash
 lus profile set gravel \
   --gewichten "hoogtemeters=0.4,offroad=0.5,populair=0.1" \
-  --kasseien graag --beton ok --steenwegen vermijd
+  --kasseien graag --beton ok --steenwegen vermijd --autovrij belangrijk
 lus profile show gravel
 lus draft new --start "Wetteren" --profiel-naam gravel
 ```
@@ -256,10 +256,11 @@ OSM-GPS-traces en drie gecureerde datasets van
 - `lf_routes` — LF- en icoonroutes.
 
 Dezelfde Vlaanderen-fetch cachet daarnaast fiets- en wandelwegdek,
-verkeersintensiteit, recreatieve POI's en fiets-/wandelknooppunten. Die extra
-lagen worden niet als GraphHopper-areas ingebakken: ze vullen ontbrekende
-kassei- en onverhardgegevens aan, berekenen het autovrije aandeel en verrijken
-preview en terreinprobe met voorzieningen en knooppuntlabels.
+verkeersintensiteit, recreatieve POI's en fiets-/wandelknooppunten. Kasseicellen
+en drukke cellen worden als `kassei_tvl` en `druk_tvl` ingebakken, zodat
+`vermijd-kasseien` ook ontbrekende OSM-tags opvangt en `autovrij` verkeersarme
+wegen kan prioriteren. De overige data vullen kwaliteitsmetrieken aan en
+verrijken preview en terreinprobe met voorzieningen en knooppuntlabels.
 
 De Toerisme Vlaanderen-data vallen onder de Modellicentie Gratis Hergebruik;
 de bron en datasetnamen blijven hierboven vermeld voor naamsvermelding en

@@ -198,6 +198,7 @@ async def inspect_contract():
     assert plan.input_schema["properties"]["tolerance_km"]["minimum"] == 0
     assert plan.input_schema["properties"]["profiel_naam"]["default"] == "standaard"
     assert plan.input_schema["properties"]["kasseien"]["default"] is None
+    assert plan.input_schema["properties"]["autovrij"]["default"] is None
     request_id = plan.input_schema["properties"]["request_id"]["anyOf"][0]
     assert request_id["maxLength"] == 128
     adjust = tools["adjust_route"]
@@ -219,6 +220,9 @@ async def inspect_contract():
     assert preference_schema["additionalProperties"] is False
     assert preference_schema["properties"]["kasseien"]["anyOf"][0]["enum"] == [
         "vermijd", "ok", "graag"
+    ]
+    assert preference_schema["properties"]["autovrij"]["anyOf"][0]["enum"] == [
+        "belangrijk", "ok"
     ]
 
     drafts = tools["list_drafts"]
@@ -294,13 +298,14 @@ def test_draft_tools_use_isolated_home_and_validate_climbs():
 from lusmaker import draft, mcp_server
 
 created = mcp_server.new_draft(
-    start="50.8,3.7", name="mcp-test", vermijd_kasseien=True
+    start="50.8,3.7", name="mcp-test", vermijd_kasseien=True, autovrij=True
 )
 shown = mcp_server.get_draft(created["id"])
 assert shown["id"] == created["id"]
 assert shown["name"] == "mcp-test"
 assert shown["profile"] == "quiet"
 assert shown["avoid_cobbles"] is True
+assert shown["avoid_busy"] is True
 assert shown["revision"] == 1
 
 added = mcp_server.add_climb(

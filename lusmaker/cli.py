@@ -114,6 +114,7 @@ def cmd_profile_set(args):
             "kasseien": args.kasseien,
             "beton": args.beton,
             "steenwegen": args.steenwegen,
+            "autovrij": args.autovrij,
         }.items()
         if value is not None
     }
@@ -223,7 +224,8 @@ def cmd_draft_new(args):
     return draft.create(
         start=args.start, name=args.name, loop=not args.no_loop, end=args.end,
         strict=args.strict, avoid_cobbles=args.vermijd_kasseien,
-        avoid_concrete=args.vermijd_beton, region=args.region,
+        avoid_concrete=args.vermijd_beton, avoid_busy=args.autovrij,
+        region=args.region,
         profile=args.profiel,
         profile_doc=args.profiel_naam,
     )
@@ -397,6 +399,7 @@ def cmd_plan_route(args):
         vermijd_plaatsen=args.vermijd_plaats,
         kasseien=args.kasseien,
         beton_vermijden=not args.beton_toestaan,
+        autovrij=args.autovrij,
         strict=args.strict,
         naam=args.naam,
         activiteit=args.activiteit,
@@ -464,6 +467,7 @@ def main(argv=None):
     s.add_argument("--kasseien", choices=("vermijd", "ok", "graag"))
     s.add_argument("--beton", choices=("vermijd", "ok", "graag"))
     s.add_argument("--steenwegen", choices=("vermijd", "ok"))
+    s.add_argument("--autovrij", choices=("belangrijk", "ok"))
     s.add_argument("--vermijd-plaats", action="append")
     s.set_defaults(func=cmd_profile_set)
 
@@ -534,6 +538,12 @@ def main(argv=None):
         help="vermijd betonbanen niet extra",
     )
     s.add_argument("--strict", action="store_true")
+    s.add_argument(
+        "--autovrij",
+        action="store_true",
+        default=None,
+        help="prioriteer autovrije en verkeersarme wegen",
+    )
     s.add_argument(
         "--geen-opvulling",
         action="store_true",
@@ -627,6 +637,11 @@ def main(argv=None):
     s.add_argument("--strict", action="store_true", help="steenwegen maximaal vermijden")
     s.add_argument("--vermijd-kasseien", action="store_true", help="zachte straf op kasseistroken")
     s.add_argument("--vermijd-beton", action="store_true", help="zachte straf op betonbanen")
+    s.add_argument(
+        "--autovrij",
+        action="store_true",
+        help="zachte voorkeur voor autovrije en verkeersarme wegen",
+    )
     s.set_defaults(func=cmd_draft_new)
     s = dsub.add_parser("list")
     _region_arg(s)
