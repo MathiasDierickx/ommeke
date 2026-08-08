@@ -395,7 +395,7 @@ resource "aws_lambda_function_url" "app" {
   cors {
     allow_credentials = false
     allow_origins     = local.cors_origins
-    allow_methods     = ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+    allow_methods     = ["GET", "POST", "PATCH", "DELETE"]
     allow_headers = [
       "accept",
       "authorization",

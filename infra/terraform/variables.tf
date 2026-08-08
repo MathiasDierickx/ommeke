@@ -45,13 +45,13 @@ variable "region_slug" {
 }
 
 variable "lambda_memory_mb" {
-  description = "Lambda-geheugen; GraphHopper heeft veel RAM nodig."
+  description = "Lambda-geheugen; 3008 MB werkt ook in accounts met de lage startquota."
   type        = number
-  default     = 10240
+  default     = 3008
 
   validation {
-    condition     = var.lambda_memory_mb >= 4096 && var.lambda_memory_mb <= 10240
-    error_message = "lambda_memory_mb moet tussen 4096 en 10240 liggen."
+    condition     = var.lambda_memory_mb >= 1769 && var.lambda_memory_mb <= 10240
+    error_message = "lambda_memory_mb moet tussen 1769 en 10240 liggen."
   }
 }
 
@@ -67,20 +67,21 @@ variable "lambda_ephemeral_storage_mb" {
 }
 
 variable "max_concurrency" {
-  description = "Kosten- en capaciteitscap; reserveert geen provisioned instances."
+  description = "Optionele reserved-concurrencycap; null gebruikt de accountquota."
   type        = number
-  default     = 1
+  default     = null
+  nullable    = true
 
   validation {
-    condition     = var.max_concurrency >= 1 && var.max_concurrency <= 10
-    error_message = "max_concurrency moet tussen 1 en 10 liggen."
+    condition     = var.max_concurrency == null ? true : var.max_concurrency >= 1 && var.max_concurrency <= 10
+    error_message = "max_concurrency moet null of een getal tussen 1 en 10 zijn."
   }
 }
 
 variable "java_opts" {
   description = "JVM heapinstellingen binnen het Lambda-geheugen."
   type        = string
-  default     = "-Xms512m -Xmx7g"
+  default     = "-Xms256m -Xmx2g"
 }
 
 variable "oauth_callback_urls" {

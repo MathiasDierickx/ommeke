@@ -29,8 +29,8 @@ ChatGPT / Claude / MCP-client ──────┤
 Terraform maakt aan:
 
 - één ECR-repository met immutable images en lifecycle-retentie;
-- één Lambda zonder provisioned concurrency, maximaal vijftien minuten per
-  request en standaard maximaal één gelijktijdige execution;
+- één Lambda zonder provisioned concurrency en maximaal vijftien minuten per
+  request;
 - een Function URL met response streaming;
 - een Cognito user pool met self-service registratie, optionele TOTP-MFA,
   managed login, een confidential MCP-client en publieke webclient met PKCE;
@@ -49,8 +49,11 @@ Function URL vermijdt de API Gateway-timeout voor lange route- en modelcalls.
 
 ## Wat “scale to zero” hier betekent
 
-Als niemand Lusmaker gebruikt, draait er geen compute. `max_concurrency` is een
-kosten- en capaciteitsplafond; het warmt of reserveert geen Lambda-instances.
+Als niemand Lusmaker gebruikt, draait er geen compute. `max_concurrency` kan
+als kosten- en capaciteitsplafond worden ingesteld; het warmt of reserveert
+geen Lambda-instances. AWS-accounts met de minimale concurrencyquota van 10
+kunnen geen reserved concurrency instellen, omdat AWS minstens 10 executions
+accountbreed ongereserveerd houdt. In dat geval blijft de accountquota de cap.
 Een cold start kopieert de read-only GraphHopper-cache naar Lambda `/tmp`, start
 GraphHopper en opent daarna pas de MCP-server. `AWS_LWA_ASYNC_INIT` laat die
 opstart binnen de Lambda-timeout doorlopen.
@@ -75,6 +78,10 @@ uncompressed, maximaal 10 GB `/tmp` en een Lambda-timeout van 15 minuten. Maak
 een kleinere regiopack wanneer graph plus runtime daar niet binnen passen. Zie
 de [AWS Lambda quota's](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
 en de [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter).
+De stack start bewust met 3.008 MB geheugen en een 2 GB Java-heap, zodat ook
+accounts met de lage initiële memoryquota kunnen deployen. Verhoog
+`lambda_memory_mb` en `java_opts` samen als AWS een hogere quota heeft
+goedgekeurd.
 
 ## Vereisten
 

@@ -12,6 +12,11 @@ web_callback_urls = [
   "http://localhost:3000/"
 ]
 
+# Verhoog na een goedgekeurde AWS Lambda memory-quota indien gewenst.
+# lambda_memory_mb = 10240
+# java_opts        = "-Xms512m -Xmx7g"
+# max_concurrency  = 1
+
 # billing_email       = "aws-kosten@example.com"
 # monthly_budget_usd  = 10
 # force_destroy_data  = false

@@ -4,9 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - .github/workflows/deploy-aws.yml
       - deploy/aws/**
-      - infra/**
+      - infra/terraform/**
       - lusmaker/**
       - pyproject.toml
   workflow_dispatch:
