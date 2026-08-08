@@ -11,3 +11,9 @@ docker-compose.regions.yml
 *.tfvars
 *.tfplan
 .terraform.tfstate.lock.info
+web/node_modules/
+web/.next/
+web/out/
+web/*.tsbuildinfo
+web/.env*
+!web/.env.example
