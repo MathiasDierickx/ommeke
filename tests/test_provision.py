@@ -187,3 +187,27 @@ def test_foreground_provision_uses_injected_build_exec_and_health():
                 "graphhopper-zeeland",
             ]
         ]
+
+
+def test_graphhopper_import_timeout_is_bounded_and_configurable():
+    previous = os.environ.get("LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS")
+    try:
+        os.environ.pop("LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS", None)
+        assert provision._gh_import_timeout() == 20 * 60
+
+        os.environ["LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS"] = "3600"
+        assert provision._gh_import_timeout() == 3600
+
+        for invalid in ("geen-getal", "0", "7201"):
+            os.environ["LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS"] = invalid
+            try:
+                provision._gh_import_timeout()
+            except RuntimeError as exc:
+                assert "LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS" in str(exc)
+            else:
+                raise AssertionError(f"ongeldige timeout aanvaard: {invalid}")
+    finally:
+        if previous is None:
+            os.environ.pop("LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS", None)
+        else:
+            os.environ["LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS"] = previous

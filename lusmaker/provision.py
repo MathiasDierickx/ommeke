@@ -22,6 +22,8 @@ from .discover import geofabrik_path_from_url
 
 
 PHASES = ("downloaden", "bouwen", "gh-import", "klaar")
+DEFAULT_GH_IMPORT_TIMEOUT_SECONDS = 20 * 60
+MAX_GH_IMPORT_TIMEOUT_SECONDS = 2 * 60 * 60
 
 
 def provision_path(slug: str, *, home: Path | None = None) -> Path:
@@ -279,15 +281,33 @@ def _default_build(region: config.Region, pbf_url: str) -> dict:
     }
 
 
+def _gh_import_timeout() -> float:
+    raw = os.environ.get("LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS")
+    if raw is None:
+        return float(DEFAULT_GH_IMPORT_TIMEOUT_SECONDS)
+    try:
+        timeout = float(raw)
+    except ValueError as exc:
+        raise RuntimeError(
+            "LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS moet een getal zijn"
+        ) from exc
+    if not 1 <= timeout <= MAX_GH_IMPORT_TIMEOUT_SECONDS:
+        raise RuntimeError(
+            "LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS moet tussen 1 en 7200 liggen"
+        )
+    return timeout
+
+
 def _wait_for_health(
     url: str,
     *,
     health_check: Callable[[str], bool] | None = None,
-    timeout: float = 20 * 60,
+    timeout: float | None = None,
     interval: float = 5,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> None:
+    timeout = _gh_import_timeout() if timeout is None else timeout
     if health_check is None:
         def health_check(candidate: str) -> bool:
             try:
@@ -301,7 +321,10 @@ def _wait_for_health(
         if health_check(url):
             return
         sleep(interval)
-    raise RuntimeError("GraphHopper werd niet gezond binnen 20 minuten")
+    minutes = timeout / 60
+    raise RuntimeError(
+        f"GraphHopper werd niet gezond binnen {minutes:g} minuten"
+    )
 
 
 def _upload_pack(

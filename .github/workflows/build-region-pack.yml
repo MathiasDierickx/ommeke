@@ -38,6 +38,7 @@ jobs:
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       LUSMAKER_HOME: /tmp/lusmaker
       LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
+      LUSMAKER_GH_IMPORT_TIMEOUT_SECONDS: "3600"
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -78,6 +79,12 @@ jobs:
             --key "region-packs/${{ inputs.slug }}.tar.gz"
           echo "### Regiopack" >> "$GITHUB_STEP_SUMMARY"
           echo "\`s3://$TF_STATE_BUCKET/region-packs/${{ inputs.slug }}.tar.gz\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Toon GraphHopper-log bij fout
+        if: failure()
+        run: |
+          docker compose -f docker-compose.regions.yml logs --no-color --tail 400 \
+            "graphhopper-${{ inputs.slug }}" || true
 
       - name: Stop tijdelijke GraphHopper
         if: always()
