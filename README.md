@@ -1,7 +1,7 @@
 # Lusmaker
 
 Bouw fiets- en trail-GPX-**lussen** stap voor stap, aangestuurd door een LLM
-(Claude/OpenAI) via de `lus`-CLI. Denk:
+(Claude/ChatGPT) via MCP of door scripts via de `lus`-CLI. Denk:
 
 > "Zoek een route van Wetteren naar de Berendries, rustige wegen, klimmen die
 > weinig omweg vragen erbij, en een lus — geen twee keer dezelfde baan."
@@ -12,13 +12,11 @@ erbij voor ~9 km extra?") die de LLM aan de gebruiker terugspeelt.
 ## Architectuur
 
 ```
-LLM (Claude Code, ...) ──bash──> lus CLI (JSON in/uit)
-                                   ├── GraphHopper (Docker, lokaal) — routing
-                                   │     profielen "quiet" en "trail"
-                                   │     + per-request custom model
-                                   ├── klim-database — OSM-namen + DEM-klimsegmentdetectie
-                                   ├── gazetteer — lokale geocoder (OSM plaatsen/straten)
-                                   └── drafts — stateful route-opbouw + GPX-export
+Claude / ChatGPT ──MCP stdio of Streamable HTTP──> Lusmaker-domeinlaag
+scripts          ──CLI met JSON─────────────────>     ├── GraphHopper-routing
+                                                       ├── klim- en geodata
+                                                       ├── stateful drafts
+                                                       └── GPX + HTML-resources
 ```
 
 - **Routing**: self-hosted [GraphHopper](https://github.com/graphhopper/graphhopper)
@@ -172,77 +170,79 @@ en draaien nooit mee in `tests.run`.
 
 ## MCP
 
-Dezelfde routeflow is beschikbaar als lokale MCP-server via stdio. Vervang
-`/absoluut/pad/naar/lusmaker` hieronder door het absolute pad naar deze
-repository.
-
-Voor Claude Code:
-
-```bash
-claude mcp add lusmaker -- /absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp
-```
-
-Voor Claude Desktop, voeg dit toe aan de MCP-configuratie:
-
-```json
-{
-  "mcpServers": {
-    "lusmaker": {
-      "command": "/absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp"
-    }
-  }
-}
-```
-
 De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.
-GraphHopper moet draaien wanneer MCP-tools routeren, suggesties berekenen of
-optimaliseren; controleer dit met `lus status`.
+GraphHopper moet beschikbaar zijn wanneer een tool routeert; controleer dat
+met `lus status`. Gebruik voor een normale chat de lite-server met tien
+composiet-tools; de volledige server biedt daarnaast de fijnmazige drafttools.
 
-`new_draft` accepteert `profiel="quiet"|"trail"` en `profiel_naam`;
-`plan_route` accepteert `activiteit="fietsen"|"trail"` en `profiel_naam`.
-Beide gebruiken standaard het bestaande fietsprofiel. `get_profile` en
-`update_profile` zijn ook in lite beschikbaar; `list_profiles` alleen in
-volledige MCP-modus. `route_readiness` bouwt of hergebruikt een
-verkenningsprobe en begeleidt de voorkeurvragen vóór optimize.
+### Claude via stdio
 
-Voor het normale gesprek volstaan meestal twee composiet-tools:
-`plan_route(...)` maakt en routeert een lus en schrijft meteen
-`<LUSMAKER_HOME>/exports/<draft>/route.gpx` plus `preview.html`;
-`adjust_route(...)` bundelt latere toevoegingen, verwijderingen,
-vermijdplaatsen en een nieuw afstandsbudget in één call. Beide antwoorden zijn
-compact en bevatten een direct bruikbare Nederlandse samenvattingszin.
-
-Start voor hosted gebruik de lite-modus om alleen de tien token-zuinige tools
-aan te bieden:
+Vervang het pad hieronder door het absolute repositorypad:
 
 ```bash
-.venv/bin/lus-mcp --lite
+claude mcp add lusmaker -- /absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp --lite
 ```
 
-In een MCP-config voeg je `"--lite"` als argument toe:
+Claude Desktop gebruikt dezelfde executable en `args: ["--lite"]` in zijn
+`mcpServers`-configuratie. Zonder transportoptie gebruikt Lusmaker stdio.
 
-```json
-{
-  "mcpServers": {
-    "lusmaker": {
-      "command": "/absoluut/pad/naar/lusmaker/.venv/bin/lus-mcp",
-      "args": ["--lite"]
-    }
-  }
-}
-```
+### Conversatiecontract
 
-Lite bevat `plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
-`route_readiness`, `get_profile`, `update_profile`, `ensure_region`,
-`region_status` en `list_drafts`. `route_details` is de expliciete uitweg voor
-legs en volledige kwaliteitsmetrieken; zonder `--lite` blijft de volledige set
-van 24 tools beschikbaar.
+Gebruik `plan_route` voor de eerste wens. `target_km=50` betekent “mik op 50
+km”; `tolerance_km=2.5` bepaalt de toegestane afwijking. `max_km=50` is een
+harde bovengrens. `doel` onderscheidt `hoogtemeters`, `toeren` en de kortste
+route via expliciete klimmen. Laat onbekende voorkeuren zoals `kasseien` op
+`null` staan; `false` is een echte keuze om ze te vermijden.
 
-Dezelfde composiet-flow bestaat in de CLI:
+`plan_route` geeft ofwel `status="needs_input"` met maximaal drie gerichte
+vragen, ofwel `status="ready"` met cijfers, een constraint-rapport en deze
+MCP-resources:
+
+- `lusmaker://drafts/<id>/route.gpx` (`application/gpx+xml`);
+- `lusmaker://drafts/<id>/preview.html` (`text/html`).
+
+Pas profielantwoorden toe met `update_profile`. Een plaats vermijden of juist
+toestaan gaat via `adjust_route`; roep die daarna opnieuw aan tot `ready`.
+Hergebruik bij retries dezelfde `request_id`, zodat geen tweede draft ontstaat.
+Stuur bij mutaties de laatst ontvangen `revision` als `expected_revision` mee;
+een verouderde call wordt dan afgewezen in plaats van nieuwere wijzigingen te
+overschrijven.
+
+Dezelfde afstandssemantiek bestaat in de CLI:
 
 ```bash
-lus plan-route --start Wetteren --max-km 45 --via-klim Berendries
-lus adjust-route <draft-id> --voeg-klim-toe Molenberg --max-km 45
+lus plan-route --start Wetteren --target-km 50 --doel hoogtemeters \
+  --request-id rit-2026-08-08
+lus adjust-route <draft-id> --target-km 45 --expected-revision 4
+```
+
+### ChatGPT en Streamable HTTP
+
+Start een lokale HTTP-endpoint voor ontwikkeling als volgt:
+
+```bash
+.venv/bin/lus-mcp --lite --transport streamable-http \
+  --host 127.0.0.1 --port 8000 --path /mcp --stateless-http --json-response
+```
+
+ChatGPT verbindt met een remote MCP-server, niet rechtstreeks met localhost.
+Gebruik voor een lokale/private installatie OpenAI Secure MCP Tunnel, of zet
+de endpoint achter een eigen HTTPS- en authenticatieproxy. Voeg hem daarna in
+ChatGPT developer mode als custom app toe. Zie de actuele
+[OpenAI-instructies voor developer mode en MCP-apps](https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt).
+
+Een bind op een niet-lokaal adres wordt zonder `--allow-remote` geweigerd.
+Die vlag voegt zelf **geen** authenticatie of TLS toe en is dus alleen bedoeld
+achter een beveiligde proxy. OAuth/tenant-isolatie horen bij de hosted laag,
+niet bij deze lokale server.
+
+### Evals
+
+`evals/route_intents.json` bevat netwerkloze prompt→tool-acceptatiecases voor
+Claude en ChatGPT. Score opgenomen toolcalls met:
+
+```bash
+.venv/bin/python -m lusmaker.mcp_evals opgenomen-toolcalls.json
 ```
 
 ### Open routelagen en populariteit

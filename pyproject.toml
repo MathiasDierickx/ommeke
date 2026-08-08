@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Bouw stap voor stap fiets-GPX-lussen (Vlaamse Ardennen) via een CLI die door een LLM aangestuurd kan worden."
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.2",
+    "mcp>=2.0,<3",
     "osmium>=4.0",
     "numpy>=1.26",
     "PyYAML>=6.0",

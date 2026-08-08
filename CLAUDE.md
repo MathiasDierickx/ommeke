@@ -4,28 +4,29 @@ Lusmaker bouwt fiets-GPX-lussen (Vlaamse Ardennen) stap voor stap via de `lus`-C
 Jij bent de conversatielaag: vertaal wensen van de gebruiker ("mooie lus naar de
 Berendries, rustige wegen, geen twee keer dezelfde baan") naar CLI-stappen, en
 speel vragen/suggesties van de tool terug naar de gebruiker.
-Dezelfde flow is ook beschikbaar via de stdio MCP-server `lus-mcp`.
+Dezelfde flow is beschikbaar via `lus-mcp` over stdio of Streamable HTTP.
 
-## Begin met de readiness-lus
+## Begin met de composiet-workflow
 
-Maak voor een nieuwe gebruiker eerst een draft met een benoemd profiel en
-minstens één routedoel (bijvoorbeeld een gewenste klim). Roep daarna
-`route_readiness` aan. Die routeert één snelle verkenningsroute, toont alleen
-materiële voorkeurvragen en cachet de probe. Stel de vragen letterlijk aan de
-gebruiker en pas telkens de gekozen `patch` toe met `update_profile`. Staat bij
-een optie `doel: draft`, voer de patch uit met `avoid_place`. Vraag vervolgens
-opnieuw `route_readiness` op. Herhaal tot `klaar=true`; optimaliseer dan pas en
-maak preview/GPX.
+Gebruik voor een nieuwe gebruikerswens `plan_route` met profiel `standaard` en
+een stabiele `request_id`. Gebruik `target_km` voor “ongeveer N km” en
+`max_km` alleen wanneer N een harde bovengrens is. De tool maakt zelf de draft
+en verkenningsprobe. Bij `status: needs_input` stel je de teruggegeven vragen
+letterlijk; routeer of exporteer nog niet.
+
+Pas profielpatches toe met `update_profile`. Een plaats vermijden doe je met
+`adjust_route(vermijd_plaatsen=[...])`; een passage die expliciet oké is met
+`adjust_route(sta_plaatsen_toe=[...])`. Roep `adjust_route` daarna opnieuw aan
+tot `status: ready`. Hergebruik steeds de draft en geef de laatst ontvangen
+`revision` mee als `expected_revision`.
 
 Een `null`-voorkeur betekent onbekend; `ok` betekent expliciet onverschillig.
-Geef daarom `profiel_naam` mee aan `new_draft`, zodat profielupdates de
-verkenningsroute correct ongeldig maken. In lite zijn `route_readiness`,
-`get_profile` en `update_profile` beschikbaar. Gebruik daar `adjust_route` met
-`max_km` voor de definitieve optimalisatie; in volledige MCP-modus kan dat ook
-met `optimize_draft`. `plan_route` blijft geschikt wanneer alle voorkeuren al
-bekend zijn en een compacte one-call-flow gewenst is.
+Geef daarom niet automatisch `false` door voor een onbekende nullable keuze.
+`route_readiness` en de fijnmazige drafttools blijven beschikbaar als escape
+hatch, maar zijn niet nodig voor het normale gesprek.
 
-De compacte tools beperken round-trips en resultaatgrootte. `route_details`
+De compacte tools beperken round-trips en resultaatgrootte. Geef GPX en
+preview via de teruggegeven artifact-URI's. `route_details`
 geeft legs en de volledige kwaliteitsmetrieken alleen wanneer de gebruiker
 erom vraagt.
 
@@ -57,8 +58,9 @@ GraphHopper moet draaien: `docker compose up -d` (check met `lus status`).
 4. `lus draft readiness <id> --profiel-naam standaard` (MCP:
    `route_readiness`) — maakt of hergebruikt de verkenningsprobe. Stel maximaal
    drie teruggegeven vragen aan de gebruiker. Pas profielopties toe met
-   `update_profile`; gebruik `avoid_place` wanneer `doel=draft`. Vraag readiness
-   opnieuw op tot `klaar=true`.
+   `update_profile`; gebruik bij `doel=draft` `avoid_place` om te vermijden of
+   `adjust_route(sta_plaatsen_toe=[...])` om een passage te aanvaarden. Vraag
+   readiness opnieuw op tot `klaar=true`.
 5. Bij een afstandsbudget: `lus draft optimize <id> --max-km 45` — vult de lus
    automatisch aan met klimmen en bewaakt het harde budget na elke herroutering.
    Gebruik `--objective hm-per-km` als efficiënt klimmen belangrijker is dan
