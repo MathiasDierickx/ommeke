@@ -177,6 +177,39 @@ vermeld dan de metriekverschuiving in de commitmessage. Een onverwachte
 cassettebreuk is een regressie. De recorder en live-smoke zijn netwerk/GH-tests
 en draaien nooit mee in `tests.run`.
 
+## Productie testen
+
+De opt-in E2E-runner test zonder browser de volledige gedeployde keten:
+publieke health en OAuth-metadata, de 401-gate, Cognito-SRP-login,
+gesprekken, een echte Bedrock-routevraag, routebestanden en de MCP-lite-toolset.
+Installeer eerst de extra testdependency:
+
+```bash
+uv pip install --python .venv/bin/python -e '.[e2e]'
+```
+
+Configureer een echt Cognito-testaccount en de Function-URL. De runner gebruikt
+de access token van die eindgebruiker en heeft geen AWS-credentials nodig:
+
+```bash
+export LUSMAKER_E2E_API=https://<function-id>.lambda-url.eu-west-1.on.aws
+export LUSMAKER_E2E_POOL_ID=eu-west-1_<pool-id>
+export LUSMAKER_E2E_CLIENT_ID=<client-id>
+export LUSMAKER_E2E_USERNAME=<testgebruiker>
+export LUSMAKER_E2E_PASSWORD=<testwachtwoord>
+export LUSMAKER_E2E_REGION=eu-west-1  # optioneel; dit is de default
+
+.venv/bin/python -m tests.e2e_prod --verbose
+```
+
+`--api URL` overschrijft `LUSMAKER_E2E_API`. Elke stap print `OK`, `FOUT` of
+`SKIP` met zijn duur, gevolgd door een tabel. De exitcode is alleen 0 wanneer
+geen stap faalt. Een 502/`model_unavailable` meldt expliciet dat de
+Bedrock-modeltoegang, het use-case-formulier of de betaalmethode gecontroleerd
+moet worden; alleen de afhankelijke routebestandsstap wordt dan overgeslagen.
+Deze runner is bewust geen onderdeel van `tests.run`, omdat hij productie,
+Cognito en Bedrock aanspreekt.
+
 ## MCP
 
 De lokale data moeten eerst met `lus setup` en `lus build` opgebouwd zijn.

@@ -32,6 +32,40 @@
 - IdP-configuratie zelf, DNS, certificaten, CI/CD.
 - De web-UI: staat los; de MCP-server is een aparte service.
 
+## Productie-E2E als post-deploy-hook
+
+`python -m tests.e2e_prod` controleert de gedeployde Function-URL als echte
+Cognito-eindgebruiker, inclusief Bedrock-chat, route-artifacts en MCP. De
+runner gebruikt geen AWS-credentials. Voor CI zijn een afzonderlijk
+testaccount en de volgende repositorysecrets nodig:
+
+- `LUSMAKER_E2E_POOL_ID`;
+- `LUSMAKER_E2E_CLIENT_ID`;
+- `LUSMAKER_E2E_USERNAME`;
+- `LUSMAKER_E2E_PASSWORD`.
+
+Na de bestaande deploy- en publieke smoke-stappen kan `deploy-aws.yml` later
+deze hook krijgen. Dit is alleen de voorgestelde integratie; de workflow blijft
+eigendom van het AWS-spoor:
+
+```yaml
+- name: Test volledige productieketen
+  env:
+    LUSMAKER_E2E_POOL_ID: ${{ secrets.LUSMAKER_E2E_POOL_ID }}
+    LUSMAKER_E2E_CLIENT_ID: ${{ secrets.LUSMAKER_E2E_CLIENT_ID }}
+    LUSMAKER_E2E_USERNAME: ${{ secrets.LUSMAKER_E2E_USERNAME }}
+    LUSMAKER_E2E_PASSWORD: ${{ secrets.LUSMAKER_E2E_PASSWORD }}
+    LUSMAKER_E2E_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+  run: |
+    python -m pip install --disable-pip-version-check -e '.[e2e]'
+    LUSMAKER_E2E_API="$(terraform -chdir=infra/terraform output -raw api_endpoint)" \
+      python -m tests.e2e_prod
+```
+
+Activeer deze blokkerende stap zodra het Bedrock-model voor productie is
+vrijgegeven. Tot dan rapporteert stap 7 bewust `FOUT` met de modeltoegang-hint
+en wordt alleen de daarvan afhankelijke artifactcontrole `SKIP`.
+
 ## Afstemming
 
 - Beide sporen raken `pyproject.toml` mogelijk (deps). Bij merge naar main:
