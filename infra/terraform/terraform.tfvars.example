@@ -1,0 +1,11 @@
+aws_region  = "eu-west-1"
+environment = "prod"
+region_slug = "vlaanderen"
+
+oauth_callback_urls = [
+  "https://jouw-mcp-client.example/oauth/callback"
+]
+
+# billing_email     = "aws-kosten@example.com"
+# monthly_budget_usd = 10
+# cors_origins       = ["https://jouw-app.example"]
