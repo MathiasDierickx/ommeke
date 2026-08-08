@@ -25,6 +25,9 @@ _ARTIFACTS = {
 _http_delivery: ContextVar[bool] = ContextVar(
     "lusmaker_http_artifact_delivery", default=False
 )
+_public_url_override: ContextVar[str | None] = ContextVar(
+    "lusmaker_public_url_override", default=None
+)
 
 
 def validate_draft_id(draft_id: str) -> str:
@@ -34,17 +37,23 @@ def validate_draft_id(draft_id: str) -> str:
 
 
 @contextmanager
-def delivery_mode(http: bool):
+def delivery_mode(http: bool, *, public_url: str | None = None):
     """Selecteer per request lokale paden of publieke HTTP-bestands-URL's."""
-    token = _http_delivery.set(bool(http))
+    mode_token = _http_delivery.set(bool(http))
+    url_token = _public_url_override.set(public_url)
     try:
         yield
     finally:
-        _http_delivery.reset(token)
+        _public_url_override.reset(url_token)
+        _http_delivery.reset(mode_token)
 
 
 def public_base_url(explicit: str | None = None) -> str:
-    value = (explicit or os.environ.get("LUSMAKER_PUBLIC_URL", "")).rstrip("/")
+    value = (
+        explicit
+        or _public_url_override.get()
+        or os.environ.get("LUSMAKER_PUBLIC_URL", "")
+    ).rstrip("/")
     parsed = urlsplit(value)
     if (
         parsed.scheme not in {"http", "https"}

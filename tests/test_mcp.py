@@ -447,12 +447,21 @@ from lusmaker import mcp_server
 
 calls = []
 mcp_server.mcp.run = lambda **kwargs: calls.append(("full", kwargs))
-mcp_server.lite_mcp.run = lambda **kwargs: calls.append(("lite", kwargs))
+
+class FakeHTTPServer:
+    def run(self, **kwargs):
+        calls.append(("http", kwargs))
+
+builds = []
+def build_http_server(**kwargs):
+    builds.append(kwargs)
+    return FakeHTTPServer()
+
+mcp_server.build_http_server = build_http_server
 
 mcp_server.main([])
 mcp_server.main([
-    "--lite",
-    "--transport", "streamable-http",
+    "--http",
     "--host", "127.0.0.1",
     "--port", "8123",
     "--path", "/routes",
@@ -463,7 +472,7 @@ mcp_server.main([
 assert calls == [
     ("full", {"transport": "stdio"}),
     (
-        "lite",
+        "http",
         {
             "transport": "streamable-http",
             "host": "127.0.0.1",
@@ -474,29 +483,212 @@ assert calls == [
         },
     ),
 ]
+assert builds == [{"full": False}]
 """,
             Path(temp_dir),
         )
 
 
-def test_http_transport_refuses_unauthenticated_remote_bind_by_default():
+def test_http_transport_requires_auth_and_public_url_configuration():
     _require_mcp()
     with tempfile.TemporaryDirectory() as temp_dir:
         _run_isolated(
             """
+import os
 from lusmaker import mcp_server
 
-mcp_server.mcp.run = lambda **_kwargs: (_ for _ in ()).throw(
-    AssertionError("server had niet mogen starten")
-)
+for name in (
+    "LUSMAKER_PUBLIC_URL",
+    "LUSMAKER_OAUTH_ISSUER",
+    "LUSMAKER_OAUTH_JWKS_URL",
+    "LUSMAKER_OAUTH_AUDIENCE",
+    "LUSMAKER_AUTH_DISABLED",
+):
+    os.environ.pop(name, None)
 try:
-    mcp_server.main([
-        "--transport", "streamable-http", "--host", "0.0.0.0"
-    ])
+    mcp_server.main(["--http"])
 except SystemExit as exc:
     assert exc.code == 2
 else:
-    raise AssertionError("publieke bind zonder opt-in werd aanvaard")
+    raise AssertionError("HTTP-server zonder authconfig werd gestart")
+""",
+            Path(temp_dir),
+        )
+
+
+def test_http_server_defaults_to_lite_and_full_is_explicit():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            f"""
+import asyncio
+from lusmaker import mcp_server
+
+lite = mcp_server.build_http_server(
+    auth_disabled=True, public_url="http://127.0.0.1:8123"
+)
+full = mcp_server.build_http_server(
+    full=True, auth_disabled=True, public_url="http://127.0.0.1:8123"
+)
+
+async def inspect():
+    assert {{tool.name for tool in await lite.list_tools()}} == {repr(EXPECTED_LITE_TOOLS)}
+    assert {{tool.name for tool in await full.list_tools()}} == {repr(EXPECTED_TOOLS)}
+
+asyncio.run(inspect())
+""",
+            Path(temp_dir),
+        )
+
+
+def test_remote_middleware_uses_token_subject_for_tool_storage_and_urls():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+import asyncio
+from mcp.server.auth.middleware.auth_context import auth_context_var
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
+from mcp.server.auth.provider import AccessToken
+from lusmaker import artifacts, config, mcp_server, tenant
+
+middleware = mcp_server._RemoteUserScopeMiddleware(
+    auth_disabled=False, public_url="https://routes.example.test"
+)
+access = AccessToken(
+    token="token",
+    client_id="client",
+    scopes=[],
+    subject="alice",
+    claims={"iss": "https://login.example.test"},
+)
+
+async def call_next(_context):
+    assert config.current_user_id() == "alice"
+    assert tenant.current() == "alice"
+    assert config.DRAFTS.name == "drafts"
+    assert config.DRAFTS.parent.name == "alice"
+    assert artifacts.output_reference(
+        "/tmp/route.gpx", "abc123", "route.gpx"
+    ) == "https://routes.example.test/files/alice/abc123/route.gpx"
+    return {"ok": True}
+
+token = auth_context_var.set(AuthenticatedUser(access))
+try:
+    assert asyncio.run(middleware(object(), call_next)) == {"ok": True}
+finally:
+    auth_context_var.reset(token)
+
+assert config.current_user_id() == "local"
+""",
+            Path(temp_dir),
+        )
+
+
+def test_http_app_requires_bearer_exposes_metadata_and_scopes_files():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+import asyncio
+import json
+from mcp.server.auth.provider import AccessToken
+from lusmaker import artifacts, config, mcp_server
+from lusmaker.oauth import OAuthConfig
+
+class StaticVerifier:
+    async def verify_token(self, token):
+        if token != "alice-token":
+            return None
+        return AccessToken(
+            token=token,
+            client_id="test-client",
+            scopes=[],
+            expires_at=None,
+            subject="alice",
+            claims={"iss": "https://login.example.test"},
+        )
+
+async def get(app, path, authorization=None):
+    sent = []
+    headers = []
+    if authorization:
+        headers.append((b"authorization", authorization.encode()))
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "https",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": headers,
+        "server": ("routes.example.test", 443),
+        "client": ("127.0.0.1", 12345),
+    }
+    received = False
+    async def receive():
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.disconnect"}
+    async def send(message):
+        sent.append(message)
+    await app(scope, receive, send)
+    start = next(message for message in sent if message["type"] == "http.response.start")
+    body = b"".join(
+        message.get("body", b"")
+        for message in sent
+        if message["type"] == "http.response.body"
+    )
+    return start["status"], dict(start["headers"]), body
+
+oauth = OAuthConfig(
+    issuer="https://login.example.test",
+    jwks_url="https://login.example.test/jwks.json",
+    audience="lusmaker-mcp",
+)
+server = mcp_server.build_http_server(
+    oauth_config=oauth,
+    token_verifier=StaticVerifier(),
+    public_url="https://routes.example.test",
+)
+app = server.streamable_http_app(host="routes.example.test")
+
+with config.user_scope("alice"):
+    path = artifacts.safe_output_path("abc123", "route.gpx")
+    path.write_bytes(b"<gpx/>")
+
+missing_status, missing_headers, _ = asyncio.run(get(app, "/mcp"))
+assert missing_status == 401
+assert b"resource_metadata" in missing_headers[b"www-authenticate"]
+
+metadata_status, _, metadata_body = asyncio.run(
+    get(app, "/.well-known/oauth-protected-resource")
+)
+assert metadata_status == 200
+metadata = json.loads(metadata_body)
+assert metadata["resource"] == "https://routes.example.test"
+assert metadata["authorization_servers"] == ["https://login.example.test"]
+
+file_status, file_headers, file_body = asyncio.run(
+    get(app, "/files/alice/abc123/route.gpx", "Bearer alice-token")
+)
+assert file_status == 200
+assert file_body == b"<gpx/>"
+assert file_headers[b"content-type"].startswith(b"application/gpx+xml")
+
+cross_status, _, _ = asyncio.run(
+    get(app, "/files/bob/abc123/route.gpx", "Bearer alice-token")
+)
+assert cross_status == 403
+unauthenticated_file, _, _ = asyncio.run(
+    get(app, "/files/alice/abc123/route.gpx")
+)
+assert unauthenticated_file == 401
 """,
             Path(temp_dir),
         )

@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from lusmaker import intents
+from lusmaker import artifacts, config, intents
 
 
 def _climb(climb_id, name, length_m=1000, avg_pct=4.0):
@@ -195,6 +195,33 @@ def test_plan_route_injects_route_and_export_functions():
     assert state["avoid_busy"] is True
     assert state["profile"] == "trail"
     assert result["draft"] == "abc123"
+
+
+def test_plan_route_export_helper_returns_http_urls_in_delivery_scope():
+    def export_fn(_draft, _climbs, path):
+        Path(path).write_text("artifact", encoding="utf-8")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with (
+            config.user_scope("alice"),
+            artifacts.delivery_mode(
+                True, public_url="https://routes.example.test"
+            ),
+        ):
+            files = intents._export_files(
+                {"id": "abc123"},
+                {},
+                export_gpx_fn=export_fn,
+                export_preview_fn=export_fn,
+                exports_root=Path(temp_dir),
+            )
+
+    assert files == {
+        "gpx": "https://routes.example.test/files/alice/abc123/route.gpx",
+        "preview": (
+            "https://routes.example.test/files/alice/abc123/preview.html"
+        ),
+    }
 
 
 def test_plan_route_passes_no_fill_to_optimizer():

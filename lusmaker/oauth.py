@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -119,7 +120,7 @@ class JWTTokenVerifier:
     async def verify_token(self, token: str) -> AccessToken | None:
         """FastMCP TokenVerifier-interface; ongeldige tokens leveren 401 op."""
         try:
-            claims = self.validate(token)
+            claims = await asyncio.to_thread(self.validate, token)
         except OAuthError:
             return None
         scopes = claims.get("scope", claims.get("scp", []))

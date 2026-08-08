@@ -1,14 +1,18 @@
 """MCP-server bovenop de Lusmaker-domeinfuncties."""
 
 import argparse
-import ipaddress
 from typing import Any
+from urllib.parse import urlsplit
 
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
 from mcp.types import Annotations
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.settings import AuthSettings
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from . import __version__
 from . import (
@@ -20,10 +24,12 @@ from . import (
     geo,
     gpx,
     intents,
+    oauth,
     preview,
     profiles,
     readiness,
     regions,
+    tenant,
 )
 from .mcp_contracts import (
     Activity,
@@ -71,13 +77,28 @@ HOSTED_SERVER_INSTRUCTIONS = (
     "gebruiker."
 )
 
-def _server(name: str, *, instructions: str = SERVER_INSTRUCTIONS):
+REMOTE_SERVER_INSTRUCTIONS = (
+    "Gebruik plan_route voor een nieuwe routewens en adjust_route voor een "
+    "bestaande draft. Vraag ontbrekende gebruikerskeuzes uit bij status "
+    "needs_input. Hergebruik bij retries dezelfde request_id en stuur bij "
+    "mutaties de laatst ontvangen revision mee. Geef GPX en preview via de "
+    "teruggegeven HTTPS-URL's aan de gebruiker."
+)
+
+
+def _server(
+    name: str,
+    *,
+    instructions: str = SERVER_INSTRUCTIONS,
+    **kwargs,
+):
     return FastMCP(
         name,
         title="Lusmaker",
         description="Bouw en verfijn fiets- en traillussen met GPX-export.",
         instructions=instructions,
         version=__version__,
+        **kwargs,
     )
 
 
@@ -479,8 +500,7 @@ def route_details(draft_id: NonEmptyString) -> RouteDetailsResult:
     return intents.route_details(draft_id)
 
 
-lite_mcp = _server("lusmaker-lite")
-for _lite_tool in (
+LITE_TOOLS = (
     plan_route,
     adjust_route,
     suggest_climbs,
@@ -491,7 +511,43 @@ for _lite_tool in (
     ensure_region,
     region_status,
     list_drafts,
-):
+)
+
+FULL_TOOLS = (
+    status,
+    get_profile,
+    update_profile,
+    list_profiles,
+    list_regions,
+    ensure_region,
+    region_status,
+    geocode,
+    list_climbs,
+    new_draft,
+    list_drafts,
+    get_draft,
+    add_climb,
+    remove_climb,
+    avoid_place,
+    unavoid_place,
+    route_draft,
+    route_readiness,
+    suggest_climbs,
+    plan_route,
+    adjust_route,
+    optimize_draft,
+    export_gpx,
+    preview_draft,
+)
+
+
+def _register_tools(server, tools) -> None:
+    for tool in tools:
+        server.tool(**tool_contract(tool.__name__))(tool)
+
+
+lite_mcp = _server("lusmaker-lite")
+for _lite_tool in LITE_TOOLS:
     lite_mcp.tool(**tool_contract(_lite_tool.__name__))(_lite_tool)
 
 
@@ -524,8 +580,8 @@ def route_preview_resource(draft_id: NonEmptyString) -> bytes:
     return artifacts.read(draft_id, "preview.html")
 
 
-for _resource_server in (mcp, lite_mcp, hosted_mcp):
-    _resource_server.resource(
+def _register_resources(server) -> None:
+    server.resource(
         "lusmaker://drafts/{draft_id}/route.gpx",
         name="route-gpx",
         title="GPX-route",
@@ -533,7 +589,7 @@ for _resource_server in (mcp, lite_mcp, hosted_mcp):
         mime_type="application/gpx+xml",
         annotations=RESOURCE_ANNOTATIONS,
     )(route_gpx_resource)
-    _resource_server.resource(
+    server.resource(
         "lusmaker://drafts/{draft_id}/preview.html",
         name="route-preview",
         title="Routepreview",
@@ -543,22 +599,161 @@ for _resource_server in (mcp, lite_mcp, hosted_mcp):
     )(route_preview_resource)
 
 
+for _resource_server in (mcp, lite_mcp, hosted_mcp):
+    _register_resources(_resource_server)
+
+
+class _RemoteUserScopeMiddleware:
+    """Koppel elk MCP-bericht aan het gevalideerde token-subject."""
+
+    def __init__(self, *, auth_disabled: bool, public_url: str):
+        self.auth_disabled = auth_disabled
+        self.public_url = public_url
+
+    async def __call__(self, context, call_next):
+        access_token = get_access_token()
+        uid = "local" if self.auth_disabled else getattr(
+            access_token, "subject", None
+        )
+        if not uid:
+            raise oauth.OAuthError("bearer-token mist een subject-claim")
+        with (
+            config.user_scope(uid),
+            tenant.use(uid),
+            artifacts.delivery_mode(True, public_url=self.public_url),
+        ):
+            return await call_next(context)
+
+
+def _auth_error(public_url: str) -> JSONResponse:
+    metadata = f"{public_url}/.well-known/oauth-protected-resource"
+    return JSONResponse(
+        {"error": "invalid_token", "error_description": "Authentication required"},
+        status_code=401,
+        headers={
+            "WWW-Authenticate": (
+                'Bearer error="invalid_token", '
+                'error_description="Authentication required", '
+                f'resource_metadata="{metadata}"'
+            )
+        },
+    )
+
+
+def _register_file_route(
+    server,
+    *,
+    auth_disabled: bool,
+    public_url: str,
+) -> None:
+    @server.custom_route(
+        "/files/{uid}/{draft_id}/{filename}", methods=["GET"]
+    )
+    async def download_file(request: Request) -> Response:
+        access_token = get_access_token()
+        token_uid = "local" if auth_disabled else getattr(
+            access_token, "subject", None
+        )
+        if not token_uid:
+            return _auth_error(public_url)
+        requested_uid = request.path_params["uid"]
+        if requested_uid != token_uid:
+            return JSONResponse(
+                {"error": "geen toegang tot export van een andere gebruiker"},
+                status_code=403,
+            )
+        draft_id = request.path_params["draft_id"]
+        filename = request.path_params["filename"]
+        try:
+            config.validate_user_id(requested_uid)
+            draft.validate_draft_id(draft_id)
+            mime_type = artifacts.content_type(filename)
+            with config.user_scope(token_uid), tenant.use(token_uid):
+                payload = artifacts.read(draft_id, filename)
+        except (ValueError, draft.DraftError, artifacts.ArtifactError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        disposition = "attachment" if filename.endswith(".gpx") else "inline"
+        return Response(
+            payload,
+            media_type=mime_type,
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{filename}"',
+                "Cache-Control": "private, no-store",
+            },
+        )
+
+
+def build_http_server(
+    *,
+    full: bool = False,
+    auth_disabled: bool | None = None,
+    oauth_config: oauth.OAuthConfig | None = None,
+    token_verifier=None,
+    public_url: str | None = None,
+):
+    """Bouw de remote FastMCP-app met auth, scoping en bestandsdownloads."""
+    base_url = artifacts.public_base_url(public_url)
+    if urlsplit(base_url).path not in {"", "/"}:
+        raise oauth.OAuthError("LUSMAKER_PUBLIC_URL mag geen pad bevatten")
+    auth_disabled = (
+        oauth.auth_disabled() if auth_disabled is None else auth_disabled
+    )
+    kwargs = {
+        "middleware": [
+            _RemoteUserScopeMiddleware(
+                auth_disabled=auth_disabled, public_url=base_url
+            )
+        ]
+    }
+    if not auth_disabled:
+        oauth_config = oauth_config or oauth.OAuthConfig.from_env()
+        kwargs["auth"] = AuthSettings(
+            issuer_url=oauth_config.issuer,
+            resource_server_url=base_url,
+        )
+        kwargs["token_verifier"] = token_verifier or oauth.JWTTokenVerifier(
+            oauth_config
+        )
+    server = _server(
+        "lusmaker-http",
+        instructions=REMOTE_SERVER_INSTRUCTIONS,
+        **kwargs,
+    )
+    _register_tools(server, FULL_TOOLS if full else LITE_TOOLS)
+    _register_resources(server)
+    _register_file_route(
+        server, auth_disabled=auth_disabled, public_url=base_url
+    )
+    return server
+
+
 def main(argv: list[str] | None = None) -> None:
     """Start lokaal via stdio of als Streamable HTTP endpoint."""
     parser = argparse.ArgumentParser(prog="lus-mcp")
-    parser.add_argument(
+    toolset = parser.add_mutually_exclusive_group()
+    toolset.add_argument(
         "--lite",
         action="store_true",
         help="exposeer alleen de tien token-zuinige tools",
     )
+    toolset.add_argument(
+        "--full",
+        action="store_true",
+        help="exposeer in HTTP-modus de volledige toolset",
+    )
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="start met Streamable HTTP; standaard lite en OAuth-verplicht",
+    )
     parser.add_argument(
         "--transport",
         choices=("stdio", "streamable-http"),
-        default="stdio",
-        help="MCP-transport (standaard: stdio)",
+        default=None,
+        help="legacy-alias voor de transportkeuze",
     )
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8123)
     parser.add_argument("--path", default="/mcp", help="HTTP-pad voor MCP")
     parser.add_argument(
         "--stateless-http",
@@ -573,11 +768,16 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--allow-remote",
         action="store_true",
-        help="sta een niet-lokale bind toe; zet authenticatie/TLS ervoor",
+        help=argparse.SUPPRESS,
     )
     args = parser.parse_args(argv)
-    server = lite_mcp if args.lite else mcp
-    if args.transport == "stdio":
+    transport = args.transport or (
+        "streamable-http" if args.http else "stdio"
+    )
+    if args.http and transport != "streamable-http":
+        parser.error("--http kan niet met --transport stdio")
+    if transport == "stdio":
+        server = lite_mcp if args.lite else mcp
         server.run(transport="stdio")
         return
 
@@ -586,14 +786,9 @@ def main(argv: list[str] | None = None) -> None:
     if not args.path.startswith("/"):
         parser.error("--path moet met '/' beginnen")
     try:
-        is_loopback = ipaddress.ip_address(args.host).is_loopback
-    except ValueError:
-        is_loopback = args.host.casefold() == "localhost"
-    if not is_loopback and not args.allow_remote:
-        parser.error(
-            "een niet-lokale --host vereist --allow-remote; gebruik bovendien "
-            "een authenticatie- en TLS-proxy"
-        )
+        server = build_http_server(full=args.full)
+    except (artifacts.ArtifactError, oauth.OAuthError, ValueError) as exc:
+        parser.error(str(exc))
     server.run(
         transport="streamable-http",
         host=args.host,
