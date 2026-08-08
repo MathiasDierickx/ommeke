@@ -100,7 +100,7 @@ def _weight_question(
     }
 
 
-def _passed_place(d: dict, probe: dict) -> dict | None:
+def _passed_places(d: dict, probe: dict) -> list[dict]:
     excluded = {
         str(point.get("label", "")).casefold()
         for point in (d.get("start"), d.get("end"))
@@ -116,10 +116,15 @@ def _passed_place(d: dict, probe: dict) -> dict | None:
             "toegestane_plaatsen", []
         )
     )
+    places = []
+    seen = set(excluded)
     for place in (probe.get("terrein") or {}).get("plaatskernen", []):
-        if str(place.get("label", "")).casefold() not in excluded:
-            return place
-    return None
+        label = str(place.get("label", "")).strip()
+        key = label.casefold()
+        if label and key not in seen:
+            places.append(place)
+            seen.add(key)
+    return places
 
 
 def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
@@ -245,23 +250,30 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             questions.append(weight_question)
 
     if not preferences["vermijd_plaatsen"]:
-        place = _passed_place(d, probe)
-        if place is not None:
-            label = place["label"]
+        places = _passed_places(d, probe)
+        if places:
+            labels = [place["label"] for place in places]
+            joined = ", ".join(labels)
             questions.append(
                 {
                     "id": "vermijd_plaatsen",
                     "prioriteit": 5,
-                    "reden": f"de verkenningsroute passeert de plaatskern van {label}",
-                    "vraag": f"Is de doorgang door {label} oké, of wil je die plaats vermijden?",
+                    "reden": f"de verkenningsroute passeert deze plaatskernen: {joined}",
+                    "vraag": (
+                        f"Is de doorgang door {joined} overal oké, of wil je "
+                        "zelf kiezen welke plaatsen de route vermijdt?"
+                    ),
                     "opties": {
                         "ok": {
                             "doel": "draft",
-                            "patch": {"allow_place": label},
+                            "patch": {"allow_places": labels},
                         },
-                        "vermijd": {
+                        "kies_zelf": {
                             "doel": "draft",
-                            "patch": {"avoid_place": label},
+                            "vervolg": (
+                                "gebruik adjust_route met sta_plaatsen_toe en "
+                                "vermijd_plaatsen"
+                            ),
                         },
                     },
                 }
