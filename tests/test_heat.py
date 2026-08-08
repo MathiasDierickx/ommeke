@@ -201,13 +201,22 @@ def test_fetch_vlaanderen_reports_http_404_as_clear_error():
 def test_build_writes_both_area_ids_and_keeps_cellsets_separate():
     bike_cell = heat.geo.cell(50.82, 3.72)
     walk_cell = heat.geo.cell(50.83, 3.73)
+    cobble_cell = heat.geo.cell(50.84, 3.74)
+    busy_cell = heat.geo.cell(50.85, 3.75)
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
             config.ensure_dirs()
             _write_gpx(config.HEAT_DIR / "eigen.gpx")
             with open(config.VLAANDEREN_ROUTES_PKL, "wb") as handle:
                 pickle.dump(
-                    {"fiets": {bike_cell}, "wandel": {walk_cell}}, handle
+                    {
+                        "version": 2,
+                        "fiets": {bike_cell},
+                        "wandel": {walk_cell},
+                        "wegdek": {"kassei": {cobble_cell}},
+                        "druk": {busy_cell},
+                    },
+                    handle,
                 )
             result = heat.build()
             geojson = json.loads(
@@ -222,10 +231,20 @@ def test_build_writes_both_area_ids_and_keeps_cellsets_separate():
     assert [feature["id"] for feature in geojson["features"]] == [
         "popular",
         "popular_trail",
+        "kassei_tvl",
+        "druk_tvl",
     ]
     assert cached["cells"] == own | {bike_cell}
     assert cached["trail_cells"] == own | {walk_cell}
+    assert cached["areas"] == [
+        "popular",
+        "popular_trail",
+        "kassei_tvl",
+        "druk_tvl",
+    ]
     assert result["trail_cellen"] == len(own | {walk_cell})
+    assert result["kassei_tvl_cellen"] == 1
+    assert result["druk_tvl_cellen"] == 1
 
 
 def test_build_without_walking_data_keeps_single_popular_area():
@@ -244,6 +263,7 @@ def test_build_without_walking_data_keeps_single_popular_area():
 
     assert [feature["id"] for feature in geojson["features"]] == ["popular"]
     assert cached["trail_cells"] == set()
+    assert cached["areas"] == ["popular"]
 
 
 def test_features_near_route_applies_distances_and_global_poi_cap():

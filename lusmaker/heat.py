@@ -665,11 +665,17 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
 
     own = {c for c, srcs in cell_sources.items() if len(srcs) >= min_passes}
     osm = _osm_cells(osm_min_points)
-    vlaanderen = _vlaanderen_cells()
+    vlaanderen_data_cached = vlaanderen_data()
+    vlaanderen = {
+        "fiets": vlaanderen_data_cached["fiets"],
+        "wandel": vlaanderen_data_cached["wandel"],
+    }
     popular = own | osm | vlaanderen["fiets"]
     # Eigen tracks tellen mee voor trail zodra de gecureerde wandellaag bestaat.
     popular_trail = (own | vlaanderen["wandel"]) if vlaanderen["wandel"] else set()
-    if not popular and not popular_trail:
+    cobble_tvl = vlaanderen_data_cached["wegdek"].get("kassei", set())
+    busy_tvl = vlaanderen_data_cached["druk"]
+    if not popular and not popular_trail and not cobble_tvl and not busy_tvl:
         raise RuntimeError(
             f"geen data: drop GPX-ritten in {config.HEAT_DIR}, draai "
             "`lus heat fetch-osm` en/of `lus heat fetch-vlaanderen`"
@@ -685,12 +691,18 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
         geojson["features"].append(_area_feature("popular", popular))
     if popular_trail:
         geojson["features"].append(_area_feature("popular_trail", popular_trail))
+    if cobble_tvl:
+        geojson["features"].append(_area_feature("kassei_tvl", cobble_tvl))
+    if busy_tvl:
+        geojson["features"].append(_area_feature("druk_tvl", busy_tvl))
+    area_ids = [feature["id"] for feature in geojson["features"]]
     (config.CUSTOM_AREAS / "popular.geojson").write_text(json.dumps(geojson))
     with open(config.HEAT_PKL, "wb") as f:
         pickle.dump(
             {
                 "cells": popular,
                 "trail_cells": popular_trail,
+                "areas": area_ids,
                 "files": len(files),
                 "min_passes": min_passes,
                 "own_cells": len(own),
@@ -713,6 +725,9 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
         "polygonen": len(rects),
         "trail_cellen": len(popular_trail),
         "trail_polygonen": len(trail_rects),
+        "kassei_tvl_cellen": len(cobble_tvl),
+        "druk_tvl_cellen": len(busy_tvl),
+        "areas": area_ids,
         "km_corridor": round(len(popular) * 0.13 * 0.13 / 0.13, 1),
         "toepassen": "rm -rf ~/.lusmaker/gh/graph-cache && docker compose restart graphhopper (herimport ~5 min)",
     }

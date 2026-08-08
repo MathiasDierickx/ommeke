@@ -45,6 +45,7 @@ def test_gh_route_posts_selected_profile():
     result = gh.route(
         [(50.98, 3.87), (50.99, 3.88)],
         profile="trail",
+        area_evs=set(),
         post_fn=post,
     )
 
@@ -80,6 +81,7 @@ def test_gh_round_trip_posts_algorithm_distance_seed_and_preferences():
         profile="trail",
         strict=True,
         avoid_cobbles=True,
+        area_evs=set(),
         post_fn=post,
     )
 

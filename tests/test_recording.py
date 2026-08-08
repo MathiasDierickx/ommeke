@@ -114,7 +114,10 @@ def test_draft_route_threads_post_fn_and_computes_cacheless_metrics():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
-            result = draft.route(d, {}, router=gh.route, post_fn=post)
+            def offline_route(points, **kwargs):
+                return gh.route(points, area_evs=set(), **kwargs)
+
+            result = draft.route(d, {}, router=offline_route, post_fn=post)
 
     assert calls and all(path == "/route" for path, _body in calls)
     assert result["computed"]["kwaliteit"]["offroad_pct"] > 0

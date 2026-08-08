@@ -37,10 +37,15 @@ def _replay(name: str):
     replay = ReplayPost(fixture)
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
+            def offline_route(points, **kwargs):
+                # Replay is volledig offline: er is bewust geen /info-call en
+                # dus geen capability voor nieuw ingebakken TVL-areas.
+                return gh.route(points, area_evs=set(), **kwargs)
+
             draft.route(
                 scenario_draft,
                 copy.deepcopy(fixture["climbs"]),
-                router=gh.route,
+                router=offline_route,
                 post_fn=replay,
             )
     failures = invariant_failures(name, scenario_draft)
