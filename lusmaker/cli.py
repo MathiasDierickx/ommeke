@@ -305,6 +305,12 @@ def cmd_heat_fetch_osm(args):
     return heat.fetch_osm(max_pages_per_tile=args.max_pages)
 
 
+def cmd_heat_fetch_vlaanderen(args):
+    from . import heat
+
+    return heat.fetch_vlaanderen()
+
+
 def cmd_heat_status(args):
     from . import heat
 
@@ -561,6 +567,12 @@ def main(argv=None):
     _region_arg(s)
     s.add_argument("--max-pages", type=int, default=150)
     s.set_defaults(func=cmd_heat_fetch_osm)
+    s = hsub.add_parser(
+        "fetch-vlaanderen",
+        help="Toerisme Vlaanderen fiets- en wandelroutes downloaden",
+    )
+    _region_arg(s)
+    s.set_defaults(func=cmd_heat_fetch_vlaanderen)
     s = hsub.add_parser("status")
     _region_arg(s)
     s.set_defaults(func=cmd_heat_status)

@@ -308,6 +308,9 @@ _REGION_ATTRS = {
     "HEAT_DIR": lambda region: region.heat_dir,
     "HEAT_PKL": lambda region: region.cache / "heat.pkl",
     "OSM_TRACES_PKL": lambda region: region.cache / "osm_traces.pkl",
+    "VLAANDEREN_ROUTES_PKL": (
+        lambda region: region.cache / "vlaanderen_routes.pkl"
+    ),
     "CUSTOM_AREAS": lambda region: region.gh_dir / "custom_areas",
     "EXTRACT_PKL": lambda region: region.cache / "extract.pkl",
     "GAZETTEER_PKL": lambda region: region.cache / "gazetteer.pkl",

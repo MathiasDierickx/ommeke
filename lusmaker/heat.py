@@ -9,12 +9,50 @@ Let op: de area wordt bij de GRAAF-IMPORT ingebakken; na `heat build` moet de
 graph-cache weg en GraphHopper herstarten (instructie in de output).
 """
 import json
+import math
 import pickle
 import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from urllib.parse import urlencode
 
 from . import config, gh_config, geo
+
+
+# Bron: https://data.toerismevlaanderen.be, datasets
+# cycling_node_network_v2, hiking_node_network_v2 en lf_routes uit workspace
+# geoservices_v2. Licentie: Modellicentie Gratis Hergebruik.
+TOERISME_VLAANDEREN_WFS = (
+    "https://data.toerismevlaanderen.be/geoserver/geoservices_v2/ows"
+)
+CYCLING_NODE_NETWORK_WFS_URL = (
+    f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
+    "&request=GetFeature&typeNames=geoservices_v2%3Acycling_node_network_v2"
+    "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
+)
+HIKING_NODE_NETWORK_WFS_URL = (
+    f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
+    "&request=GetFeature&typeNames=geoservices_v2%3Ahiking_node_network_v2"
+    "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
+)
+LF_ROUTES_WFS_URL = (
+    f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
+    "&request=GetFeature&typeNames=geoservices_v2%3Alf_routes"
+    "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
+)
+VLAANDEREN_ROUTE_LAYERS = {
+    "fietsnetwerk": (
+        "fiets",
+        "cycling_node_network_v2",
+        CYCLING_NODE_NETWORK_WFS_URL,
+    ),
+    "wandelnetwerken": (
+        "wandel",
+        "hiking_node_network_v2",
+        HIKING_NODE_NETWORK_WFS_URL,
+    ),
+    "LF- en icoonroutes": ("fiets", "lf_routes", LF_ROUTES_WFS_URL),
+}
 
 
 def _parse_gpx(path) -> list[tuple[float, float]]:
@@ -61,6 +99,117 @@ def _rects(cells) -> list[list[list[float]]]:
             if j is not None:
                 run_start = prev = j
     return rects
+
+
+def _vlaanderen_wfs_url(base_url: str, bbox) -> str:
+    """WFS GetFeature-URL met server-side bbox-filter en GeoJSON-output."""
+    minlat, minlon, maxlat, maxlon = bbox
+    query = urlencode(
+        {"bbox": f"{minlon},{minlat},{maxlon},{maxlat},EPSG:4326"}
+    )
+    return f"{base_url}&{query}"
+
+
+def _fetch_url(url: str) -> bytes:
+    import urllib.request
+
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "lusmaker/0.1 (hobby routeplanner)"}
+    )
+    with urllib.request.urlopen(request, timeout=90) as response:
+        return response.read()
+
+
+def _geojson_document(payload, label: str) -> dict:
+    if isinstance(payload, dict):
+        document = payload
+    else:
+        if isinstance(payload, bytes):
+            payload = payload.decode("utf-8", errors="replace")
+        if not isinstance(payload, str):
+            raise RuntimeError(f"{label}: onverwacht antwoordtype")
+        if payload.lstrip().startswith("<"):
+            raise RuntimeError(
+                f"{label}: WFS gaf een HTML/XML-antwoord in plaats van GeoJSON"
+            )
+        try:
+            document = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"{label}: WFS-antwoord is geen geldige GeoJSON") from exc
+    if document.get("type") != "FeatureCollection" or not isinstance(
+        document.get("features"), list
+    ):
+        raise RuntimeError(f"{label}: WFS-antwoord is geen GeoJSON FeatureCollection")
+    return document
+
+
+def _geometry_lines(geometry: dict | None):
+    if not geometry:
+        return
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if geometry_type == "LineString":
+        yield coordinates
+    elif geometry_type == "MultiLineString":
+        yield from coordinates or []
+    elif geometry_type == "GeometryCollection":
+        for child in geometry.get("geometries") or []:
+            yield from _geometry_lines(child)
+
+
+def _geojson_cells(document: dict) -> set:
+    """Raster lijngeometrieën uit een GeoJSON FeatureCollection op het heatgrid."""
+    cells = set()
+    for feature in document.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        for line in _geometry_lines(feature.get("geometry")):
+            points = []
+            for coordinate in line or []:
+                if not isinstance(coordinate, (list, tuple)) or len(coordinate) < 2:
+                    continue
+                try:
+                    lon, lat = float(coordinate[0]), float(coordinate[1])
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(lat) and math.isfinite(lon):
+                    points.append((lat, lon))
+            cells.update(_track_cells(points))
+    return cells
+
+
+def fetch_vlaanderen(fetcher=_fetch_url) -> dict:
+    """Download en cache de fiets- en wandelroutelagen voor de regio-bbox."""
+    config.ensure_dirs()
+    routes = {"fiets": set(), "wandel": set()}
+    layer_counts = {}
+    for label, (kind, layer, base_url) in VLAANDEREN_ROUTE_LAYERS.items():
+        print(f"[heat] Toerisme Vlaanderen: {label} downloaden", file=sys.stderr)
+        url = _vlaanderen_wfs_url(base_url, config.BBOX)
+        try:
+            payload = fetcher(url)
+        except Exception as exc:
+            code = getattr(exc, "code", None)
+            detail = f"HTTP {code}" if code is not None else str(exc)
+            raise RuntimeError(f"{label}: WFS-download mislukt ({detail})") from exc
+        document = _geojson_document(payload, label)
+        cells = _geojson_cells(document)
+        routes[kind].update(cells)
+        layer_counts[layer] = len(cells)
+        print(
+            f"[heat] Toerisme Vlaanderen: {label} — {len(cells)} cellen",
+            file=sys.stderr,
+        )
+
+    with open(config.VLAANDEREN_ROUTES_PKL, "wb") as handle:
+        pickle.dump(routes, handle)
+    return {
+        "regio": config.current_region().slug,
+        "fiets_cellen": len(routes["fiets"]),
+        "wandel_cellen": len(routes["wandel"]),
+        "lagen": layer_counts,
+        "cache": str(config.VLAANDEREN_ROUTES_PKL),
+    }
 
 
 def fetch_osm(max_pages_per_tile: int = 150) -> dict:
