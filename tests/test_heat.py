@@ -61,7 +61,7 @@ def test_fetch_vlaanderen_parses_lines_uses_bbox_and_caches_separate_sets():
     def fetcher(url):
         calls.append(url)
         layer = parse_qs(urlparse(url).query)["typeNames"][0]
-        return MINI_LINES if layer.endswith("cycling_node_network_v2") else {
+        return MINI_LINES if "traject_fiets" in layer else {
             "type": "FeatureCollection",
             "features": [],
         }

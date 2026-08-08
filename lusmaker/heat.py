@@ -19,39 +19,28 @@ from urllib.parse import urlencode
 from . import config, gh_config, geo
 
 
-# Bron: https://data.toerismevlaanderen.be, datasets
-# cycling_node_network_v2, hiking_node_network_v2 en lf_routes uit workspace
-# geoservices_v2. Licentie: Modellicentie Gratis Hergebruik.
-TOERISME_VLAANDEREN_WFS = (
-    "https://data.toerismevlaanderen.be/geoserver/geoservices_v2/ows"
-)
-CYCLING_NODE_NETWORK_WFS_URL = (
-    f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
-    "&request=GetFeature&typeNames=geoservices_v2%3Acycling_node_network_v2"
-    "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
-)
-HIKING_NODE_NETWORK_WFS_URL = (
-    f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
-    "&request=GetFeature&typeNames=geoservices_v2%3Ahiking_node_network_v2"
-    "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
-)
-LF_ROUTES_WFS_URL = (
-    f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
-    "&request=GetFeature&typeNames=geoservices_v2%3Alf_routes"
-    "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
-)
+# Bron: Toerisme Vlaanderen open data (Modellicentie Gratis Hergebruik).
+# Endpoints gevalideerd 2026-08-08 via metadata.vlaanderen.be
+# (record c91e9b9d-6465-4dec-beeb-16fdc6d759a0) en GetCapabilities.
+TOERISME_VLAANDEREN_WFS = "https://geodata.toerismevlaanderen.be/geoserver/wfs"
+
+
+def _wfs_url(layer: str) -> str:
+    return (
+        f"{TOERISME_VLAANDEREN_WFS}?service=WFS&version=2.0.0"
+        f"&request=GetFeature&typeNames={layer}"
+        "&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
+    )
+
+
+CYCLING_NODE_NETWORK_WFS_URL = _wfs_url("routes%3Atraject_fiets")
+HIKING_NODE_NETWORK_WFS_URL = _wfs_url("routes%3Atraject_wandel")
+LF_ROUTES_WFS_URL = _wfs_url("routes%3Aicoonroute_trajecten")
+
 VLAANDEREN_ROUTE_LAYERS = {
-    "fietsnetwerk": (
-        "fiets",
-        "cycling_node_network_v2",
-        CYCLING_NODE_NETWORK_WFS_URL,
-    ),
-    "wandelnetwerken": (
-        "wandel",
-        "hiking_node_network_v2",
-        HIKING_NODE_NETWORK_WFS_URL,
-    ),
-    "LF- en icoonroutes": ("fiets", "lf_routes", LF_ROUTES_WFS_URL),
+    "fietsnetwerk": ("fiets", "routes:traject_fiets", CYCLING_NODE_NETWORK_WFS_URL),
+    "wandelnetwerken": ("wandel", "routes:traject_wandel", HIKING_NODE_NETWORK_WFS_URL),
+    "icoonroutes": ("fiets", "routes:icoonroute_trajecten", LF_ROUTES_WFS_URL),
 }
 
 
