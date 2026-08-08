@@ -180,6 +180,14 @@ data "aws_iam_policy_document" "github_deploy" {
     ]
   }
 
+  # DescribeLogGroups ondersteunt geen resource-level IAM-scoping. Terraform
+  # gebruikt deze read-only call om de beheerde Lambda-loggroep te vinden.
+  statement {
+    sid       = "LogsDiscovery"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
   statement {
     sid       = "Cognito"
     actions   = ["cognito-idp:*"]
