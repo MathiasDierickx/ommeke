@@ -81,11 +81,14 @@ lus profile show gravel
 lus draft new --start "Wetteren" --profiel-naam gravel
 ```
 
-Profielen staan onder `<LUSMAKER_HOME>/profiles/`. Een voorkeur met waarde
-`null` is nog onbekend; `ok` betekent dat de gebruiker er expliciet geen
-voorkeur voor heeft. Elke wijziging via CLI of MCP wordt met tijdstip en bron
-in de profielhistoriek bewaard. Expliciete draftknoppen zoals
-`--vermijd-kasseien` blijven boven op het profiel werken.
+Profielen staan lokaal onder `<LUSMAKER_HOME>/profiles/`. De remote MCP-server
+slaat profielen, drafts en exports per OAuth-subject op onder
+`<LUSMAKER_HOME>/users/<sub>/`; regio's, caches, heat-data en GraphHopper-
+graven blijven gedeeld. Een voorkeur met waarde `null` is nog onbekend; `ok`
+betekent dat de gebruiker er expliciet geen voorkeur voor heeft. Elke wijziging
+via CLI of MCP wordt met tijdstip en bron in de profielhistoriek bewaard.
+Expliciete draftknoppen zoals `--vermijd-kasseien` blijven boven op het profiel
+werken.
 
 Voor een traillus kies je het profiel bij het aanmaken, of gebruik je de
 composietopdracht met een activiteit:
@@ -222,25 +225,37 @@ lus plan-route --start Wetteren --target-km 50 --doel hoogtemeters \
 lus adjust-route <draft-id> --target-km 45 --expected-revision 4
 ```
 
-### ChatGPT en Streamable HTTP
+### Claude/ChatGPT via Streamable HTTP
 
-Start een lokale HTTP-endpoint voor ontwikkeling als volgt:
+De remote server valideert bearer-JWT's met RS256/JWKS en exposeert standaard
+de lite-toolset op `/mcp`. Configureer de resource-serverinterface via:
 
 ```bash
-.venv/bin/lus-mcp --lite --transport streamable-http \
-  --host 127.0.0.1 --port 8000 --path /mcp --stateless-http --json-response
+export LUSMAKER_OAUTH_ISSUER=https://login.example.com
+export LUSMAKER_OAUTH_JWKS_URL=https://login.example.com/.well-known/jwks.json
+export LUSMAKER_OAUTH_AUDIENCE=lusmaker-mcp
+export LUSMAKER_PUBLIC_URL=https://mcp.example.com
+.venv/bin/lus-mcp --http
 ```
 
-ChatGPT verbindt met een remote MCP-server, niet rechtstreeks met localhost.
-Gebruik voor een lokale/private installatie OpenAI Secure MCP Tunnel, of zet
-de endpoint achter een eigen HTTPS- en authenticatieproxy. Voeg hem daarna in
-ChatGPT developer mode als custom app toe. Zie de actuele
-[OpenAI-instructies voor developer mode en MCP-apps](https://help.openai.com/en/articles/12584461-developer-mode-and-full-mcp-connectors-in-chatgpt).
+`--http` bindt standaard op `0.0.0.0:8123`; `--full` exposeert de volledige
+toolset. De IdP verzorgt de interactieve OAuth-flow en toestemming; Lusmaker
+is alleen resource server. Het RFC 9728-document staat op
+`/.well-known/oauth-protected-resource`. GPX en preview worden als
+token-gebonden URL onder `/files/<sub>/<draft>/<bestand>` teruggegeven; een
+token van een andere gebruiker krijgt geen toegang.
 
-Een bind op een niet-lokaal adres wordt zonder `--allow-remote` geweigerd.
-Die vlag voegt zelf **geen** authenticatie of TLS toe en is dus alleen bedoeld
-achter een beveiligde proxy. OAuth/tenant-isolatie horen bij de hosted laag,
-niet bij deze lokale server.
+Alleen voor lokaal HTTP-testen kan authenticatie expliciet uitgeschakeld
+worden; de opslag valt dan terug op de bestaande lokale paden:
+
+```bash
+LUSMAKER_AUTH_DISABLED=1 \
+LUSMAKER_PUBLIC_URL=http://127.0.0.1:8123 \
+.venv/bin/lus-mcp --http --host 127.0.0.1
+```
+
+ChatGPT en Claude verbinden met een publiek bereikbare HTTPS-server, niet
+rechtstreeks met localhost. TLS wordt door de deploymentlaag afgehandeld.
 
 ### Evals
 
