@@ -3,13 +3,34 @@ import html
 import json
 import math
 
-from . import geo
+from . import geo, heat
 from .draft import DraftError
 
 
 ROUTE_COLORS = ("#2563eb", "#f97316")
 CLIMB_COLOR = "#dc2626"
 MAX_ROUTE_POINTS = 1500
+MAX_POI_MARKERS = 40
+POI_ICONS = {
+    "picknickbank": "🧺",
+    "zitbank": "🪑",
+    "toilet": "🚻",
+    "uitkijktoren": "🔭",
+    "fietspomp_en_fietsherstel": "🔧",
+    "fietsverhuur": "🚲",
+    "speeltuin": "🛝",
+    "ebike": "⚡",
+}
+POI_LABELS = {
+    "picknickbank": "Picknickbank",
+    "zitbank": "Zitbank",
+    "toilet": "Toilet",
+    "uitkijktoren": "Uitkijktoren",
+    "fietspomp_en_fietsherstel": "Fietspomp of fietsherstel",
+    "fietsverhuur": "Fietsverhuur",
+    "speeltuin": "Speeltuin",
+    "ebike": "E-bikepunt",
+}
 
 
 def _json(value) -> str:
@@ -118,7 +139,12 @@ def _metric(label: str, value, suffix: str = "") -> str:
     return f'<span><strong>{html.escape(str(value))}{suffix}</strong> {label}</span>'
 
 
-def render(d: dict, climb_db: dict) -> str:
+def render(
+    d: dict,
+    climb_db: dict,
+    *,
+    feature_selector=heat.features_near_route,
+) -> str:
     """Render een gerouteerde draft als één zelfstandig HTML-document."""
     if not d.get("_geometry"):
         raise DraftError("routeer eerst: `lus draft route <id>`")
@@ -126,6 +152,41 @@ def render(d: dict, climb_db: dict) -> str:
     computed = d.get("computed") or {}
     leg_meta = computed.get("legs") or []
     geometry = d["_geometry"]
+    route_coords = [
+        (point[0], point[1]) for leg in geometry for point in leg
+    ]
+    route_features = feature_selector(
+        route_coords,
+        poi_radius_m=150.0,
+        knot_radius_m=100.0,
+        max_pois=MAX_POI_MARKERS,
+    )
+    poi_markers = []
+    for poi in route_features.get("pois", [])[:MAX_POI_MARKERS]:
+        poi_type = str(poi.get("type", "poi"))
+        label = POI_LABELS.get(poi_type, poi_type.replace("_", " ").title())
+        name = poi.get("naam")
+        popup = f"<strong>{html.escape(label)}</strong>"
+        if name:
+            popup += f"<br>{html.escape(str(name))}"
+        poi_markers.append(
+            {
+                "coords": [poi["lat"], poi["lon"]],
+                "icon": POI_ICONS.get(poi_type, "•"),
+                "popup": popup,
+            }
+        )
+    knot_markers = [
+        {
+            "coords": [knot["lat"], knot["lon"]],
+            "nummer": str(knot["nummer"]),
+            "popup": (
+                f"Knooppunt {html.escape(str(knot['nummer']))} "
+                f"({html.escape(str(knot['type']))})"
+            ),
+        }
+        for knot in route_features.get("knopen", [])
+    ]
     map_legs = _downsample(geometry)
     leg_data = []
     for i, coords in enumerate(map_legs):
@@ -199,6 +260,8 @@ def render(d: dict, climb_db: dict) -> str:
     h2 {{ margin-bottom: 8px; }} .profile {{ width: 100%; height: auto; background: white; border-radius: 10px; }}
     .profile .axis {{ stroke: #94a3b8; }} .profile .elevation {{ fill: none; stroke: #172033; stroke-width: 3; }}
     .profile text {{ fill: #526070; font-size: 15px; }} .start-marker {{ font-size: 25px; line-height: 30px; text-align: center; }}
+    .poi-marker {{ font-size: 16px; line-height: 20px; text-align: center; filter: drop-shadow(0 1px 1px white); }}
+    .knot-marker {{ color: #172033; background: white; border: 1px solid #526070; border-radius: 8px; font: 700 11px/16px system-ui, sans-serif; text-align: center; }}
   </style>
 </head>
 <body>
@@ -221,6 +284,12 @@ def render(d: dict, climb_db: dict) -> str:
     {_json(climb_markers)}.forEach(climb => L.circleMarker(climb.top, {{
       radius: 7, color: '{CLIMB_COLOR}', fillColor: '{CLIMB_COLOR}', fillOpacity: 1
     }}).bindPopup(climb.popup).addTo(map));
+    {_json(poi_markers)}.forEach(poi => L.marker(poi.coords, {{
+      icon: L.divIcon({{className: 'poi-marker', html: poi.icon, iconSize: [20, 20]}})
+    }}).bindPopup(poi.popup).addTo(map));
+    {_json(knot_markers)}.forEach(knot => L.marker(knot.coords, {{
+      icon: L.divIcon({{className: 'knot-marker', html: knot.nummer, iconSize: [22, 16]}})
+    }}).bindPopup(knot.popup).addTo(map));
     if (bounds.length) map.fitBounds(bounds, {{padding: [24, 24]}});
   </script>
 </body>

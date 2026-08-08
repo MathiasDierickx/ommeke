@@ -101,3 +101,46 @@ def test_downsample_uses_one_global_point_budget():
     assert sum(len(leg) for leg in sampled) == preview.MAX_ROUTE_POINTS
     assert sampled[0][0] == legs[0][0]
     assert sampled[1][-1] == legs[1][-1]
+
+
+def test_render_adds_pois_and_knot_labels_and_caps_poi_markers():
+    calls = []
+
+    def feature_selector(route_coords, **kwargs):
+        calls.append((route_coords, kwargs))
+        return {
+            "pois": [
+                {
+                    "type": "picknickbank",
+                    "lat": 50.981,
+                    "lon": 3.871 + index / 100_000,
+                    "naam": f"Bank <{index}>",
+                }
+                for index in range(45)
+            ],
+            "knopen": [
+                {
+                    "lat": 50.982,
+                    "lon": 3.872,
+                    "nummer": 12,
+                    "type": "fiets",
+                }
+            ],
+        }
+
+    document = preview.render(
+        _draft(), _climbs(), feature_selector=feature_selector
+    )
+
+    assert len(calls) == 1
+    assert calls[0][1] == {
+        "poi_radius_m": 150.0,
+        "knot_radius_m": 100.0,
+        "max_pois": preview.MAX_POI_MARKERS,
+    }
+    assert document.count('"icon":') == preview.MAX_POI_MARKERS
+    assert "Bank \\u0026lt;0\\u0026gt;" in document
+    assert "Bank \\u0026lt;40\\u0026gt;" not in document
+    assert '"nummer": "12"' in document
+    assert "className: 'poi-marker'" in document
+    assert "className: 'knot-marker'" in document
