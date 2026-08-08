@@ -74,14 +74,98 @@ def test_fetch_vlaanderen_parses_lines_uses_bbox_and_caches_separate_sets():
 
     expected = heat._track_cells([(50.8, 3.7), (50.8, 3.702)])
     expected |= heat._track_cells([(50.81, 3.71), (50.812, 3.71)])
-    assert cached == {"fiets": expected, "wandel": set()}
+    assert cached["version"] == heat.VLAANDEREN_CACHE_VERSION
+    assert cached["fiets"] == expected
+    assert cached["wandel"] == set()
+    assert cached["wegdek"] == {}
+    assert cached["druk"] == set()
+    assert cached["knopen"] == []
+    assert set(cached["pois"]) == set(heat.VLAANDEREN_POI_LAYERS)
+    assert all(not points for points in cached["pois"].values())
     assert result["fiets_cellen"] == len(expected)
     assert result["wandel_cellen"] == 0
-    assert len(calls) == 3
+    assert len(calls) == 17
     for url in calls:
         query = parse_qs(urlparse(url).query)
         assert query["bbox"] == ["3.35,50.68,4.2,51.1,EPSG:4326"]
         assert query["outputFormat"] == ["application/json"]
+
+
+def test_fetch_vlaanderen_parses_surface_traffic_poi_and_knot_layers():
+    def collection(*features):
+        return {"type": "FeatureCollection", "features": list(features)}
+
+    def line(properties, lon=3.7, lat=50.8):
+        return {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[lon, lat], [lon + 0.002, lat]],
+            },
+            "properties": properties,
+        }
+
+    def point(properties, lon=3.7, lat=50.8):
+        return {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": properties,
+        }
+
+    def fetcher(url):
+        layer = parse_qs(urlparse(url).query)["typeNames"][0]
+        if layer == "routes:wegdek_fiets":
+            return collection(
+                line({"ground": "Kassei"}),
+                line({"ground": "  halfverhard  "}, lat=50.81),
+                line({"ground": ""}, lat=50.82),
+                line({"ground": None}, lat=50.83),
+            )
+        if layer == "routes:wegdek_wandel":
+            return collection(line({"ground": "onverhard"}, lat=50.84))
+        if layer == "routes:verkeersintensiteit_fiets":
+            return collection(
+                line({"traffic": "niet-autovrij"}, lat=50.85),
+                line({"traffic": ""}, lat=50.86),
+            )
+        if layer == "poi:picknickbank":
+            return collection(
+                point({"naam": "Bank aan <de beek>"}, lon=3.71, lat=50.87),
+                point({"naam": "buiten bbox"}, lon=5.0, lat=50.87),
+            )
+        if layer == "routes:knoop_fiets":
+            return collection(
+                point({"knoopnr": 42}, lon=3.72, lat=50.88),
+                point({"knoopnr": -9999}, lon=3.73, lat=50.88),
+            )
+        if layer == "routes:knoop_wandel":
+            return collection(point({"knoopnr": "7"}, lon=3.74, lat=50.89))
+        return collection()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            result = heat.fetch_vlaanderen(fetcher=fetcher)
+            with open(config.VLAANDEREN_ROUTES_PKL, "rb") as handle:
+                cached = pickle.load(handle)
+
+    assert set(cached["wegdek"]) == {"kassei", "halfverhard", "onverhard"}
+    assert cached["wegdek"]["kassei"] == heat._track_cells(
+        [(50.8, 3.7), (50.8, 3.702)]
+    )
+    assert cached["druk"] == heat._track_cells(
+        [(50.85, 3.7), (50.85, 3.702)]
+    )
+    assert cached["pois"]["picknickbank"] == [
+        (50.87, 3.71, "Bank aan <de beek>")
+    ]
+    assert cached["knopen"] == [
+        (50.88, 3.72, 42, "fiets"),
+        (50.89, 3.74, 7, "wandel"),
+    ]
+    assert result["wegdek_cellen"]["halfverhard"] > 0
+    assert result["druk_cellen"] > 0
+    assert result["pois"]["picknickbank"] == 1
+    assert result["knopen"] == 2
 
 
 def test_fetch_vlaanderen_rejects_html_with_clear_error():

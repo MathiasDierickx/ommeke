@@ -23,6 +23,7 @@ from . import config, gh_config, geo
 # Endpoints gevalideerd 2026-08-08 via metadata.vlaanderen.be
 # (record c91e9b9d-6465-4dec-beeb-16fdc6d759a0) en GetCapabilities.
 TOERISME_VLAANDEREN_WFS = "https://geodata.toerismevlaanderen.be/geoserver/wfs"
+VLAANDEREN_CACHE_VERSION = 2
 
 
 def _wfs_url(layer: str) -> str:
@@ -41,6 +42,49 @@ VLAANDEREN_ROUTE_LAYERS = {
     "fietsnetwerk": ("fiets", "routes:traject_fiets", CYCLING_NODE_NETWORK_WFS_URL),
     "wandelnetwerken": ("wandel", "routes:traject_wandel", HIKING_NODE_NETWORK_WFS_URL),
     "icoonroutes": ("fiets", "routes:icoonroute_trajecten", LF_ROUTES_WFS_URL),
+}
+
+VLAANDEREN_SURFACE_LAYERS = {
+    "wegdek fiets": ("routes:wegdek_fiets", _wfs_url("routes%3Awegdek_fiets")),
+    "wegdek wandel": ("routes:wegdek_wandel", _wfs_url("routes%3Awegdek_wandel")),
+}
+
+VLAANDEREN_TRAFFIC_LAYERS = {
+    "verkeersintensiteit fiets": (
+        "routes:verkeersintensiteit_fiets",
+        _wfs_url("routes%3Averkeersintensiteit_fiets"),
+    ),
+    "verkeersintensiteit wandel": (
+        "routes:verkeersintensiteit_wandel",
+        _wfs_url("routes%3Averkeersintensiteit_wandel"),
+    ),
+}
+
+VLAANDEREN_POI_LAYERS = {
+    poi_type: (f"poi:{poi_type}", _wfs_url(f"poi%3A{poi_type}"))
+    for poi_type in (
+        "picknickbank",
+        "zitbank",
+        "toilet",
+        "uitkijktoren",
+        "fietspomp_en_fietsherstel",
+        "fietsverhuur",
+        "speeltuin",
+        "ebike",
+    )
+}
+
+VLAANDEREN_KNOT_LAYERS = {
+    "fietsknooppunten": (
+        "fiets",
+        "routes:knoop_fiets",
+        _wfs_url("routes%3Aknoop_fiets"),
+    ),
+    "wandelknooppunten": (
+        "wandel",
+        "routes:knoop_wandel",
+        _wfs_url("routes%3Aknoop_wandel"),
+    ),
 }
 
 
@@ -167,35 +211,181 @@ def _geojson_cells(document: dict) -> set:
     return cells
 
 
+def _geojson_cells_by_property(document: dict, property_name: str) -> dict[str, set]:
+    """Raster lijnfeatures per niet-lege, genormaliseerde attribuutwaarde."""
+    grouped = defaultdict(set)
+    for feature in document.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        value = (feature.get("properties") or {}).get(property_name)
+        if value is None or not str(value).strip():
+            continue
+        key = str(value).strip().casefold()
+        grouped[key].update(_geojson_cells({"features": [feature]}))
+    return dict(grouped)
+
+
+def _geometry_points(geometry: dict | None):
+    if not geometry:
+        return
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if geometry_type == "Point":
+        coordinates = [coordinates]
+    elif geometry_type != "MultiPoint":
+        if geometry_type == "GeometryCollection":
+            for child in geometry.get("geometries") or []:
+                yield from _geometry_points(child)
+        return
+    for coordinate in coordinates or []:
+        if not isinstance(coordinate, (list, tuple)) or len(coordinate) < 2:
+            continue
+        try:
+            lon, lat = float(coordinate[0]), float(coordinate[1])
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(lat) and math.isfinite(lon):
+            yield lat, lon
+
+
+def _point_in_bbox(point, bbox) -> bool:
+    lat, lon = point
+    minlat, minlon, maxlat, maxlon = bbox
+    return minlat <= lat <= maxlat and minlon <= lon <= maxlon
+
+
+def _geojson_pois(document: dict, bbox) -> list[tuple[float, float, str | None]]:
+    points = []
+    for feature in document.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties") or {}
+        name = properties.get("naam") or properties.get("name")
+        name = str(name).strip() if name is not None and str(name).strip() else None
+        points.extend(
+            (lat, lon, name)
+            for lat, lon in _geometry_points(feature.get("geometry"))
+            if _point_in_bbox((lat, lon), bbox)
+        )
+    return points
+
+
+def _knot_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number < 0:
+        return None
+    return int(number) if number.is_integer() else number
+
+
+def _geojson_knots(document: dict, bbox, kind: str) -> list[tuple]:
+    points = []
+    for feature in document.get("features", []):
+        if not isinstance(feature, dict):
+            continue
+        number = _knot_number((feature.get("properties") or {}).get("knoopnr"))
+        if number is None:
+            continue
+        points.extend(
+            (lat, lon, number, kind)
+            for lat, lon in _geometry_points(feature.get("geometry"))
+            if _point_in_bbox((lat, lon), bbox)
+        )
+    return points
+
+
+def _fetch_vlaanderen_document(label: str, base_url: str, fetcher) -> dict:
+    print(f"[heat] Toerisme Vlaanderen: {label} downloaden", file=sys.stderr)
+    url = _vlaanderen_wfs_url(base_url, config.BBOX)
+    try:
+        payload = fetcher(url)
+    except Exception as exc:
+        code = getattr(exc, "code", None)
+        detail = f"HTTP {code}" if code is not None else str(exc)
+        raise RuntimeError(f"{label}: WFS-download mislukt ({detail})") from exc
+    return _geojson_document(payload, label)
+
+
 def fetch_vlaanderen(fetcher=_fetch_url) -> dict:
-    """Download en cache de fiets- en wandelroutelagen voor de regio-bbox."""
+    """Download en cache alle bruikbare Toerisme Vlaanderen-lagen."""
     config.ensure_dirs()
-    routes = {"fiets": set(), "wandel": set()}
+    data = {
+        "version": VLAANDEREN_CACHE_VERSION,
+        "fiets": set(),
+        "wandel": set(),
+        "wegdek": {},
+        "druk": set(),
+        "pois": {},
+        "knopen": [],
+    }
     layer_counts = {}
     for label, (kind, layer, base_url) in VLAANDEREN_ROUTE_LAYERS.items():
-        print(f"[heat] Toerisme Vlaanderen: {label} downloaden", file=sys.stderr)
-        url = _vlaanderen_wfs_url(base_url, config.BBOX)
-        try:
-            payload = fetcher(url)
-        except Exception as exc:
-            code = getattr(exc, "code", None)
-            detail = f"HTTP {code}" if code is not None else str(exc)
-            raise RuntimeError(f"{label}: WFS-download mislukt ({detail})") from exc
-        document = _geojson_document(payload, label)
+        document = _fetch_vlaanderen_document(label, base_url, fetcher)
         cells = _geojson_cells(document)
-        routes[kind].update(cells)
+        data[kind].update(cells)
         layer_counts[layer] = len(cells)
         print(
             f"[heat] Toerisme Vlaanderen: {label} — {len(cells)} cellen",
             file=sys.stderr,
         )
 
+    for label, (layer, base_url) in VLAANDEREN_SURFACE_LAYERS.items():
+        document = _fetch_vlaanderen_document(label, base_url, fetcher)
+        grouped = _geojson_cells_by_property(document, "ground")
+        for ground, cells in grouped.items():
+            data["wegdek"].setdefault(ground, set()).update(cells)
+        layer_cells = set().union(*grouped.values()) if grouped else set()
+        layer_counts[layer] = len(layer_cells)
+        print(
+            f"[heat] Toerisme Vlaanderen: {label} — {len(layer_cells)} cellen",
+            file=sys.stderr,
+        )
+
+    for label, (layer, base_url) in VLAANDEREN_TRAFFIC_LAYERS.items():
+        document = _fetch_vlaanderen_document(label, base_url, fetcher)
+        grouped = _geojson_cells_by_property(document, "traffic")
+        cells = set().union(*grouped.values()) if grouped else set()
+        data["druk"].update(cells)
+        layer_counts[layer] = len(cells)
+        print(
+            f"[heat] Toerisme Vlaanderen: {label} — {len(cells)} cellen",
+            file=sys.stderr,
+        )
+
+    for poi_type, (layer, base_url) in VLAANDEREN_POI_LAYERS.items():
+        document = _fetch_vlaanderen_document(poi_type, base_url, fetcher)
+        points = _geojson_pois(document, config.BBOX)
+        data["pois"][poi_type] = points
+        layer_counts[layer] = len(points)
+        print(
+            f"[heat] Toerisme Vlaanderen: {poi_type} — {len(points)} punten",
+            file=sys.stderr,
+        )
+
+    for label, (kind, layer, base_url) in VLAANDEREN_KNOT_LAYERS.items():
+        document = _fetch_vlaanderen_document(label, base_url, fetcher)
+        points = _geojson_knots(document, config.BBOX, kind)
+        data["knopen"].extend(points)
+        layer_counts[layer] = len(points)
+        print(
+            f"[heat] Toerisme Vlaanderen: {label} — {len(points)} punten",
+            file=sys.stderr,
+        )
+
     with open(config.VLAANDEREN_ROUTES_PKL, "wb") as handle:
-        pickle.dump(routes, handle)
+        pickle.dump(data, handle)
     return {
         "regio": config.current_region().slug,
-        "fiets_cellen": len(routes["fiets"]),
-        "wandel_cellen": len(routes["wandel"]),
+        "fiets_cellen": len(data["fiets"]),
+        "wandel_cellen": len(data["wandel"]),
+        "wegdek_cellen": {
+            ground: len(cells) for ground, cells in sorted(data["wegdek"].items())
+        },
+        "druk_cellen": len(data["druk"]),
+        "pois": {poi_type: len(points) for poi_type, points in data["pois"].items()},
+        "knopen": len(data["knopen"]),
         "lagen": layer_counts,
         "cache": str(config.VLAANDEREN_ROUTES_PKL),
     }
@@ -305,11 +495,42 @@ def _osm_cells(min_points: int) -> set:
     return {c for c, n in counts.items() if n >= min_points}
 
 
-def _vlaanderen_cells() -> dict[str, set]:
+def vlaanderen_data() -> dict:
+    """Lees cacheversie 2, met lege aanvullingen voor een bestaande T14-cache."""
+    empty = {
+        "version": 1,
+        "fiets": set(),
+        "wandel": set(),
+        "wegdek": {},
+        "druk": set(),
+        "pois": {},
+        "knopen": [],
+    }
     if not config.VLAANDEREN_ROUTES_PKL.exists():
-        return {"fiets": set(), "wandel": set()}
+        return empty
     with open(config.VLAANDEREN_ROUTES_PKL, "rb") as handle:
-        routes = pickle.load(handle)
+        cached = pickle.load(handle)
+    if not isinstance(cached, dict):
+        return empty
+    return {
+        "version": cached.get("version", 1),
+        "fiets": set(cached.get("fiets", set())),
+        "wandel": set(cached.get("wandel", set())),
+        "wegdek": {
+            str(ground): set(cells)
+            for ground, cells in (cached.get("wegdek") or {}).items()
+        },
+        "druk": set(cached.get("druk", set())),
+        "pois": {
+            str(poi_type): list(points)
+            for poi_type, points in (cached.get("pois") or {}).items()
+        },
+        "knopen": list(cached.get("knopen") or []),
+    }
+
+
+def _vlaanderen_cells() -> dict[str, set]:
+    routes = vlaanderen_data()
     return {
         "fiets": set(routes.get("fiets", set())),
         "wandel": set(routes.get("wandel", set())),
