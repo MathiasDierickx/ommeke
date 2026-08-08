@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -87,6 +88,9 @@ class CognitoAuthMiddleware:
         self._token_cache: dict[str, tuple[float, str]] = {}
 
     async def _unauthorized(self, scope, receive, send) -> None:
+        required_scope = os.environ.get(
+            "LUSMAKER_OAUTH_SCOPE", "aws.cognito.signin.user.admin"
+        )
         response = JSONResponse(
             {"error": "Geldige Cognito access token vereist."},
             status_code=401,
@@ -94,7 +98,7 @@ class CognitoAuthMiddleware:
                 "WWW-Authenticate": (
                     'Bearer resource_metadata="'
                     f"{_metadata_url(scope)}"
-                    '"'
+                    f'", scope="{required_scope}"'
                 )
             },
         )
@@ -110,6 +114,23 @@ class CognitoAuthMiddleware:
             client = self.client or _cognito_client()
             result = await asyncio.to_thread(client.get_user, AccessToken=token)
         except Exception:
+            return None
+        try:
+            encoded_claims = token.split(".")[1]
+            padding = "=" * (-len(encoded_claims) % 4)
+            claims = json.loads(
+                base64.urlsafe_b64decode(encoded_claims + padding)
+            )
+        except (IndexError, ValueError, json.JSONDecodeError):
+            claims = {}
+        expected_client = os.environ.get("LUSMAKER_OAUTH_CLIENT_ID")
+        if expected_client and claims.get("client_id") != expected_client:
+            return None
+        required_scope = os.environ.get("LUSMAKER_OAUTH_SCOPE")
+        if (
+            required_scope
+            and required_scope not in str(claims.get("scope", "")).split()
+        ):
             return None
         attributes = {
             item.get("Name"): item.get("Value")
@@ -164,6 +185,14 @@ async def oauth_protected_resource(request: Request) -> JSONResponse:
         "resource": _resource_url(request.scope),
         "bearer_methods_supported": ["header"],
         "scopes_supported": [scope],
+        "token_endpoint_auth_methods_supported": [
+            item.strip()
+            for item in os.environ.get(
+                "LUSMAKER_TOKEN_AUTH_METHODS",
+                "client_secret_basic,client_secret_post",
+            ).split(",")
+            if item.strip()
+        ],
     }
     if issuer:
         payload["authorization_servers"] = [issuer]

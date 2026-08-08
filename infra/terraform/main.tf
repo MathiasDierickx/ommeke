@@ -260,15 +260,17 @@ resource "aws_lambda_function" "app" {
 
   environment {
     variables = {
-      AWS_LWA_ASYNC_INIT    = "true"
-      AWS_LWA_INVOKE_MODE   = "response_stream"
-      JAVA_OPTS             = var.java_opts
-      LUSMAKER_AUTH_MODE    = "cognito"
-      LUSMAKER_OAUTH_ISSUER = local.oauth_issuer
-      LUSMAKER_OAUTH_SCOPE  = "aws.cognito.signin.user.admin"
-      LUSMAKER_REGION       = var.region_slug
-      LUSMAKER_STATE_BUCKET = aws_s3_bucket.data.id
-      LUSMAKER_TMP          = "/tmp/lusmaker"
+      AWS_LWA_ASYNC_INIT          = "true"
+      AWS_LWA_INVOKE_MODE         = "response_stream"
+      JAVA_OPTS                   = var.java_opts
+      LUSMAKER_AUTH_MODE          = "cognito"
+      LUSMAKER_OAUTH_CLIENT_ID    = aws_cognito_user_pool_client.mcp.id
+      LUSMAKER_OAUTH_ISSUER       = local.oauth_issuer
+      LUSMAKER_OAUTH_SCOPE        = "aws.cognito.signin.user.admin"
+      LUSMAKER_REGION             = var.region_slug
+      LUSMAKER_STATE_BUCKET       = aws_s3_bucket.data.id
+      LUSMAKER_TMP                = "/tmp/lusmaker"
+      LUSMAKER_TOKEN_AUTH_METHODS = var.oauth_generate_secret ? "client_secret_basic,client_secret_post" : "none"
     }
   }
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 
@@ -23,6 +24,12 @@ class FakeCognito:
             "Username": "fallback",
             "UserAttributes": [{"Name": "sub", "Value": "user-123"}],
         }
+
+
+def _access_token(client_id: str, scope: str) -> str:
+    claims = json.dumps({"client_id": client_id, "scope": scope}).encode()
+    encoded = base64.urlsafe_b64encode(claims).rstrip(b"=").decode()
+    return f"header.{encoded}.signature"
 
 
 async def _invoke(app, path="/", *, headers=None, method="GET"):
@@ -163,3 +170,52 @@ def test_invalid_token_never_reaches_private_app():
     )
     assert start["status"] == 401
     assert client.calls == ["fout"]
+
+
+def test_token_must_belong_to_configured_oauth_client_and_scope():
+    required_scope = "aws.cognito.signin.user.admin"
+    valid = _access_token("client-123", required_scope)
+    wrong_client = _access_token("andere-client", required_scope)
+    client = FakeCognito(valid_token=valid)
+    previous_client = os.environ.get("LUSMAKER_OAUTH_CLIENT_ID")
+    previous_scope = os.environ.get("LUSMAKER_OAUTH_SCOPE")
+    os.environ["LUSMAKER_OAUTH_CLIENT_ID"] = "client-123"
+    os.environ["LUSMAKER_OAUTH_SCOPE"] = required_scope
+
+    async def private_app(scope, receive, send):
+        await send(
+            {"type": "http.response.start", "status": 204, "headers": []}
+        )
+        await send({"type": "http.response.body", "body": b""})
+
+    try:
+        app = CognitoAuthMiddleware(
+            private_app, client=client, auth_mode="cognito"
+        )
+        accepted, _body = asyncio.run(
+            _invoke(
+                app,
+                "/mcp",
+                headers={"authorization": f"Bearer {valid}"},
+                method="POST",
+            )
+        )
+        assert accepted["status"] == 204
+
+        client.valid_token = wrong_client
+        rejected, _body = _json_response(
+            app,
+            "/mcp",
+            headers={"authorization": f"Bearer {wrong_client}"},
+            method="POST",
+        )
+        assert rejected["status"] == 401
+    finally:
+        if previous_client is None:
+            os.environ.pop("LUSMAKER_OAUTH_CLIENT_ID", None)
+        else:
+            os.environ["LUSMAKER_OAUTH_CLIENT_ID"] = previous_client
+        if previous_scope is None:
+            os.environ.pop("LUSMAKER_OAUTH_SCOPE", None)
+        else:
+            os.environ["LUSMAKER_OAUTH_SCOPE"] = previous_scope
