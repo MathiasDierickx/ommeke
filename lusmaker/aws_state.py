@@ -170,6 +170,50 @@ def list_json(relative_prefix: str, *, client=None) -> list[dict]:
         token = response["NextContinuationToken"]
 
 
+def delete(relative: str, *, client=None) -> None:
+    """Verwijder exact één tenant-object."""
+    if not enabled():
+        raise StateError("AWS-state is niet geconfigureerd")
+    client = _client(client)
+    try:
+        client.delete_object(Bucket=bucket(), Key=key(relative))
+    except Exception as exc:
+        raise StateError(
+            f"S3-object verwijderen mislukt: {_error_code(exc) or exc}"
+        ) from exc
+
+
+def delete_prefix(relative_prefix: str, *, client=None) -> int:
+    """Verwijder alle tenant-objecten onder een niet-lege prefix."""
+    if not enabled():
+        raise StateError("AWS-state is niet geconfigureerd")
+    client = _client(client)
+    prefix = key(relative_prefix).rstrip("/") + "/"
+    deleted = 0
+    token = None
+    while True:
+        kwargs = {"Bucket": bucket(), "Prefix": prefix}
+        if token:
+            kwargs["ContinuationToken"] = token
+        try:
+            response = client.list_objects_v2(**kwargs)
+            keys = [item["Key"] for item in response.get("Contents", [])]
+            for offset in range(0, len(keys), 1000):
+                batch = keys[offset : offset + 1000]
+                client.delete_objects(
+                    Bucket=bucket(),
+                    Delete={"Objects": [{"Key": item} for item in batch]},
+                )
+                deleted += len(batch)
+        except Exception as exc:
+            raise StateError(
+                f"S3-prefix verwijderen mislukt: {_error_code(exc) or exc}"
+            ) from exc
+        if not response.get("IsTruncated"):
+            return deleted
+        token = response["NextContinuationToken"]
+
+
 def publish_artifact(
     draft_id: str, filename: str, payload: bytes, mime_type: str, *, client=None
 ) -> dict:

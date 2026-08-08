@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 from . import __version__, tenant
+from . import aws_api
 from .mcp_server import hosted_mcp
 
 
@@ -123,8 +124,13 @@ class CognitoAuthMiddleware:
             )
         except (IndexError, ValueError, json.JSONDecodeError):
             claims = {}
-        expected_client = os.environ.get("LUSMAKER_OAUTH_CLIENT_ID")
-        if expected_client and claims.get("client_id") != expected_client:
+        configured_clients = os.environ.get("LUSMAKER_OAUTH_CLIENT_IDS") or os.environ.get(
+            "LUSMAKER_OAUTH_CLIENT_ID", ""
+        )
+        expected_clients = {
+            value.strip() for value in configured_clients.split(",") if value.strip()
+        }
+        if expected_clients and claims.get("client_id") not in expected_clients:
             return None
         required_scope = os.environ.get("LUSMAKER_OAUTH_SCOPE")
         if (
@@ -220,6 +226,58 @@ def create_app(
                 "/.well-known/oauth-protected-resource/mcp",
                 oauth_protected_resource,
                 methods=["GET"],
+            ),
+            Route("/api/me", aws_api.me, methods=["GET"]),
+            Route("/api/routes", aws_api.routes_list, methods=["GET"]),
+            Route(
+                "/api/routes/{draft_id}",
+                aws_api.route_detail,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/routes/{draft_id}",
+                aws_api.route_update,
+                methods=["PATCH"],
+            ),
+            Route(
+                "/api/routes/{draft_id}",
+                aws_api.route_delete,
+                methods=["DELETE"],
+            ),
+            Route(
+                "/api/routes/{draft_id}/gpx",
+                aws_api.route_gpx,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/routes/{draft_id}/preview",
+                aws_api.route_preview,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/conversations",
+                aws_api.conversations_list,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/conversations",
+                aws_api.conversation_create,
+                methods=["POST"],
+            ),
+            Route(
+                "/api/conversations/{conversation_id}/messages",
+                aws_api.conversation_messages,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/conversations/{conversation_id}/messages",
+                aws_api.conversation_send,
+                methods=["POST"],
+            ),
+            Route(
+                "/api/conversations/{conversation_id}",
+                aws_api.conversation_delete,
+                methods=["DELETE"],
             ),
             Mount("/", app=mcp_app),
         ]

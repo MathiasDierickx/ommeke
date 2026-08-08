@@ -219,3 +219,33 @@ def test_token_must_belong_to_configured_oauth_client_and_scope():
             os.environ.pop("LUSMAKER_OAUTH_SCOPE", None)
         else:
             os.environ["LUSMAKER_OAUTH_SCOPE"] = previous_scope
+
+
+def test_token_accepts_one_of_multiple_configured_clients():
+    required_scope = "aws.cognito.signin.user.admin"
+    token = _access_token("web-client", required_scope)
+    client = FakeCognito(valid_token=token)
+    previous = os.environ.get("LUSMAKER_OAUTH_CLIENT_IDS")
+    os.environ["LUSMAKER_OAUTH_CLIENT_IDS"] = "mcp-client,web-client"
+
+    async def private_app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    try:
+        app = CognitoAuthMiddleware(
+            private_app, client=client, auth_mode="cognito"
+        )
+        accepted, _body = asyncio.run(
+            _invoke(
+                app,
+                "/api/me",
+                headers={"authorization": f"Bearer {token}"},
+            )
+        )
+        assert accepted["status"] == 204
+    finally:
+        if previous is None:
+            os.environ.pop("LUSMAKER_OAUTH_CLIENT_IDS", None)
+        else:
+            os.environ["LUSMAKER_OAUTH_CLIENT_IDS"] = previous

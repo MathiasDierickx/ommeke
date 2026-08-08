@@ -54,6 +54,16 @@ class _FakeS3:
         keys = sorted(key for key in self.objects if key.startswith(kwargs["Prefix"]))
         return {"Contents": [{"Key": key} for key in keys], "IsTruncated": False}
 
+    def delete_object(self, **kwargs):
+        self.objects.pop(kwargs["Key"], None)
+        self.etags.pop(kwargs["Key"], None)
+        return {}
+
+    def delete_objects(self, **kwargs):
+        for item in kwargs["Delete"]["Objects"]:
+            self.delete_object(Key=item["Key"])
+        return {}
+
 
 @contextmanager
 def _aws_bucket():
@@ -104,6 +114,20 @@ def test_artifact_metadata_contains_hash_and_size():
     assert payload == b"<gpx/>"
     assert result["bytes"] == 6
     assert metadata["sha256"] == result["sha256"]
+
+
+def test_tenant_delete_removes_only_the_requested_object_and_prefix():
+    client = _FakeS3()
+    with _aws_bucket(), tenant.use("abc"):
+        aws_state.put_json("drafts/a.json", {"id": "a"}, client=client)
+        aws_state.put_json("drafts/b.json", {"id": "b"}, client=client)
+        aws_state.put_bytes("artifacts/a/route.gpx", b"gpx", client=client)
+        aws_state.put_bytes("artifacts/a/preview.html", b"html", client=client)
+        aws_state.delete("drafts/a.json", client=client)
+        deleted = aws_state.delete_prefix("artifacts/a", client=client)
+
+    assert deleted == 2
+    assert list(client.objects) == ["tenants/abc/drafts/b.json"]
 
 
 def test_domain_storage_uses_s3_for_drafts_profiles_and_artifacts():

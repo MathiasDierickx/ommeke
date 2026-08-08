@@ -1,0 +1,226 @@
+"""JSON API voor de Cognito-webapp bovenop routes en Bedrock-chat."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import re
+from typing import Any
+from urllib.parse import quote
+
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse, Response
+
+from . import artifacts, aws_state, draft, tenant
+from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
+
+
+_DRAFT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _error(message: str, status: int = 400, code: str = "bad_request") -> JSONResponse:
+    return JSONResponse({"error": message, "code": code}, status_code=status)
+
+
+async def _json_body(request: Request, *, max_bytes: int = 16_384) -> dict[str, Any]:
+    body = await request.body()
+    if len(body) > max_bytes:
+        raise ChatError("request is te groot")
+    try:
+        value = json.loads(body or b"{}")
+    except json.JSONDecodeError as exc:
+        raise ChatError("ongeldige JSON") from exc
+    if not isinstance(value, dict):
+        raise ChatError("request body moet een JSON-object zijn")
+    return value
+
+
+def _draft_id(request: Request) -> str:
+    value = request.path_params.get("draft_id", "")
+    if not _DRAFT_ID_RE.fullmatch(value):
+        raise draft.DraftError("ongeldig route-id")
+    return value
+
+
+def _route_item(item: dict[str, Any]) -> dict[str, Any]:
+    computed = item.get("computed") or {}
+    return {
+        "id": item["id"],
+        "revision": int(item.get("revision", 0)),
+        "name": item.get("name") or "Naamloze route",
+        "created": item.get("created"),
+        "start": (item.get("start") or {}).get("label"),
+        "activity": "trail" if item.get("profile") == "trail" else "fietsen",
+        "region": item.get("region"),
+        "climbs": item.get("climbs") or [],
+        "total_km": computed.get("total_km"),
+        "elevation_gain_m": computed.get("elevation_gain_m"),
+        "ready": bool(computed),
+        "download_url": f"/api/routes/{item['id']}/gpx" if computed else None,
+        "preview_url": f"/api/routes/{item['id']}/preview" if computed else None,
+    }
+
+
+async def me(_request: Request) -> JSONResponse:
+    return JSONResponse({"id": tenant.current()})
+
+
+async def routes_list(_request: Request) -> JSONResponse:
+    try:
+        items = await asyncio.to_thread(draft.list_all)
+        full = await asyncio.gather(
+            *(asyncio.to_thread(draft.load, item["id"]) for item in items)
+        )
+        full.sort(key=lambda item: item.get("created", ""), reverse=True)
+        return JSONResponse({"routes": [_route_item(item) for item in full]})
+    except Exception as exc:
+        return _error(str(exc), 500, "routes_unavailable")
+
+
+async def route_detail(request: Request) -> JSONResponse:
+    try:
+        item = await asyncio.to_thread(draft.load, _draft_id(request))
+        result = _route_item(item)
+        result["avoid_places"] = item.get("avoid_places") or []
+        result["route_request"] = item.get("route_request") or {}
+        result["computed"] = item.get("computed")
+        return JSONResponse({"route": result})
+    except draft.DraftError as exc:
+        return _error(str(exc), 404, "route_not_found")
+
+
+async def route_update(request: Request) -> JSONResponse:
+    try:
+        draft_id = _draft_id(request)
+        body = await _json_body(request)
+        name = body.get("name")
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80:
+            return _error("naam moet 1 tot 80 tekens bevatten")
+        item = await asyncio.to_thread(draft.load, draft_id)
+        expected_revision = body.get("expected_revision")
+        if not isinstance(expected_revision, int):
+            return _error("expected_revision is verplicht")
+        draft.require_revision(item, expected_revision)
+        item["name"] = name.strip()
+        await asyncio.to_thread(
+            draft.save, item, expected_revision=expected_revision
+        )
+        return JSONResponse({"route": _route_item(item)})
+    except draft.DraftError as exc:
+        return _error(str(exc), 409, "route_conflict")
+    except ChatError as exc:
+        return _error(str(exc))
+
+
+async def route_delete(request: Request) -> Response:
+    try:
+        draft_id = _draft_id(request)
+        await asyncio.to_thread(draft.load, draft_id)
+        await asyncio.to_thread(aws_state.delete, f"drafts/{draft_id}.json")
+        await asyncio.to_thread(aws_state.delete_prefix, f"artifacts/{draft_id}")
+        return Response(status_code=204)
+    except draft.DraftError as exc:
+        return _error(str(exc), 404, "route_not_found")
+    except Exception as exc:
+        return _error(str(exc), 500, "route_delete_failed")
+
+
+async def route_gpx(request: Request) -> Response:
+    try:
+        draft_id = _draft_id(request)
+        item = await asyncio.to_thread(draft.load, draft_id)
+        payload = await asyncio.to_thread(artifacts.read, draft_id, "route.gpx")
+        filename = quote(f"{item.get('name') or 'lusmaker-route'}.gpx")
+        return Response(
+            payload,
+            media_type="application/gpx+xml",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+                "Cache-Control": "private, no-store",
+            },
+        )
+    except (draft.DraftError, artifacts.ArtifactError) as exc:
+        return _error(str(exc), 404, "artifact_not_found")
+
+
+async def route_preview(request: Request) -> Response:
+    try:
+        draft_id = _draft_id(request)
+        await asyncio.to_thread(draft.load, draft_id)
+        payload = await asyncio.to_thread(artifacts.read, draft_id, "preview.html")
+        return HTMLResponse(
+            payload.decode("utf-8"),
+            headers={"Cache-Control": "private, no-store"},
+        )
+    except (draft.DraftError, artifacts.ArtifactError, UnicodeDecodeError) as exc:
+        return _error(str(exc), 404, "artifact_not_found")
+
+
+async def conversations_list(_request: Request) -> JSONResponse:
+    try:
+        items = await asyncio.to_thread(ConversationStore().list)
+        return JSONResponse({"conversations": items})
+    except ChatError as exc:
+        return _error(str(exc), 500, "chat_unavailable")
+
+
+async def conversation_create(request: Request) -> JSONResponse:
+    try:
+        body = await _json_body(request)
+        title = body.get("title")
+        if title is not None and not isinstance(title, str):
+            return _error("title moet tekst zijn")
+        item = await asyncio.to_thread(ConversationStore().create, title)
+        return JSONResponse({"conversation": item}, status_code=201)
+    except ChatError as exc:
+        return _error(str(exc), 500, "chat_unavailable")
+
+
+async def conversation_messages(request: Request) -> JSONResponse:
+    try:
+        conversation_id = request.path_params["conversation_id"]
+        store = ConversationStore()
+        conversation, messages = await asyncio.gather(
+            asyncio.to_thread(store.get, conversation_id),
+            asyncio.to_thread(store.messages, conversation_id, 100),
+        )
+        return JSONResponse(
+            {"conversation": conversation, "messages": messages}
+        )
+    except ChatNotFound as exc:
+        return _error(str(exc), 404, "conversation_not_found")
+    except ChatError as exc:
+        return _error(str(exc))
+
+
+async def conversation_send(request: Request) -> JSONResponse:
+    try:
+        conversation_id = request.path_params["conversation_id"]
+        body = await _json_body(request)
+        content = body.get("content")
+        if not isinstance(content, str):
+            return _error("content moet tekst zijn")
+        result = await asyncio.to_thread(send_message, conversation_id, content)
+        return JSONResponse(result, status_code=201)
+    except ChatNotFound as exc:
+        return _error(str(exc), 404, "conversation_not_found")
+    except ChatError as exc:
+        return _error(str(exc), 422, "chat_failed")
+    except Exception:
+        return _error(
+            "Claude kon dit bericht niet verwerken. Probeer het opnieuw.",
+            502,
+            "model_unavailable",
+        )
+
+
+async def conversation_delete(request: Request) -> Response:
+    try:
+        await asyncio.to_thread(
+            ConversationStore().delete, request.path_params["conversation_id"]
+        )
+        return Response(status_code=204)
+    except ChatNotFound as exc:
+        return _error(str(exc), 404, "conversation_not_found")
+    except ChatError as exc:
+        return _error(str(exc))
