@@ -30,6 +30,7 @@ from .mcp_contracts import (
     ClimbListResult,
     ClimbSuggestionResult,
     DraftListResult,
+    ExpectedRevision,
     GeocodeResult,
     Goal,
     GraphProfile,
@@ -41,6 +42,7 @@ from .mcp_contracts import (
     ProfileListResult,
     ProfilePatch,
     RadiusKm,
+    RequestId,
     ResultLimit,
     RouteDetailsResult,
     RouteWorkflowResult,
@@ -51,8 +53,10 @@ from .mcp_contracts import (
 SERVER_INSTRUCTIONS = (
     "Gebruik plan_route voor een nieuwe routewens en adjust_route voor een "
     "bestaande draft. Vraag ontbrekende gebruikerskeuzes uit wanneer een tool "
-    "status needs_input teruggeeft. Poll region_status na ensure_region. Geef "
-    "GPX en preview via de teruggegeven artifact-URI's aan de gebruiker."
+    "status needs_input teruggeeft. Hergebruik bij retries dezelfde request_id "
+    "en stuur bij mutaties de laatst ontvangen revision mee. Poll region_status "
+    "na ensure_region. Geef GPX en preview via de teruggegeven artifact-URI's "
+    "aan de gebruiker."
 )
 
 READ_ONLY_CLOSED = ToolAnnotations(
@@ -240,17 +244,27 @@ def add_climb(
     draft_id: NonEmptyString,
     climb_id: NonEmptyString,
     position: InsertPosition | None = None,
+    expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Voeg een bekende klim toe op een optionele positie in de draft."""
-    return draft.add_climb(draft_id, climb_id, position=position)
+    return draft.add_climb(
+        draft_id,
+        climb_id,
+        position=position,
+        expected_revision=expected_revision,
+    )
 
 
 @mcp.tool(annotations=MUTATING_CLOSED)
 def remove_climb(
-    draft_id: NonEmptyString, climb_id: NonEmptyString
+    draft_id: NonEmptyString,
+    climb_id: NonEmptyString,
+    expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Verwijder een klim uit de draft."""
-    return draft.remove_climb(draft_id, climb_id)
+    return draft.remove_climb(
+        draft_id, climb_id, expected_revision=expected_revision
+    )
 
 
 @mcp.tool(annotations=ADDITIVE_CLOSED)
@@ -259,38 +273,56 @@ def avoid_place(
     place: NonEmptyString,
     radius_km: RadiusKm = 2.5,
     factor: AvoidFactor = 0.35,
+    expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Voeg een zachte vermijdzone rond een plaats toe."""
     return draft.avoid_place(
-        draft_id, place, radius_km=radius_km, factor=factor
+        draft_id,
+        place,
+        radius_km=radius_km,
+        factor=factor,
+        expected_revision=expected_revision,
     )
 
 
 @mcp.tool(annotations=MUTATING_CLOSED)
 def unavoid_place(
-    draft_id: NonEmptyString, place: NonEmptyString
+    draft_id: NonEmptyString,
+    place: NonEmptyString,
+    expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Verwijder vermijdzones die overeenkomen met een plaatsnaam."""
-    return draft.unavoid_place(draft_id, place)
+    return draft.unavoid_place(
+        draft_id, place, expected_revision=expected_revision
+    )
 
 
 @mcp.tool(annotations=MUTATING_ROUTER)
-def route_draft(draft_id: NonEmptyString) -> dict[str, Any]:
+def route_draft(
+    draft_id: NonEmptyString,
+    expected_revision: ExpectedRevision | None = None,
+) -> dict[str, Any]:
     """Routeer de draft via GraphHopper en bereken de kwaliteitsmetrieken."""
     d = draft.load(draft_id)
+    draft.require_revision(d, expected_revision)
     with draft.region_scope(d):
-        return draft.route(d, climbs.all_climbs())
+        return draft.route(
+            d, climbs.all_climbs(), expected_revision=expected_revision
+        )
 
 
 @mcp.tool(annotations=MUTATING_ROUTER)
 def route_readiness(
-    draft_id: NonEmptyString, profiel_naam: NonEmptyString = "standaard"
+    draft_id: NonEmptyString,
+    profiel_naam: NonEmptyString = "standaard",
+    expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Verken en beoordeel de routevoorkeuren. Stel de vragen aan de gebruiker,
     pas antwoorden toe via update_profile (of avoid_place bij doel=draft), en
     vraag daarna opnieuw readiness op tot klaar=true; routeer dan met optimize.
     """
     d = draft.load(draft_id)
+    draft.require_revision(d, expected_revision)
     with draft.region_scope(d):
         climb_db = climbs.all_climbs()
         draft.probe(d, climb_db)
@@ -340,6 +372,7 @@ def plan_route(
     activiteit: Activity = "fietsen",
     geen_opvulling: bool = False,
     profiel_naam: NonEmptyString = "standaard",
+    request_id: RequestId | None = None,
 ) -> RouteWorkflowResult:
     """Start een routeworkflow; kan eerst gerichte ``needs_input``-vragen geven."""
     return intents.plan_route(
@@ -359,6 +392,7 @@ def plan_route(
         geen_opvulling=geen_opvulling,
         profiel_naam=profiel_naam,
         check_readiness=True,
+        request_id=request_id,
     )
 
 
@@ -376,6 +410,7 @@ def adjust_route(
     doel: Goal | None = None,
     geen_opvulling: bool | None = None,
     profiel_naam: NonEmptyString | None = None,
+    expected_revision: ExpectedRevision | None = None,
 ) -> RouteWorkflowResult:
     """Vervolg of wijzig een routeworkflow; kan opnieuw om input vragen."""
     return intents.adjust_route(
@@ -392,6 +427,7 @@ def adjust_route(
         geen_opvulling=geen_opvulling,
         profiel_naam=profiel_naam,
         check_readiness=True,
+        expected_revision=expected_revision,
     )
 
 
@@ -403,9 +439,11 @@ def optimize_draft(
     min_ratio: NonNegativeRatio = 8.0,
     geen_opvulling: bool = False,
     target_km: PositiveKm | None = None,
+    expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Vul de route greedy met klimmen binnen een hard afstandsbudget."""
     d = draft.load(draft_id)
+    draft.require_revision(d, expected_revision)
     with draft.region_scope(d):
         return draft.optimize(
             d,

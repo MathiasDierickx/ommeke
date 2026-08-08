@@ -1,5 +1,6 @@
 """Draft-routes: opbouwen, routeren (met lus-constraint), suggesties, opslag."""
 import copy
+import fcntl
 import json
 import time
 import uuid
@@ -30,10 +31,55 @@ def load(draft_id: str) -> dict:
         return json.load(f)
 
 
-def save(d: dict) -> None:
+def require_revision(d: dict, expected_revision: int | None) -> None:
+    """Wijs een mutatie op een verouderde draft expliciet af."""
+    if expected_revision is None:
+        return
+    actual = int(d.get("revision", 0))
+    if actual != expected_revision:
+        raise DraftError(
+            f"draft '{d['id']}' is gewijzigd: verwachte revisie "
+            f"{expected_revision}, huidige revisie {actual}; laad de draft opnieuw"
+        )
+
+
+def save(d: dict, expected_revision: int | None = None) -> None:
+    """Schrijf een draft atomisch en verhoog zijn monotone revisie."""
     config.ensure_dirs()
-    with open(_path(d["id"]), "w") as f:
-        json.dump(d, f, ensure_ascii=False)
+    path = _path(d["id"])
+    lock_path = path.with_name(f".{path.name}.lock")
+    with open(lock_path, "a", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        current_revision = 0
+        if path.exists():
+            with open(path, encoding="utf-8") as handle:
+                current_revision = int(json.load(handle).get("revision", 0))
+        if expected_revision is not None and current_revision != expected_revision:
+            require_revision(
+                {"id": d["id"], "revision": current_revision}, expected_revision
+            )
+        d["revision"] = current_revision + 1
+        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            with open(temporary, "w", encoding="utf-8") as handle:
+                json.dump(d, handle, ensure_ascii=False)
+                handle.flush()
+            temporary.replace(path)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+
+
+def find_by_request_id(request_id: str) -> dict | None:
+    """Vind een eerder gestarte idempotente routeworkflow."""
+    if not config.DRAFTS.exists():
+        return None
+    for path in sorted(config.DRAFTS.glob("*.json")):
+        with open(path, encoding="utf-8") as handle:
+            candidate = json.load(handle)
+        if (candidate.get("route_request") or {}).get("request_id") == request_id:
+            return candidate
+    return None
 
 
 def _invalidate_route(d: dict) -> None:
@@ -161,6 +207,7 @@ def list_all() -> list[dict]:
             d = json.load(f)
         item = {
                 "id": d["id"],
+                "revision": int(d.get("revision", 0)),
                 "name": d["name"],
                 "start": d["start"].get("label"),
                 "loop": d["loop"],
@@ -174,9 +221,11 @@ def list_all() -> list[dict]:
 
 
 def add_climb(draft_id: str, climb_id: str, position: int | None = None,
-              climb_db: dict | None = None) -> dict:
+              climb_db: dict | None = None,
+              expected_revision: int | None = None) -> dict:
     """Voeg een bekende klim toe en maak een bestaande berekening ongeldig."""
     d = load(draft_id)
+    require_revision(d, expected_revision)
     with region_scope(d):
         db = climbs_mod.all_climbs() if climb_db is None else climb_db
         if climb_id not in db:
@@ -186,29 +235,34 @@ def add_climb(draft_id: str, climb_id: str, position: int | None = None,
         insert_at = position if position is not None else len(d["climbs"])
         d["climbs"].insert(insert_at, climb_id)
         _invalidate_route(d)
-        save(d)
+        save(d, expected_revision=expected_revision)
         out = summary(d)
         out["hint"] = f"herrouteer: `lus draft route {d['id']}`"
         return out
 
 
-def remove_climb(draft_id: str, climb_id: str) -> dict:
+def remove_climb(
+    draft_id: str, climb_id: str, expected_revision: int | None = None
+) -> dict:
     """Verwijder een klim en maak een bestaande berekening ongeldig."""
     d = load(draft_id)
+    require_revision(d, expected_revision)
     if climb_id not in d["climbs"]:
         raise DraftError(f"klim '{climb_id}' zit niet in de draft")
     d["climbs"].remove(climb_id)
     _invalidate_route(d)
-    save(d)
+    save(d, expected_revision=expected_revision)
     return summary(d)
 
 
 def avoid_place(draft_id: str, place: str, radius_km: float = 2.5,
-                factor: float = 0.35) -> dict:
+                factor: float = 0.35,
+                expected_revision: int | None = None) -> dict:
     """Voeg een zachte vermijdzone rond een plaats toe."""
     from . import geocode
 
     d = load(draft_id)
+    require_revision(d, expected_revision)
     with region_scope(d):
         point, alternatives = geocode.resolve(place)
     d.setdefault("avoid_places", []).append(
@@ -221,7 +275,7 @@ def avoid_place(draft_id: str, place: str, radius_km: float = 2.5,
         }
     )
     _invalidate_route(d)
-    save(d)
+    save(d, expected_revision=expected_revision)
     out = summary(d)
     if alternatives:
         out["andere_kandidaten"] = alternatives
@@ -229,9 +283,12 @@ def avoid_place(draft_id: str, place: str, radius_km: float = 2.5,
     return out
 
 
-def unavoid_place(draft_id: str, place: str) -> dict:
+def unavoid_place(
+    draft_id: str, place: str, expected_revision: int | None = None
+) -> dict:
     """Verwijder vermijdzones waarvan het label de zoektekst bevat."""
     d = load(draft_id)
+    require_revision(d, expected_revision)
     before = len(d.get("avoid_places", []))
     d["avoid_places"] = [
         point for point in d.get("avoid_places", [])
@@ -240,7 +297,7 @@ def unavoid_place(draft_id: str, place: str) -> dict:
     if len(d["avoid_places"]) == before:
         raise DraftError(f"geen vermijdzone gevonden voor '{place}'")
     _invalidate_route(d)
-    save(d)
+    save(d, expected_revision=expected_revision)
     return summary(d)
 
 
@@ -414,12 +471,33 @@ def _bearing(a, b) -> float:
     return (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
 
 
-def route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
+def route(
+    d: dict,
+    climb_db: dict,
+    router=gh.route,
+    *,
+    post_fn=None,
+    expected_revision: int | None = None,
+) -> dict:
+    require_revision(d, expected_revision)
     with region_scope(d):
-        return _route(d, climb_db, router, post_fn=post_fn)
+        return _route(
+            d,
+            climb_db,
+            router,
+            post_fn=post_fn,
+            expected_revision=expected_revision,
+        )
 
 
-def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
+def _route(
+    d: dict,
+    climb_db: dict,
+    router=gh.route,
+    *,
+    post_fn=None,
+    expected_revision: int | None = None,
+) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
     d.pop("_probe", None)
     legs = _waypoints(d, climb_db)
@@ -496,7 +574,7 @@ def _route(d: dict, climb_db: dict, router=gh.route, *, post_fn=None) -> dict:
         )
     except Exception as e:  # metriek mag routeren nooit blokkeren
         d["computed"]["kwaliteit"] = {"error": str(e)}
-    save(d)
+    save(d, expected_revision=expected_revision)
     return summary(d)
 
 
@@ -504,6 +582,7 @@ def summary(d: dict) -> dict:
     effective = routing_preferences(d)
     out = {
         "id": d["id"],
+        "revision": int(d.get("revision", 0)),
         "name": d["name"],
         "start": d["start"].get("label"),
         "loop": d["loop"],

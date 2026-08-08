@@ -402,6 +402,7 @@ def cmd_plan_route(args):
         activiteit=args.activiteit,
         geen_opvulling=args.geen_opvulling,
         profiel_naam=args.profiel_naam,
+        request_id=args.request_id,
     )
 
 
@@ -421,6 +422,7 @@ def cmd_adjust_route(args):
         doel=args.doel,
         geen_opvulling=args.geen_opvulling,
         profiel_naam=args.profiel_naam,
+        expected_revision=args.expected_revision,
     )
 
 
@@ -538,6 +540,10 @@ def main(argv=None):
         help="vul resterend budget niet op met een GraphHopper-rondrit",
     )
     s.add_argument("--naam")
+    s.add_argument(
+        "--request-id",
+        help="stabiele sleutel om een retry van dezelfde route te hervatten",
+    )
     s.set_defaults(func=cmd_plan_route)
 
     s = sub.add_parser(
@@ -554,6 +560,7 @@ def main(argv=None):
     s.add_argument("--target-km", type=float)
     s.add_argument("--tolerance-km", type=float)
     s.add_argument("--profiel-naam")
+    s.add_argument("--expected-revision", type=int)
     s.add_argument(
         "--doel",
         choices=("hoogtemeters", "kort", "toeren"),

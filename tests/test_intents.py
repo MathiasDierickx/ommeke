@@ -86,6 +86,8 @@ def test_compact_output_contract_and_summary():
     assert set(result) == {
         "status",
         "draft",
+        "revision",
+        "request_id",
         "km",
         "hoogtemeters",
         "klimmen",
@@ -97,6 +99,8 @@ def test_compact_output_contract_and_summary():
         "constraints",
     }
     assert result["status"] == "ready"
+    assert result["revision"] == 0
+    assert result["request_id"] is None
     assert result["constraints"]["voldaan"] is None
     assert result["klimmen"] == [
         "Diepestraat (1.1 km @ 3.5%)",
@@ -429,6 +433,69 @@ def test_plan_route_targets_tour_distance_and_reports_constraints():
     assert result["constraints"]["binnen_doelbereik"] is True
     assert result["constraints"]["binnen_maximum"] is True
     assert result["constraints"]["voldaan"] is True
+
+
+def test_plan_route_request_id_reuses_completed_draft_without_rerouting():
+    state = _routed_draft()
+    state["revision"] = 7
+    signature = {
+        "start": "Wetteren",
+        "region": None,
+        "via_klimmen": [],
+        "vermijd_plaatsen": [],
+        "naam": None,
+        "doel": "toeren",
+        "target_km": 50,
+        "max_km": None,
+        "tolerance_km": 2.5,
+        "geen_opvulling": False,
+        "profiel_naam": "standaard",
+        "activiteit": "fietsen",
+        "kasseien": None,
+        "beton_vermijden": None,
+        "strict": None,
+    }
+    state["route_request"] = {
+        "request_id": "prompt-123",
+        "input_signature": signature,
+        "doel": "toeren",
+        "target_km": 50,
+        "max_km": 52.5,
+        "tolerance_km": 2.5,
+    }
+    calls = []
+
+    def export_fn(_d, _db, path):
+        calls.append(Path(path).suffix)
+        return {"file": path}
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("een retry van een voltooide request mag niet rerouteren")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        result = intents.plan_route(
+            "Wetteren",
+            target_km=50,
+            doel="toeren",
+            profiel_naam="standaard",
+            check_readiness=True,
+            request_id="prompt-123",
+            kasseien=None,
+            beton_vermijden=None,
+            strict=None,
+            find_request_fn=lambda _request_id: state,
+            climbs_fn=_climbs,
+            route_fn=unexpected,
+            optimize_fn=unexpected,
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            exports_root=Path(temp_dir),
+        )
+
+    assert calls == [".gpx", ".html"]
+    assert result["draft"] == "abc123"
+    assert result["revision"] == 7
+    assert result["request_id"] == "prompt-123"
 
 
 def test_route_details_without_computed_is_clear_error():

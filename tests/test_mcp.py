@@ -170,6 +170,13 @@ async def inspect_contract():
     assert plan.input_schema["properties"]["tolerance_km"]["minimum"] == 0
     assert plan.input_schema["properties"]["profiel_naam"]["default"] == "standaard"
     assert plan.input_schema["properties"]["kasseien"]["default"] is None
+    request_id = plan.input_schema["properties"]["request_id"]["anyOf"][0]
+    assert request_id["maxLength"] == 128
+    adjust = tools["adjust_route"]
+    expected_revision = adjust.input_schema["properties"]["expected_revision"][
+        "anyOf"
+    ][0]
+    assert expected_revision["minimum"] == 0
     assert plan.output_schema["properties"]["status"]["enum"] == [
         "ready", "needs_input"
     ]
@@ -266,6 +273,20 @@ assert shown["id"] == created["id"]
 assert shown["name"] == "mcp-test"
 assert shown["profile"] == "quiet"
 assert shown["avoid_cobbles"] is True
+assert shown["revision"] == 1
+
+added = mcp_server.add_climb(
+    created["id"], "testklim", expected_revision=shown["revision"]
+)
+assert added["revision"] == 2
+try:
+    mcp_server.remove_climb(
+        created["id"], "testklim", expected_revision=shown["revision"]
+    )
+except draft.DraftError as exc:
+    assert "huidige revisie 2" in str(exc)
+else:
+    raise AssertionError("verouderde MCP-mutatie werd aanvaard")
 
 try:
     mcp_server.add_climb(created["id"], "onbekend")

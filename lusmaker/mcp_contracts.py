@@ -51,6 +51,19 @@ NonNegativeRatio = Annotated[
     float,
     Field(ge=0, description="Minimale hoogtemeter-per-kilometerverhouding."),
 ]
+ExpectedRevision = Annotated[
+    int,
+    Field(ge=0, description="Revisie uit get_draft of een vorige toolrespons."),
+]
+RequestId = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        description="Stabiele sleutel waarmee retries dezelfde workflow hervatten.",
+    ),
+]
 NonNegativeWeight = Annotated[
     float,
     Field(ge=0, allow_inf_nan=False, description="Niet-negatief eindig gewicht."),
@@ -100,6 +113,8 @@ class ArtifactDescriptor(TypedDict):
 class CompactRouteResult(TypedDict):
     status: Literal["ready"]
     draft: str
+    revision: int
+    request_id: str | None
     km: float
     hoogtemeters: float
     klimmen: list[str]
@@ -116,6 +131,8 @@ class RouteWorkflowResult(TypedDict, total=False):
 
     status: Literal["ready", "needs_input"]
     draft: str
+    revision: int
+    request_id: str | None
     km: float
     hoogtemeters: float
     klimmen: list[str]

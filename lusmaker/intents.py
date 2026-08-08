@@ -16,6 +16,7 @@ class IntentError(RuntimeError):
 
 
 ACTIVITY_PROFILES = {"fietsen": "quiet", "trail": "trail"}
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 def _normalise(value: str) -> str:
@@ -176,6 +177,10 @@ def compact_result(
     return {
         "status": "ready",
         "draft": d["id"],
+        "revision": int(d.get("revision", 0)),
+        "request_id": (request or d.get("route_request") or {}).get(
+            "request_id"
+        ),
         "km": computed["total_km"],
         "hoogtemeters": computed["ascend_m"],
         "klimmen": [
@@ -220,6 +225,8 @@ def _route_request(
     kasseien: bool | None,
     beton_vermijden: bool | None,
     strict: bool | None,
+    request_id: str | None,
+    input_signature: dict,
 ) -> dict:
     hard_max = max_km
     if target_km is not None and hard_max is None:
@@ -242,6 +249,8 @@ def _route_request(
         "activiteit": activiteit,
         "expliciete_voorkeuren": explicit_preferences,
         "toegestane_plaatsen": [],
+        "request_id": request_id,
+        "input_signature": input_signature,
     }
 
 
@@ -270,6 +279,8 @@ def _needs_input(
     return {
         "status": "needs_input",
         "draft": d["id"],
+        "revision": int(d.get("revision", 0)),
+        "request_id": request.get("request_id"),
         "profiel": assessment["profiel"],
         "onbekend": assessment["onbekend"],
         "vragen": assessment["vragen"],
@@ -361,6 +372,7 @@ def plan_route(
     geen_opvulling: bool = False,
     profiel_naam: str | None = None,
     check_readiness: bool = False,
+    request_id: str | None = None,
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -375,6 +387,7 @@ def plan_route(
     probe_fn=draft.probe,
     assess_fn=readiness.assess,
     profile_load_fn=profiles.load,
+    find_request_fn=draft.find_by_request_id,
     exports_root: Path | None = None,
 ) -> dict:
     """Maak en routeer een lus, eventueel na een readiness-gesprek."""
@@ -382,6 +395,10 @@ def plan_route(
         raise IntentError("doel moet 'hoogtemeters', 'kort' of 'toeren' zijn")
     if activiteit not in ACTIVITY_PROFILES:
         raise IntentError("activiteit moet 'fietsen' of 'trail' zijn")
+    if request_id is not None and not _REQUEST_ID_RE.fullmatch(request_id):
+        raise IntentError(
+            "request-id gebruikt 1-128 letters, cijfers, '.', '_', ':' of '-'"
+        )
     _validate_request(
         target_km=target_km,
         max_km=max_km,
@@ -393,6 +410,23 @@ def plan_route(
         raise IntentError(
             "een lege hoogtemeterlus vereist target-km, max-km of een via-klim"
         )
+    input_signature = {
+        "start": start.strip(),
+        "region": region,
+        "via_klimmen": list(via_klimmen),
+        "vermijd_plaatsen": list(vermijd_plaatsen),
+        "naam": naam,
+        "doel": doel,
+        "target_km": target_km,
+        "max_km": max_km,
+        "tolerance_km": tolerance_km,
+        "geen_opvulling": geen_opvulling,
+        "profiel_naam": profiel_naam,
+        "activiteit": activiteit,
+        "kasseien": kasseien,
+        "beton_vermijden": beton_vermijden,
+        "strict": strict,
+    }
     request = _route_request(
         doel=doel,
         target_km=target_km,
@@ -404,7 +438,48 @@ def plan_route(
         kasseien=kasseien,
         beton_vermijden=beton_vermijden,
         strict=strict,
+        request_id=request_id,
+        input_signature=input_signature,
     )
+    existing = find_request_fn(request_id) if request_id is not None else None
+    if existing is not None:
+        stored_request = existing.get("route_request") or {}
+        if stored_request.get("input_signature") != input_signature:
+            raise IntentError(
+                f"request-id '{request_id}' is al gebruikt voor een andere routewens"
+            )
+        request = stored_request
+        d = existing
+        with draft.region_scope(d):
+            climb_db = climbs_fn()
+            if not d.get("computed") and check_readiness:
+                needs_input = _needs_input(
+                    d,
+                    climb_db,
+                    request,
+                    probe_fn=probe_fn,
+                    assess_fn=assess_fn,
+                    profile_load_fn=profile_load_fn,
+                )
+                if needs_input is not None:
+                    return needs_input
+            if not d.get("computed"):
+                _execute_request(
+                    d,
+                    climb_db,
+                    request,
+                    route_fn=route_fn,
+                    optimize_fn=optimize_fn,
+                )
+                d = load_fn(d["id"])
+            files = _export_files(
+                d,
+                climb_db,
+                export_gpx_fn=export_gpx_fn,
+                export_preview_fn=export_preview_fn,
+                exports_root=exports_root,
+            )
+        return compact_result(d, climb_db, files, request)
     create_kwargs = dict(
         start=start,
         name=naam,
@@ -475,6 +550,7 @@ def adjust_route(
     geen_opvulling: bool | None = None,
     profiel_naam: str | None = None,
     check_readiness: bool = False,
+    expected_revision: int | None = None,
     *,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -494,6 +570,7 @@ def adjust_route(
 ) -> dict:
     """Pas meerdere routewensen toe, routeer eenmaal en exporteer opnieuw."""
     d = load_fn(draft_id)
+    draft.require_revision(d, expected_revision)
     previous_request = d.get("route_request") or {}
     effective_target = (
         target_km if target_km is not None else previous_request.get("target_km")
