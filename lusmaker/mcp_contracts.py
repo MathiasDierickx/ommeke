@@ -2,10 +2,66 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
+from mcp.types import ToolAnnotations
 from pydantic import ConfigDict, Field
 from typing_extensions import NotRequired, TypedDict
+
+
+@dataclass(frozen=True)
+class ToolContract:
+    title: str
+    annotations: ToolAnnotations
+
+
+def _annotations(*, read_only: bool, open_world: bool) -> ToolAnnotations:
+    return ToolAnnotations(
+        readOnlyHint=read_only,
+        destructiveHint=False,
+        idempotentHint=read_only,
+        openWorldHint=open_world,
+    )
+
+
+_READ_ONLY_CLOSED = _annotations(read_only=True, open_world=False)
+_READ_ONLY_ROUTER = _annotations(read_only=True, open_world=True)
+_MUTATING_CLOSED = _annotations(read_only=False, open_world=False)
+_MUTATING_ROUTER = _annotations(read_only=False, open_world=True)
+
+TOOL_CONTRACTS = {
+    "status": ToolContract("Status controleren", _READ_ONLY_ROUTER),
+    "get_profile": ToolContract("Profiel ophalen", _READ_ONLY_CLOSED),
+    "update_profile": ToolContract("Profiel bijwerken", _MUTATING_CLOSED),
+    "list_profiles": ToolContract("Profielen tonen", _READ_ONLY_CLOSED),
+    "list_regions": ToolContract("Regio's tonen", _READ_ONLY_ROUTER),
+    "ensure_region": ToolContract("Regio klaarmaken", _MUTATING_ROUTER),
+    "region_status": ToolContract("Regiostatus ophalen", _READ_ONLY_CLOSED),
+    "geocode": ToolContract("Plaats zoeken", _READ_ONLY_CLOSED),
+    "list_climbs": ToolContract("Klimmen tonen", _READ_ONLY_CLOSED),
+    "new_draft": ToolContract("Draft maken", _MUTATING_CLOSED),
+    "list_drafts": ToolContract("Drafts tonen", _READ_ONLY_CLOSED),
+    "get_draft": ToolContract("Draft ophalen", _READ_ONLY_CLOSED),
+    "add_climb": ToolContract("Klim toevoegen", _MUTATING_CLOSED),
+    "remove_climb": ToolContract("Klim verwijderen", _MUTATING_CLOSED),
+    "avoid_place": ToolContract("Plaats vermijden", _MUTATING_CLOSED),
+    "unavoid_place": ToolContract("Plaats toestaan", _MUTATING_CLOSED),
+    "route_draft": ToolContract("Draft routeren", _MUTATING_ROUTER),
+    "route_readiness": ToolContract("Routevoorkeuren beoordelen", _READ_ONLY_ROUTER),
+    "suggest_climbs": ToolContract("Klimmen voorstellen", _READ_ONLY_ROUTER),
+    "plan_route": ToolContract("Route plannen", _MUTATING_ROUTER),
+    "adjust_route": ToolContract("Route aanpassen", _MUTATING_ROUTER),
+    "optimize_draft": ToolContract("Draft optimaliseren", _MUTATING_ROUTER),
+    "export_gpx": ToolContract("GPX exporteren", _MUTATING_CLOSED),
+    "preview_draft": ToolContract("Preview maken", _MUTATING_CLOSED),
+    "route_details": ToolContract("Routedetails ophalen", _READ_ONLY_CLOSED),
+}
+
+
+def tool_contract(name: str) -> dict[str, Any]:
+    contract = TOOL_CONTRACTS[name]
+    return {"title": contract.title, "annotations": contract.annotations}
 
 
 Activity = Literal["fietsen", "trail"]

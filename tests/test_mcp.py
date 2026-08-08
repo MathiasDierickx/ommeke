@@ -52,6 +52,21 @@ EXPECTED_LITE_TOOLS = {
 
 EXPECTED_HOSTED_TOOLS = EXPECTED_LITE_TOOLS - {"ensure_region", "region_status"}
 
+READ_ONLY_TOOLS = {
+    "status",
+    "geocode",
+    "list_climbs",
+    "get_draft",
+    "list_drafts",
+    "get_profile",
+    "list_profiles",
+    "route_readiness",
+    "region_status",
+    "route_details",
+    "list_regions",
+    "suggest_climbs",
+}
+
 
 def _require_mcp() -> None:
     if importlib.util.find_spec("mcp") is None:
@@ -232,6 +247,37 @@ async def inspect_contract():
     assert mcp_server.lite_mcp.version
 
 asyncio.run(inspect_contract())
+""",
+            Path(temp_dir),
+        )
+
+
+def test_every_tool_has_dutch_title_and_review_hints():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        expected_read_only = repr(READ_ONLY_TOOLS)
+        _run_isolated(
+            f"""
+import asyncio
+from lusmaker import mcp_server
+from lusmaker.mcp_contracts import TOOL_CONTRACTS
+
+async def inspect_annotations():
+    advertised = {{}}
+    for server in (mcp_server.mcp, mcp_server.lite_mcp):
+        advertised.update({{tool.name: tool for tool in await server.list_tools()}})
+    assert set(advertised) == set(TOOL_CONTRACTS)
+    actual_read_only = set()
+    for name, tool in advertised.items():
+        assert tool.title
+        assert tool.title == TOOL_CONTRACTS[name].title
+        assert tool.annotations is not None
+        assert tool.annotations.destructive_hint is False
+        if tool.annotations.read_only_hint:
+            actual_read_only.add(name)
+    assert actual_read_only == {expected_read_only}
+
+asyncio.run(inspect_annotations())
 """,
             Path(temp_dir),
         )

@@ -8,7 +8,7 @@ try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # mcp 2.x: FastMCP werd MCPServer
     from mcp.server import MCPServer as FastMCP
-from mcp.types import Annotations, ToolAnnotations
+from mcp.types import Annotations
 
 from . import __version__
 from . import (
@@ -48,6 +48,7 @@ from .mcp_contracts import (
     RouteDetailsResult,
     RouteWorkflowResult,
     ToleranceKm,
+    tool_contract,
 )
 
 
@@ -70,44 +71,6 @@ HOSTED_SERVER_INSTRUCTIONS = (
     "gebruiker."
 )
 
-READ_ONLY_CLOSED = ToolAnnotations(
-    readOnlyHint=True,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=False,
-)
-READ_ONLY_ROUTER = ToolAnnotations(
-    readOnlyHint=True,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=True,
-)
-ADDITIVE_CLOSED = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=False,
-    openWorldHint=False,
-)
-MUTATING_CLOSED = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=True,
-    idempotentHint=False,
-    openWorldHint=False,
-)
-MUTATING_ROUTER = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=True,
-    idempotentHint=False,
-    openWorldHint=True,
-)
-ENSURE_EXTERNAL = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=True,
-)
-
-
 def _server(name: str, *, instructions: str = SERVER_INSTRUCTIONS):
     return FastMCP(
         name,
@@ -121,37 +84,37 @@ def _server(name: str, *, instructions: str = SERVER_INSTRUCTIONS):
 mcp = _server("lusmaker")
 
 
-@mcp.tool(annotations=READ_ONLY_ROUTER)
+@mcp.tool(**tool_contract("status"))
 def status() -> dict[str, Any]:
     """Controleer of de lokale data en GraphHopper beschikbaar zijn."""
     return config.status()
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("get_profile"))
 def get_profile(naam: NonEmptyString = "standaard") -> dict[str, Any]:
     """Toon een persistent voorkeurenprofiel; ontbrekend geeft defaults."""
     return profiles.load(naam)
 
 
-@mcp.tool(annotations=MUTATING_CLOSED)
+@mcp.tool(**tool_contract("update_profile"))
 def update_profile(naam: NonEmptyString, patch: ProfilePatch) -> dict[str, Any]:
     """Pas een getypeerde profielpatch toe; ongeldige velden geven een toolfout."""
     return profiles.apply_patch(naam, patch, bron="mcp")
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("list_profiles"))
 def list_profiles() -> ProfileListResult:
     """Toon alle opgeslagen voorkeurenprofielen."""
     return {"profielen": profiles.list_all()}
 
 
-@mcp.tool(annotations=READ_ONLY_ROUTER)
+@mcp.tool(**tool_contract("list_regions"))
 def list_regions() -> dict[str, Any]:
     """Toon beschikbare regiopacks, de default-regio en hun status."""
     return regions.list_all()
 
 
-@mcp.tool(annotations=ENSURE_EXTERNAL)
+@mcp.tool(**tool_contract("ensure_region"))
 def ensure_region(place: NonEmptyString) -> dict[str, Any]:
     """Zoek een plaats of slug en start provisioning van de kleinste regio."""
     from . import provision
@@ -159,7 +122,7 @@ def ensure_region(place: NonEmptyString) -> dict[str, Any]:
     return provision.ensure_region(place)
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("region_status"))
 def region_status(slug: NonEmptyString) -> dict[str, Any]:
     """Toon de pollbare voortgang van een regioprovisioning."""
     from . import provision
@@ -167,7 +130,7 @@ def region_status(slug: NonEmptyString) -> dict[str, Any]:
     return provision.region_status(slug)
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("geocode"))
 def geocode(query: NonEmptyString, limit: ResultLimit = 5) -> GeocodeResult:
     """Zoek een plaats, straat of adres in de lokale geocoder."""
     return {
@@ -176,7 +139,7 @@ def geocode(query: NonEmptyString, limit: ResultLimit = 5) -> GeocodeResult:
     }
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("list_climbs"))
 def list_climbs(
     near: NonEmptyString | None = None,
     radius_km: RadiusKm = 15,
@@ -210,7 +173,7 @@ def list_climbs(
         return {"bij": point["label"], "klimmen": results}
 
 
-@mcp.tool(annotations=ADDITIVE_CLOSED)
+@mcp.tool(**tool_contract("new_draft"))
 def new_draft(
     start: NonEmptyString,
     name: NonEmptyString | None = None,
@@ -240,19 +203,19 @@ def new_draft(
     )
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("list_drafts"))
 def list_drafts() -> DraftListResult:
     """Toon alle opgeslagen route-drafts."""
     return {"drafts": draft.list_all()}
 
 
-@mcp.tool(annotations=READ_ONLY_CLOSED)
+@mcp.tool(**tool_contract("get_draft"))
 def get_draft(draft_id: NonEmptyString) -> dict[str, Any]:
     """Toon de samenvatting en berekende route van één draft."""
     return draft.summary(draft.load(draft_id))
 
 
-@mcp.tool(annotations=ADDITIVE_CLOSED)
+@mcp.tool(**tool_contract("add_climb"))
 def add_climb(
     draft_id: NonEmptyString,
     climb_id: NonEmptyString,
@@ -268,7 +231,7 @@ def add_climb(
     )
 
 
-@mcp.tool(annotations=MUTATING_CLOSED)
+@mcp.tool(**tool_contract("remove_climb"))
 def remove_climb(
     draft_id: NonEmptyString,
     climb_id: NonEmptyString,
@@ -280,7 +243,7 @@ def remove_climb(
     )
 
 
-@mcp.tool(annotations=ADDITIVE_CLOSED)
+@mcp.tool(**tool_contract("avoid_place"))
 def avoid_place(
     draft_id: NonEmptyString,
     place: NonEmptyString,
@@ -298,7 +261,7 @@ def avoid_place(
     )
 
 
-@mcp.tool(annotations=MUTATING_CLOSED)
+@mcp.tool(**tool_contract("unavoid_place"))
 def unavoid_place(
     draft_id: NonEmptyString,
     place: NonEmptyString,
@@ -310,7 +273,7 @@ def unavoid_place(
     )
 
 
-@mcp.tool(annotations=MUTATING_ROUTER)
+@mcp.tool(**tool_contract("route_draft"))
 def route_draft(
     draft_id: NonEmptyString,
     expected_revision: ExpectedRevision | None = None,
@@ -324,7 +287,7 @@ def route_draft(
         )
 
 
-@mcp.tool(annotations=MUTATING_ROUTER)
+@mcp.tool(**tool_contract("route_readiness"))
 def route_readiness(
     draft_id: NonEmptyString,
     profiel_naam: NonEmptyString = "standaard",
@@ -342,7 +305,7 @@ def route_readiness(
         return readiness.assess(d, profiles.load(profiel_naam), climb_db)
 
 
-@mcp.tool(annotations=READ_ONLY_ROUTER)
+@mcp.tool(**tool_contract("suggest_climbs"))
 def suggest_climbs(
     draft_id: NonEmptyString,
     max_detour_km: PositiveKm = 8,
@@ -368,7 +331,7 @@ def suggest_climbs(
     }
 
 
-@mcp.tool(annotations=MUTATING_ROUTER)
+@mcp.tool(**tool_contract("plan_route"))
 def plan_route(
     start: NonEmptyString,
     region: NonEmptyString | None = None,
@@ -411,7 +374,7 @@ def plan_route(
     )
 
 
-@mcp.tool(annotations=MUTATING_ROUTER)
+@mcp.tool(**tool_contract("adjust_route"))
 def adjust_route(
     draft_id: NonEmptyString,
     voeg_klimmen_toe: list[str] = [],
@@ -446,7 +409,7 @@ def adjust_route(
     )
 
 
-@mcp.tool(annotations=MUTATING_ROUTER)
+@mcp.tool(**tool_contract("optimize_draft"))
 def optimize_draft(
     draft_id: NonEmptyString,
     max_km: PositiveKm,
@@ -471,7 +434,7 @@ def optimize_draft(
         )
 
 
-@mcp.tool(annotations=MUTATING_CLOSED)
+@mcp.tool(**tool_contract("export_gpx"))
 def export_gpx(
     draft_id: NonEmptyString, output_path: str | None = None
 ) -> dict[str, Any]:
@@ -488,7 +451,7 @@ def export_gpx(
     return result
 
 
-@mcp.tool(annotations=MUTATING_CLOSED)
+@mcp.tool(**tool_contract("preview_draft"))
 def preview_draft(
     draft_id: NonEmptyString, output_path: str | None = None
 ) -> dict[str, Any]:
@@ -511,35 +474,35 @@ def route_details(draft_id: NonEmptyString) -> RouteDetailsResult:
 
 
 lite_mcp = _server("lusmaker-lite")
-for _lite_tool, _lite_annotations in (
-    (plan_route, MUTATING_ROUTER),
-    (adjust_route, MUTATING_ROUTER),
-    (suggest_climbs, READ_ONLY_ROUTER),
-    (route_details, READ_ONLY_CLOSED),
-    (route_readiness, MUTATING_ROUTER),
-    (get_profile, READ_ONLY_CLOSED),
-    (update_profile, MUTATING_CLOSED),
-    (ensure_region, ENSURE_EXTERNAL),
-    (region_status, READ_ONLY_CLOSED),
-    (list_drafts, READ_ONLY_CLOSED),
+for _lite_tool in (
+    plan_route,
+    adjust_route,
+    suggest_climbs,
+    route_details,
+    route_readiness,
+    get_profile,
+    update_profile,
+    ensure_region,
+    region_status,
+    list_drafts,
 ):
-    lite_mcp.tool(annotations=_lite_annotations)(_lite_tool)
+    lite_mcp.tool(**tool_contract(_lite_tool.__name__))(_lite_tool)
 
 
 hosted_mcp = _server(
     "lusmaker-hosted", instructions=HOSTED_SERVER_INSTRUCTIONS
 )
-for _hosted_tool, _hosted_annotations in (
-    (plan_route, MUTATING_ROUTER),
-    (adjust_route, MUTATING_ROUTER),
-    (suggest_climbs, READ_ONLY_ROUTER),
-    (route_details, READ_ONLY_CLOSED),
-    (route_readiness, MUTATING_ROUTER),
-    (get_profile, READ_ONLY_CLOSED),
-    (update_profile, MUTATING_CLOSED),
-    (list_drafts, READ_ONLY_CLOSED),
+for _hosted_tool in (
+    plan_route,
+    adjust_route,
+    suggest_climbs,
+    route_details,
+    route_readiness,
+    get_profile,
+    update_profile,
+    list_drafts,
 ):
-    hosted_mcp.tool(annotations=_hosted_annotations)(_hosted_tool)
+    hosted_mcp.tool(**tool_contract(_hosted_tool.__name__))(_hosted_tool)
 
 
 RESOURCE_ANNOTATIONS = Annotations(audience=["user"], priority=1.0)
