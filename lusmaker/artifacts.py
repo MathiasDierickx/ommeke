@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from pathlib import Path
 
-from . import config
+from . import aws_state, config
 
 
 class ArtifactError(RuntimeError):
@@ -27,6 +28,8 @@ def _validate_draft_id(draft_id: str) -> str:
 
 
 def root() -> Path:
+    if aws_state.enabled():
+        return Path(os.environ.get("LUSMAKER_TMP", "/tmp/lusmaker")) / "exports"
     return config.home_path() / "exports"
 
 
@@ -76,17 +79,27 @@ def uri_for(draft_id: str, filename: str) -> str:
 
 def describe(draft_id: str, filename: str) -> dict:
     key, mime_type, title = _ARTIFACTS[filename]
-    path = path_for(draft_id, filename)
     item = {
         "type": key,
         "title": title,
         "uri": uri_for(draft_id, filename),
         "mime_type": mime_type,
     }
-    if path.exists():
-        payload = path.read_bytes()
-        item["bytes"] = len(payload)
-        item["sha256"] = hashlib.sha256(payload).hexdigest()
+    if aws_state.enabled():
+        payload, _etag, metadata = aws_state.get_bytes(
+            f"artifacts/{draft_id}/{filename}"
+        )
+        if payload is not None:
+            item["bytes"] = len(payload)
+            item["sha256"] = metadata.get("sha256") or hashlib.sha256(
+                payload
+            ).hexdigest()
+    else:
+        path = path_for(draft_id, filename)
+        if path.exists():
+            payload = path.read_bytes()
+            item["bytes"] = len(payload)
+            item["sha256"] = hashlib.sha256(payload).hexdigest()
     return item
 
 
@@ -95,9 +108,33 @@ def describe_all(draft_id: str) -> list[dict]:
 
 
 def read(draft_id: str, filename: str) -> bytes:
+    if aws_state.enabled():
+        payload, _etag, _metadata = aws_state.get_bytes(
+            f"artifacts/{draft_id}/{filename}"
+        )
+        if payload is None:
+            raise ArtifactError(
+                f"artifact '{filename}' voor draft '{draft_id}' bestaat niet; "
+                "routeer eerst"
+            )
+        return payload
     path = path_for(draft_id, filename)
     if not path.is_file():
         raise ArtifactError(
             f"artifact '{filename}' voor draft '{draft_id}' bestaat niet; routeer eerst"
         )
     return path.read_bytes()
+
+
+def publish(draft_id: str, filename: str) -> dict:
+    """Publiceer een lokaal gegenereerd artifact naar de hosted state-store."""
+    path = path_for(draft_id, filename)
+    if not path.is_file():
+        raise ArtifactError(f"artifact '{filename}' werd niet gegenereerd")
+    payload = path.read_bytes()
+    if not aws_state.enabled():
+        return {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+    _kind, mime_type, _title = _ARTIFACTS[filename]
+    return aws_state.publish_artifact(
+        draft_id, filename, payload, mime_type
+    )

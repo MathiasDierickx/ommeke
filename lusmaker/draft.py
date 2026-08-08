@@ -7,7 +7,7 @@ import uuid
 from contextlib import contextmanager
 
 from . import climbs as climbs_mod
-from . import config, geo, gh, profiles
+from . import aws_state, config, geo, gh, profiles
 
 
 class DraftError(RuntimeError):
@@ -24,6 +24,13 @@ def _path(draft_id: str):
 
 
 def load(draft_id: str) -> dict:
+    if aws_state.enabled():
+        value, _etag = aws_state.get_json(f"drafts/{draft_id}.json")
+        if value is None:
+            raise DraftError(
+                f"draft '{draft_id}' bestaat niet — zie `lus draft list`"
+            )
+        return value
     p = _path(draft_id)
     if not p.exists():
         raise DraftError(f"draft '{draft_id}' bestaat niet — zie `lus draft list`")
@@ -45,6 +52,27 @@ def require_revision(d: dict, expected_revision: int | None) -> None:
 
 def save(d: dict, expected_revision: int | None = None) -> None:
     """Schrijf een draft atomisch en verhoog zijn monotone revisie."""
+    if aws_state.enabled():
+        relative = f"drafts/{d['id']}.json"
+        current, etag = aws_state.get_json(relative)
+        current_revision = int((current or {}).get("revision", 0))
+        if expected_revision is not None and current_revision != expected_revision:
+            require_revision(
+                {"id": d["id"], "revision": current_revision}, expected_revision
+            )
+        d["revision"] = current_revision + 1
+        try:
+            aws_state.put_json(
+                relative,
+                d,
+                etag=etag,
+                create_only=current is None,
+            )
+        except aws_state.StateConflict as exc:
+            raise DraftError(
+                f"draft '{d['id']}' is gelijktijdig gewijzigd; laad de draft opnieuw"
+            ) from exc
+        return
     config.ensure_dirs()
     path = _path(d["id"])
     lock_path = path.with_name(f".{path.name}.lock")
@@ -72,6 +100,16 @@ def save(d: dict, expected_revision: int | None = None) -> None:
 
 def find_by_request_id(request_id: str) -> dict | None:
     """Vind een eerder gestarte idempotente routeworkflow."""
+    if aws_state.enabled():
+        return next(
+            (
+                candidate
+                for candidate in aws_state.list_json("drafts")
+                if (candidate.get("route_request") or {}).get("request_id")
+                == request_id
+            ),
+            None,
+        )
     if not config.DRAFTS.exists():
         return None
     for path in sorted(config.DRAFTS.glob("*.json")):
@@ -92,11 +130,16 @@ def _invalidate_route(d: dict) -> None:
 def invalidate_profile(profile_name: str) -> int:
     """Invalideer drafts die een gewijzigd voorkeurenprofiel gebruiken."""
     invalidated = 0
-    if not config.DRAFTS.exists():
-        return invalidated
-    for path in sorted(config.DRAFTS.glob("*.json")):
-        with open(path, encoding="utf-8") as handle:
-            d = json.load(handle)
+    if aws_state.enabled():
+        drafts = aws_state.list_json("drafts")
+    else:
+        if not config.DRAFTS.exists():
+            return invalidated
+        drafts = []
+        for path in sorted(config.DRAFTS.glob("*.json")):
+            with open(path, encoding="utf-8") as handle:
+                drafts.append(json.load(handle))
+    for d in drafts:
         if d.get("profile_doc") != profile_name:
             continue
         _invalidate_route(d)
@@ -202,9 +245,14 @@ def create(start: str, name: str | None = None, loop: bool = True,
 
 def list_all() -> list[dict]:
     out = []
-    for p in sorted(config.DRAFTS.glob("*.json")):
-        with open(p) as f:
-            d = json.load(f)
+    if aws_state.enabled():
+        drafts = sorted(aws_state.list_json("drafts"), key=lambda item: item["id"])
+    else:
+        drafts = []
+        for path in sorted(config.DRAFTS.glob("*.json")):
+            with open(path) as handle:
+                drafts.append(json.load(handle))
+    for d in drafts:
         item = {
                 "id": d["id"],
                 "revision": int(d.get("revision", 0)),
@@ -477,6 +525,7 @@ def route(
     router=gh.route,
     *,
     post_fn=None,
+    area_evs: set[str] | frozenset[str] | None = None,
     expected_revision: int | None = None,
 ) -> dict:
     require_revision(d, expected_revision)
@@ -486,6 +535,7 @@ def route(
             climb_db,
             router,
             post_fn=post_fn,
+            area_evs=area_evs,
             expected_revision=expected_revision,
         )
 
@@ -496,6 +546,7 @@ def _route(
     router=gh.route,
     *,
     post_fn=None,
+    area_evs: set[str] | frozenset[str] | None = None,
     expected_revision: int | None = None,
 ) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
@@ -525,6 +576,8 @@ def _route(
         }
         if post_fn is not None:
             route_kwargs["post_fn"] = post_fn
+        if area_evs is not None:
+            route_kwargs["area_evs"] = area_evs
         res = router(
             leg["points"],
             **route_kwargs,

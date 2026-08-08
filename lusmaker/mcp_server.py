@@ -469,6 +469,7 @@ def export_gpx(
         canonical = artifacts.safe_output_path(draft_id, "route.gpx")
         if canonical != path:
             gpx.export(d, climbs.all_climbs(), str(canonical))
+        artifacts.publish(draft_id, "route.gpx")
     result["artifact"] = artifacts.describe(draft_id, "route.gpx")
     return result
 
@@ -485,6 +486,7 @@ def preview_draft(
         canonical = artifacts.safe_output_path(draft_id, "preview.html")
         if canonical != path:
             preview.export(d, climbs.all_climbs(), str(canonical))
+        artifacts.publish(draft_id, "preview.html")
     result["artifact"] = artifacts.describe(draft_id, "preview.html")
     return result
 

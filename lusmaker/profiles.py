@@ -8,7 +8,7 @@ import math
 import re
 from datetime import datetime
 
-from . import config
+from . import aws_state, config
 
 
 WEIGHT_KEYS = ("hoogtemeters", "offroad", "populair", "kort")
@@ -110,6 +110,14 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
 
 
 def load(name: str = "standaard") -> dict:
+    _path(name)
+    if aws_state.enabled():
+        data, _etag = aws_state.get_json(f"profiles/{name}.json")
+        return (
+            default_document(name)
+            if data is None
+            else _validate(data, expected_name=name)
+        )
     path = _path(name)
     if not path.exists():
         return default_document(name)
@@ -122,6 +130,21 @@ def load(name: str = "standaard") -> dict:
 
 def save(profile: dict) -> dict:
     checked = _validate(profile)
+    if aws_state.enabled():
+        relative = f"profiles/{checked['naam']}.json"
+        current, etag = aws_state.get_json(relative)
+        try:
+            aws_state.put_json(
+                relative,
+                checked,
+                etag=etag,
+                create_only=current is None,
+            )
+        except aws_state.StateConflict as exc:
+            raise ProfileError(
+                "profiel is gelijktijdig gewijzigd; laad het opnieuw"
+            ) from exc
+        return checked
     path = _path(checked["naam"])
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".json.tmp")
@@ -134,6 +157,11 @@ def save(profile: dict) -> dict:
 
 
 def list_all() -> list[dict]:
+    if aws_state.enabled():
+        return sorted(
+            (_validate(item) for item in aws_state.list_json("profiles")),
+            key=lambda profile: profile["naam"],
+        )
     directory = config.home_path() / "profiles"
     if not directory.exists():
         return []

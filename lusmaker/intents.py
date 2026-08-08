@@ -8,7 +8,18 @@ import re
 import unicodedata
 from pathlib import Path
 
-from . import artifacts, climbs, config, draft, gpx, heat, preview, profiles, readiness
+from . import (
+    artifacts,
+    aws_state,
+    climbs,
+    config,
+    draft,
+    gpx,
+    heat,
+    preview,
+    profiles,
+    readiness,
+)
 
 
 class IntentError(RuntimeError):
@@ -405,6 +416,9 @@ def _export_files(
     preview_path = output_dir / "preview.html"
     export_gpx_fn(d, climb_db, str(gpx_path))
     export_preview_fn(d, climb_db, str(preview_path))
+    if aws_state.enabled():
+        artifacts.publish(d["id"], "route.gpx")
+        artifacts.publish(d["id"], "preview.html")
     return {"gpx": str(gpx_path), "preview": str(preview_path)}
 
 
