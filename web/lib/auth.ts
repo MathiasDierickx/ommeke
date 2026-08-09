@@ -3,6 +3,18 @@ import type { AuthSession } from "./types";
 const SESSION_KEY = "lusmaker.auth";
 const PKCE_KEY = "lusmaker.pkce";
 
+type PendingAuth = {
+  verifier: string;
+  state: string;
+  redirectUri: string;
+  returnTo: string;
+};
+
+export type CompletedAuth = {
+  session: AuthSession;
+  returnTo: string;
+};
+
 function required(name: string, value: string | undefined): string {
   if (!value) throw new Error(`${name} ontbreekt in de Vercel environment`);
   return value.replace(/\/$/, "");
@@ -80,7 +92,8 @@ export async function beginAuth(mode: "login" | "signup" = "login"): Promise<voi
   const verifier = randomValue(64);
   const state = randomValue(24);
   const redirectUri = `${window.location.origin}/`;
-  sessionStorage.setItem(PKCE_KEY, JSON.stringify({ verifier, state, redirectUri }));
+  const returnTo = `${window.location.pathname}${window.location.search}`;
+  sessionStorage.setItem(PKCE_KEY, JSON.stringify({ verifier, state, redirectUri, returnTo }));
   const params = new URLSearchParams({
     response_type: "code",
     client_id: authConfig.clientId(),
@@ -94,10 +107,10 @@ export async function beginAuth(mode: "login" | "signup" = "login"): Promise<voi
   window.location.assign(`${authConfig.domain()}${path}?${params.toString()}`);
 }
 
-export async function finishAuth(code: string, state: string): Promise<AuthSession> {
+export async function finishAuth(code: string, state: string): Promise<CompletedAuth> {
   const value = sessionStorage.getItem(PKCE_KEY);
   if (!value) throw new Error("Aanmeldsessie verlopen. Probeer opnieuw.");
-  const pending = JSON.parse(value) as { verifier: string; state: string; redirectUri: string };
+  const pending = JSON.parse(value) as PendingAuth;
   if (pending.state !== state) throw new Error("Ongeldige aanmeldstatus.");
   const body = new URLSearchParams({
     grant_type: "authorization_code",
@@ -114,7 +127,10 @@ export async function finishAuth(code: string, state: string): Promise<AuthSessi
   if (!response.ok) throw new Error("Aanmelden kon niet worden afgerond.");
   const session = tokenSession((await response.json()) as Record<string, unknown>);
   sessionStorage.removeItem(PKCE_KEY);
-  return saveSession(session);
+  return {
+    session: saveSession(session),
+    returnTo: pending.returnTo?.startsWith("/") ? pending.returnTo : "/",
+  };
 }
 
 export async function refreshSession(session: AuthSession): Promise<AuthSession | null> {

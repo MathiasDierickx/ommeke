@@ -1,11 +1,11 @@
 "use client";
 
 import {
+  ArrowLeft,
   ArrowDownToLine,
   ArrowUp,
   Bike,
   Check,
-  ChevronRight,
   CircleUserRound,
   Footprints,
   LoaderCircle,
@@ -13,9 +13,6 @@ import {
   Map,
   Menu,
   MessageSquare,
-  MoreHorizontal,
-  Mountain,
-  PanelRightClose,
   Pencil,
   Plus,
   Route as RouteIcon,
@@ -25,7 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { apiRequest, authenticatedBlob } from "@/lib/api";
 import {
@@ -37,6 +34,11 @@ import {
   refreshSession,
 } from "@/lib/auth";
 import type { AuthSession, ChatMessage, Conversation, Route } from "@/lib/types";
+
+export type WorkspaceView =
+  | { kind: "new" }
+  | { kind: "conversation"; id: string }
+  | { kind: "route"; id: string };
 
 const STARTERS = [
   "Maak een rustige fietsroute van 50 km vanuit Wetteren",
@@ -134,7 +136,13 @@ function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }) {
   );
 }
 
-function Message({ message }: { message: ChatMessage }) {
+function Message({
+  message,
+  onRoute,
+}: {
+  message: ChatMessage;
+  onRoute: (id: string) => void;
+}) {
   const assistant = message.role === "assistant";
   return (
     <article className={`message ${assistant ? "message-assistant" : "message-user"}`}>
@@ -148,7 +156,12 @@ function Message({ message }: { message: ChatMessage }) {
         ))}
       </div>
       {message.route_ids?.length ? (
-        <div className="route-made"><Check /> Route opgeslagen in je bibliotheek</div>
+        <button
+          className="route-made"
+          onClick={() => onRoute(message.route_ids!.at(-1)!)}
+        >
+          <Check /> Route opgeslagen · open kaart <ArrowUp />
+        </button>
       ) : null}
     </article>
   );
@@ -198,6 +211,7 @@ function Sidebar({
   conversations,
   routes,
   selectedConversation,
+  selectedRoute,
   onConversation,
   onRoute,
   onNew,
@@ -207,6 +221,7 @@ function Sidebar({
   conversations: Conversation[];
   routes: Route[];
   selectedConversation?: string;
+  selectedRoute?: string;
   onConversation: (id: string) => void;
   onRoute: (route: Route) => void;
   onNew: () => void;
@@ -242,7 +257,11 @@ function Sidebar({
           <div className="nav-items route-nav-items">
             {routes.length === 0 ? <p className="nav-empty">Je eerste route verschijnt hier</p> : null}
             {routes.map((route) => (
-              <button key={route.id} onClick={() => onRoute(route)}>
+              <button
+                key={route.id}
+                className={selectedRoute === route.id ? "active" : ""}
+                onClick={() => onRoute(route)}
+              >
                 <span className="nav-title">{route.name}</span>
                 <span className="nav-meta">
                   {route.total_km ? `${route.total_km.toFixed(1)} km` : "Draft"}
@@ -262,14 +281,15 @@ function Sidebar({
   );
 }
 
-function RouteInspector({
+function RouteFullscreen({
   route,
   previewUrl,
   loadingPreview,
   onDownload,
   onRename,
   onDelete,
-  onClose,
+  onBack,
+  onMenu,
 }: {
   route: Route | null;
   previewUrl: string | null;
@@ -277,45 +297,32 @@ function RouteInspector({
   onDownload: () => void;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
-  onClose: () => void;
+  onBack: () => void;
+  onMenu: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(route?.name || "");
-  useEffect(() => setName(route?.name || ""), [route?.name]);
-
-  if (!route) {
-    return (
-      <aside className="inspector inspector-empty">
-        <button className="icon-button inspector-close" onClick={onClose} aria-label="Sluit routedetail"><PanelRightClose /></button>
-        <div className="contour-map" aria-hidden="true">
-          <svg viewBox="0 0 420 520">
-            {Array.from({ length: 9 }, (_, index) => (
-              <path key={index} d={`M-20 ${80 + index * 49} C90 ${10 + index * 58} 175 ${160 + index * 34} 280 ${75 + index * 52} S390 ${120 + index * 45} 460 ${55 + index * 58}`} />
-            ))}
-            <path className="route-stroke" d="M80 420 C110 330 225 350 210 250 S265 125 350 92" />
-          </svg>
-        </div>
-        <div className="inspector-empty-copy">
-          <RouteIcon />
-          <h3>Je route komt hier tot leven</h3>
-          <p>Selecteer een bestaande route of beschrijf je volgende rit in de chat.</p>
-        </div>
-      </aside>
-    );
-  }
+  useEffect(() => {
+    setName(route?.name || "");
+    setEditing(false);
+  }, [route?.id, route?.name]);
 
   return (
-    <aside className="inspector">
-      <div className="inspector-head">
-        <span>Routedetail</span>
-        <button className="icon-button" onClick={onClose} aria-label="Sluit routedetail"><PanelRightClose /></button>
+    <section className="route-fullscreen">
+      <div className="route-map-canvas">
+        {loadingPreview || !route ? <div className="map-loading"><LoaderCircle className="spin" /> Routekaart laden…</div> : null}
+        {previewUrl && route ? <iframe src={previewUrl} title={`Kaart van ${route.name}`} sandbox="allow-scripts" /> : null}
+        {route && !previewUrl && !loadingPreview ? <div className="map-unavailable"><Map />Preview nog niet beschikbaar</div> : null}
       </div>
-      <div className="map-frame">
-        {loadingPreview ? <div className="map-loading"><LoaderCircle className="spin" /> Kaart laden</div> : null}
-        {previewUrl ? <iframe src={previewUrl} title={`Kaart van ${route.name}`} sandbox="allow-scripts" /> : null}
-        {!previewUrl && !loadingPreview ? <div className="map-unavailable"><Map />Preview nog niet beschikbaar</div> : null}
-      </div>
-      <div className="route-detail-scroll">
+      <header className="route-topbar">
+        <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
+        <div className="route-topbar-title">
+          <Logo />
+          <span><small>Routedetail</small><strong>{route?.name || "Route laden…"}</strong></span>
+        </div>
+        <button className="route-back" onClick={onBack}><ArrowLeft /> Gesprekken</button>
+      </header>
+      {route ? <aside className="route-overlay-card">
         <div className="route-title-row">
           {editing ? (
             <form
@@ -344,12 +351,13 @@ function RouteInspector({
           <button className="button button-danger" onClick={onDelete}><Trash2 /> Verwijder</button>
         </div>
         <div className="route-footnote"><Sparkles /> Gemaakt met Claude via Amazon Bedrock</div>
-      </div>
-    </aside>
+      </aside> : null}
+    </section>
   );
 }
 
-export function LusmakerApp() {
+export function LusmakerApp({ view }: { view: WorkspaceView }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -365,10 +373,12 @@ export function LusmakerApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [leftOpen, setLeftOpen] = useState(false);
-  const [rightOpen, setRightOpen] = useState(false);
   const messageEnd = useRef<HTMLDivElement>(null);
+  const authStarted = useRef(false);
 
   useEffect(() => {
+    if (authStarted.current) return;
+    authStarted.current = true;
     let active = true;
     const resolve = async () => {
       try {
@@ -376,8 +386,9 @@ export function LusmakerApp() {
         const state = searchParams.get("state");
         let next = loadSession();
         if (code && state) {
-          next = await finishAuth(code, state);
-          window.history.replaceState({}, "", "/");
+          const completed = await finishAuth(code, state);
+          next = completed.session;
+          router.replace(completed.returnTo);
         } else if (next) {
           next = await refreshSession(next);
           if (!next) clearSession();
@@ -392,7 +403,7 @@ export function LusmakerApp() {
     };
     void resolve();
     return () => { active = false; };
-  }, [searchParams]);
+  }, [router, searchParams]);
 
   const loadWorkspace = useCallback(async (accessToken: string) => {
     const [conversationData, routeData] = await Promise.all([
@@ -409,32 +420,97 @@ export function LusmakerApp() {
   }, [session, loadWorkspace]);
 
   useEffect(() => {
+    if (!session || view.kind !== "conversation") return;
+    let active = true;
+    setConversationId(view.id);
+    setSelectedRoute(null);
+    setError(undefined);
+    apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(
+      `/api/conversations/${encodeURIComponent(view.id)}/messages`,
+      session.accessToken,
+    ).then((data) => {
+      if (!active) return;
+      setMessages(data.messages);
+      setConversations((current) => current.some((item) => item.id === data.conversation.id)
+        ? current.map((item) => item.id === data.conversation.id ? data.conversation : item)
+        : [data.conversation, ...current]);
+    }).catch((cause) => {
+      if (active) setError(cause instanceof Error ? cause.message : "Gesprek laden mislukt.");
+    });
+    return () => { active = false; };
+  }, [session, view]);
+
+  useEffect(() => {
+    if (!session || view.kind !== "route") return;
+    let active = true;
+    let objectUrl: string | null = null;
+    setConversationId(undefined);
+    setSelectedRoute(null);
+    setPreviewUrl(null);
+    setLoadingPreview(true);
+    setError(undefined);
+    const load = async () => {
+      try {
+        const data = await apiRequest<{ route: Route }>(
+          `/api/routes/${encodeURIComponent(view.id)}`,
+          session.accessToken,
+        );
+        if (!active) return;
+        setSelectedRoute(data.route);
+        if (!data.route.preview_url) return;
+        const blob = await authenticatedBlob(data.route.preview_url, session.accessToken);
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setPreviewUrl(objectUrl);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Route laden mislukt.");
+      } finally {
+        if (active) setLoadingPreview(false);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [session, view]);
+
+  useEffect(() => {
+    if (view.kind !== "new") return;
+    setConversationId(undefined);
+    setMessages([]);
+    setSelectedRoute(null);
+    setPreviewUrl(null);
+    setError(undefined);
+  }, [view]);
+
+  useEffect(() => {
     messageEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
-
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
 
   const activeConversation = useMemo(
     () => conversations.find((item) => item.id === conversationId),
     [conversations, conversationId],
   );
 
-  const openConversation = async (id: string) => {
-    if (!session) return;
-    setError(undefined);
-    setConversationId(id);
+  useEffect(() => {
+    document.title = view.kind === "route"
+      ? `${selectedRoute?.name || "Route"} — Lusmaker`
+      : `${activeConversation?.title || "Nieuwe route"} — Lusmaker`;
+  }, [activeConversation?.title, selectedRoute?.name, view.kind]);
+
+  const openConversation = (id: string) => {
     setLeftOpen(false);
-    try {
-      const data = await apiRequest<{ messages: ChatMessage[] }>(`/api/conversations/${id}/messages`, session.accessToken);
-      setMessages(data.messages);
-      const lastRouteId = [...data.messages].reverse().flatMap((item) => item.route_ids || [])[0];
-      const route = routes.find((item) => item.id === lastRouteId);
-      if (route) void openRoute(route);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Gesprek laden mislukt.");
-    }
+    router.push(`/chats/${encodeURIComponent(id)}`);
+  };
+
+  const openRoute = (id: string) => {
+    setLeftOpen(false);
+    router.push(`/routes/${encodeURIComponent(id)}`);
+  };
+
+  const openNewChat = () => {
+    setLeftOpen(false);
+    router.push("/");
   };
 
   const newConversation = async (): Promise<string | undefined> => {
@@ -449,6 +525,7 @@ export function LusmakerApp() {
       setMessages([]);
       setSelectedRoute(null);
       setLeftOpen(false);
+      window.history.replaceState({}, "", `/chats/${encodeURIComponent(data.conversation.id)}`);
       return data.conversation.id;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Gesprek maken mislukt.");
@@ -483,31 +560,14 @@ export function LusmakerApp() {
       setMessages((current) => [...current, result.message]);
       await loadWorkspace(session.accessToken);
       if (result.route_ids.length) {
-        const routeData = await apiRequest<{ route: Route }>(`/api/routes/${result.route_ids.at(-1)}`, session.accessToken);
-        await openRoute(routeData.route);
+        openRoute(result.route_ids.at(-1)!);
+      } else {
+        router.replace(`/chats/${encodeURIComponent(id)}`);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Claude kon niet antwoorden.");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const openRoute = async (route: Route) => {
-    if (!session) return;
-    setSelectedRoute(route);
-    setRightOpen(true);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    if (!route.preview_url) return;
-    setLoadingPreview(true);
-    try {
-      const blob = await authenticatedBlob(route.preview_url, session.accessToken);
-      setPreviewUrl(URL.createObjectURL(blob));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Preview laden mislukt.");
-    } finally {
-      setLoadingPreview(false);
     }
   };
 
@@ -542,36 +602,60 @@ export function LusmakerApp() {
     await apiRequest<void>(`/api/routes/${selectedRoute.id}`, session.accessToken, { method: "DELETE" });
     setRoutes((current) => current.filter((item) => item.id !== selectedRoute.id));
     setSelectedRoute(null);
-    setRightOpen(false);
+    router.push("/");
   };
 
   if (!authReady) return <div className="app-loading"><LoaderCircle className="spin" /> Lusmaker laden…</div>;
   if (!session) return <LoginScreen error={authError} />;
 
+  const sidebar = (
+    <Sidebar
+      conversations={conversations}
+      routes={routes}
+      selectedConversation={view.kind === "conversation" ? view.id : undefined}
+      selectedRoute={view.kind === "route" ? view.id : undefined}
+      onConversation={openConversation}
+      onRoute={(route) => openRoute(route.id)}
+      onNew={openNewChat}
+      onClose={() => setLeftOpen(false)}
+      session={session}
+    />
+  );
+
+  if (view.kind === "route") {
+    return (
+      <main className={`route-shell ${leftOpen ? "left-open" : ""}`}>
+        <div className="mobile-scrim" onClick={() => setLeftOpen(false)} />
+        {sidebar}
+        {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)}><X /></button></div> : null}
+        <RouteFullscreen
+          route={selectedRoute}
+          previewUrl={previewUrl}
+          loadingPreview={loadingPreview}
+          onDownload={() => void downloadRoute()}
+          onRename={renameRoute}
+          onDelete={deleteRoute}
+          onBack={() => router.push("/")}
+          onMenu={() => setLeftOpen(true)}
+        />
+      </main>
+    );
+  }
+
   return (
-    <main className={`workspace ${leftOpen ? "left-open" : ""} ${rightOpen ? "right-open" : ""}`}>
-      <div className="mobile-scrim" onClick={() => { setLeftOpen(false); setRightOpen(false); }} />
-      <Sidebar
-        conversations={conversations}
-        routes={routes}
-        selectedConversation={conversationId}
-        onConversation={(id) => void openConversation(id)}
-        onRoute={(route) => void openRoute(route)}
-        onNew={() => void newConversation()}
-        onClose={() => setLeftOpen(false)}
-        session={session}
-      />
+    <main className={`workspace ${leftOpen ? "left-open" : ""}`}>
+      <div className="mobile-scrim" onClick={() => setLeftOpen(false)} />
+      {sidebar}
       <section className="chat-panel">
         <header className="chat-head">
           <button className="icon-button mobile-menu" onClick={() => setLeftOpen(true)} aria-label="Open navigatie"><Menu /></button>
           <div><span className="chat-kicker">Routegesprek</span><h1>{activeConversation?.title || "Nieuwe route"}</h1></div>
           <div className="model-status"><span /> Claude via Bedrock</div>
-          <button className="icon-button mobile-route" onClick={() => setRightOpen(true)} aria-label="Open routedetail"><Map /></button>
         </header>
         {error ? <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)}><X /></button></div> : null}
         <div className="messages">
           {messages.length === 0 ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
-          {messages.map((message) => <Message key={message.id} message={message} />)}
+          {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} />)}
           {busy ? (
             <div className="thinking-row"><Logo /><span>Lus tekent je route</span><i /><i /><i /></div>
           ) : null}
@@ -579,15 +663,6 @@ export function LusmakerApp() {
         </div>
         <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy} />
       </section>
-      <RouteInspector
-        route={selectedRoute}
-        previewUrl={previewUrl}
-        loadingPreview={loadingPreview}
-        onDownload={() => void downloadRoute()}
-        onRename={renameRoute}
-        onDelete={deleteRoute}
-        onClose={() => setRightOpen(false)}
-      />
     </main>
   );
 }

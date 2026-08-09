@@ -61,7 +61,9 @@ def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
 
     assert not (workflows / "deploy-vercel.yml").exists()
     next_config = _read("web/next.config.ts")
-    assert 'output: "export"' in next_config
+    assert 'output: "export"' not in next_config
+    assert (ROOT / "web/app/chats/[conversationId]/page.tsx").is_file()
+    assert (ROOT / "web/app/routes/[routeId]/page.tsx").is_file()
 
     pack = _read(".github/workflows/build-region-pack.yml")
     assert "workflow_dispatch:" in pack

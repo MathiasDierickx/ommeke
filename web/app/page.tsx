@@ -5,7 +5,7 @@ import { LusmakerApp } from "@/components/lusmaker-app";
 export default function HomePage() {
   return (
     <Suspense fallback={<div className="app-loading">Lusmaker laden…</div>}>
-      <LusmakerApp />
+      <LusmakerApp view={{ kind: "new" }} />
     </Suspense>
   );
 }

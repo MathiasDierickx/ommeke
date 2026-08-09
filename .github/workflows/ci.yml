@@ -83,5 +83,5 @@ jobs:
       - name: Controleer TypeScript
         run: npm run typecheck
 
-      - name: Bouw statische Next.js-app
+      - name: Bouw Next.js-app
         run: npm run build
