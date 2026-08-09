@@ -43,6 +43,31 @@ POI_NAMES = {
 }
 
 
+def suggest_route_name(
+    start: str,
+    *,
+    target_km: float | None,
+    max_km: float | None,
+    doel: str,
+    activiteit: str,
+) -> str:
+    """Bouw een compacte fallbacknaam uit de gestructureerde routewens."""
+    place = start.strip().split(",", 1)[0]
+    if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", place) or not place:
+        place = "je startpunt"
+    if activiteit == "trail":
+        kind = "Traillus"
+    elif doel == "hoogtemeters":
+        kind = "Heuvelrit"
+    elif doel == "toeren":
+        kind = "Rondrit"
+    else:
+        kind = "Fietslus"
+    distance = target_km if target_km is not None else max_km
+    suffix = f" · {distance:g} km" if distance is not None else ""
+    return f"{kind} rond {place}{suffix}"[:80].rstrip()
+
+
 def _normalise(value: str) -> str:
     value = unicodedata.normalize("NFKD", value.casefold())
     value = "".join(char for char in value if not unicodedata.combining(char))
@@ -585,9 +610,18 @@ def plan_route(
                 exports_root=exports_root,
             )
         return compact_result(d, climb_db, files, request)
+    route_name = naam.strip() if naam else suggest_route_name(
+        start,
+        target_km=target_km,
+        max_km=max_km,
+        doel=doel,
+        activiteit=activiteit,
+    )
+    if not route_name:
+        raise IntentError("naam mag niet leeg zijn")
     create_kwargs = dict(
         start=start,
-        name=naam,
+        name=route_name,
         strict=bool(strict),
         avoid_cobbles=kasseien is False,
         avoid_concrete=beton_vermijden is True,

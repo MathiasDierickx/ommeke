@@ -20,8 +20,9 @@ from starlette.responses import JSONResponse, Response
 
 from . import __version__
 from . import (
-    climbs,
     artifacts,
+    aws_state,
+    climbs,
     config,
     draft,
     geocode as geocode_mod,
@@ -49,6 +50,7 @@ from .mcp_contracts import (
     ExpectedRevision,
     GeocodeResult,
     Goal,
+    GpxDownloadResult,
     GraphProfile,
     InsertPosition,
     NonEmptyString,
@@ -60,6 +62,7 @@ from .mcp_contracts import (
     RadiusKm,
     RequestId,
     ResultLimit,
+    RouteName,
     RouteDetailsResult,
     RouteWorkflowResult,
     ToleranceKm,
@@ -72,8 +75,8 @@ SERVER_INSTRUCTIONS = (
     "bestaande draft. Vraag ontbrekende gebruikerskeuzes uit wanneer een tool "
     "status needs_input teruggeeft. Hergebruik bij retries dezelfde request_id "
     "en stuur bij mutaties de laatst ontvangen revision mee. Poll region_status "
-    "na ensure_region. Geef GPX en preview via de teruggegeven artifact-URI's "
-    "aan de gebruiker."
+    "na ensure_region. Geef plan_route altijd een korte naam die de routewens "
+    "samenvat. Gebruik download_gpx wanneer de gebruiker het GPX-bestand wil."
 )
 
 HOSTED_SERVER_INSTRUCTIONS = (
@@ -82,16 +85,17 @@ HOSTED_SERVER_INSTRUCTIONS = (
     "vraag de gebruiker om een startplaats binnen die regio wanneer de route "
     "erbuiten valt. Vraag ontbrekende keuzes uit bij status needs_input. "
     "Hergebruik bij retries dezelfde request_id en stuur bij mutaties de laatst "
-    "ontvangen revision mee. Geef GPX en preview via de artifact-URI's aan de "
-    "gebruiker."
+    "ontvangen revision mee. Geef plan_route altijd een korte naam die de "
+    "routewens samenvat. Gebruik download_gpx voor een tijdelijke HTTPS-link."
 )
 
 REMOTE_SERVER_INSTRUCTIONS = (
     "Gebruik plan_route voor een nieuwe routewens en adjust_route voor een "
     "bestaande draft. Vraag ontbrekende gebruikerskeuzes uit bij status "
     "needs_input. Hergebruik bij retries dezelfde request_id en stuur bij "
-    "mutaties de laatst ontvangen revision mee. Geef GPX en preview via de "
-    "teruggegeven HTTPS-URL's aan de gebruiker."
+    "mutaties de laatst ontvangen revision mee. Geef plan_route altijd een "
+    "korte naam die de routewens samenvat. Gebruik download_gpx wanneer de "
+    "gebruiker het GPX-bestand wil."
 )
 
 
@@ -375,7 +379,7 @@ def plan_route(
     beton_vermijden: bool | None = None,
     autovrij: bool | None = None,
     strict: bool | None = None,
-    naam: NonEmptyString | None = None,
+    naam: RouteName | None = None,
     activiteit: Activity = "fietsen",
     geen_opvulling: bool = False,
     profiel_naam: NonEmptyString = "standaard",
@@ -509,11 +513,37 @@ def route_details(draft_id: NonEmptyString) -> RouteDetailsResult:
     return intents.route_details(draft_id)
 
 
+@mcp.tool(**tool_contract("download_gpx"))
+def download_gpx(draft_id: NonEmptyString) -> GpxDownloadResult:
+    """Maak een downloadbare GPX-link; hosted links vervallen na 15 minuten."""
+    d = draft.load(draft_id)
+    descriptor = artifacts.describe(draft_id, "route.gpx")
+    if "bytes" not in descriptor or "sha256" not in descriptor:
+        raise artifacts.ArtifactError(
+            f"GPX voor draft '{draft_id}' bestaat niet; routeer eerst"
+        )
+    hosted = aws_state.enabled()
+    return {
+        "draft": draft_id,
+        "naam": d.get("name") or "Lusmaker-route",
+        "download_url": artifacts.temporary_download_url(
+            draft_id,
+            "route.gpx",
+            download_name=f"{d.get('name') or 'lusmaker-route'}.gpx",
+        ),
+        "expires_in": 900 if hosted else None,
+        "mime_type": descriptor["mime_type"],
+        "bytes": descriptor["bytes"],
+        "sha256": descriptor["sha256"],
+    }
+
+
 LITE_TOOLS = (
     plan_route,
     adjust_route,
     suggest_climbs,
     route_details,
+    download_gpx,
     route_readiness,
     get_profile,
     update_profile,
@@ -546,6 +576,7 @@ FULL_TOOLS = (
     adjust_route,
     optimize_draft,
     export_gpx,
+    download_gpx,
     preview_draft,
 )
 
@@ -613,6 +644,7 @@ for _hosted_tool in (
     adjust_route,
     suggest_climbs,
     route_details,
+    download_gpx,
     route_readiness,
     get_profile,
     update_profile,

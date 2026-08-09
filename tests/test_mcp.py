@@ -34,6 +34,7 @@ EXPECTED_TOOLS = {
     "adjust_route",
     "optimize_draft",
     "export_gpx",
+    "download_gpx",
     "preview_draft",
 }
 
@@ -42,6 +43,7 @@ EXPECTED_LITE_TOOLS = {
     "adjust_route",
     "suggest_climbs",
     "route_details",
+    "download_gpx",
     "route_readiness",
     "get_profile",
     "update_profile",
@@ -65,6 +67,7 @@ READ_ONLY_TOOLS = {
     "route_details",
     "list_regions",
     "suggest_climbs",
+    "download_gpx",
 }
 
 
@@ -132,7 +135,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 24
+assert len(actual) == 25
 """,
             Path(temp_dir),
         )
@@ -160,7 +163,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 10
+assert len(actual) == 11
 """,
             Path(temp_dir),
         )
@@ -331,6 +334,35 @@ async def inspect_resources():
 asyncio.run(inspect_resources())
 """,
             home,
+        )
+
+
+def test_download_gpx_tool_returns_a_local_resource_reference():
+    _require_mcp()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        _run_isolated(
+            """
+from lusmaker import artifacts, draft, mcp_server
+
+created = draft.new(
+    start={"lat": 50.8, "lon": 3.7, "label": "Wetteren"},
+    name="Heuvelrit rond Wetteren",
+    loop=True,
+    end=None,
+)
+path = artifacts.safe_output_path(created["id"], "route.gpx")
+path.write_bytes(b"<gpx/>")
+
+result = mcp_server.download_gpx(created["id"])
+assert result["download_url"] == (
+    f"lusmaker://drafts/{created['id']}/route.gpx"
+)
+assert result["naam"] == "Heuvelrit rond Wetteren"
+assert result["expires_in"] is None
+assert result["bytes"] == 6
+assert len(result["sha256"]) == 64
+""",
+            Path(temp_dir),
         )
 
 

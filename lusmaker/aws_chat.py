@@ -251,7 +251,15 @@ PLAN_ROUTE_SCHEMA = {
         "beton_vermijden": {"type": ["boolean", "null"]},
         "autovrij": {"type": ["boolean", "null"]},
         "strict": {"type": ["boolean", "null"]},
-        "naam": {"type": "string", "maxLength": 80},
+        "naam": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": (
+                "Korte natuurlijke titel die de volledige routevraag samenvat, "
+                "zoals 'Heuvelrit rond Wetteren · 38 km'."
+            ),
+        },
         "activiteit": {"type": "string", "enum": ["fietsen", "trail"]},
         "geen_opvulling": {"type": "boolean"},
     },
@@ -323,6 +331,8 @@ TOOL_CONFIG = {
 SYSTEM_PROMPT = """Je bent Lus, een Nederlandstalige routebouwer voor fiets- en traillussen.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
+Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in maximaal 80
+tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
 Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte vragen.
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
 zeg dat GPX en preview rechts in de routebibliotheek staan. Hou antwoorden praktisch en kort.

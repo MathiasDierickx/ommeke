@@ -193,6 +193,27 @@ def describe_all(draft_id: str) -> list[dict]:
     return [describe(draft_id, filename) for filename in _ARTIFACTS]
 
 
+def temporary_download_url(
+    draft_id: str,
+    filename: str,
+    *,
+    download_name: str | None = None,
+    expires_in: int = 900,
+) -> str:
+    """Geef hosted een tijdelijke S3-link en lokaal de MCP-resource-URI."""
+    validate_draft_id(draft_id)
+    if filename not in _ARTIFACTS:
+        raise ArtifactError(f"onbekend artifact '{filename}'")
+    if aws_state.enabled():
+        return aws_state.presigned_get_url(
+            f"artifacts/{draft_id}/{filename}",
+            expires_in=expires_in,
+            content_type=content_type(filename),
+            download_name=download_name or filename,
+        )
+    return uri_for(draft_id, filename)
+
+
 def read(draft_id: str, filename: str) -> bytes:
     if aws_state.enabled():
         payload, _etag, _metadata = aws_state.get_bytes(

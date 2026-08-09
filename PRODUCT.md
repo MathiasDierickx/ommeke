@@ -92,8 +92,8 @@ systeemprompt. Daarom handelen `plan_route` en `adjust_route` het normale pad
 in één call af en geven ze een compact resultaat zonder legs, coördinaten of
 geneste berekeningen. Detailinformatie blijft opt-in via `route_details`.
 
-`lus-mcp --lite` beperkt bovendien de schema-overhead tot tien tools:
+`lus-mcp --lite` beperkt bovendien de schema-overhead tot elf tools:
 `plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
-`route_readiness`, `get_profile`, `update_profile`, `ensure_region`,
-`region_status` en `list_drafts`. Self-hosted en ontwikkelomgevingen houden
-zonder die vlag de volledige toolset.
+`download_gpx`, `route_readiness`, `get_profile`, `update_profile`,
+`ensure_region`, `region_status` en `list_drafts`. Self-hosted en
+ontwikkelomgevingen houden zonder die vlag de volledige toolset.

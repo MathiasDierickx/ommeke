@@ -77,6 +77,7 @@ TOOL_CONTRACTS = {
     "optimize_draft": ToolContract("Draft optimaliseren", _MUTATING_ROUTER),
     "export_gpx": ToolContract("GPX exporteren", _MUTATING_CLOSED),
     "preview_draft": ToolContract("Preview maken", _MUTATING_CLOSED),
+    "download_gpx": ToolContract("GPX downloaden", _READ_ONLY_CLOSED),
     "route_details": ToolContract("Routedetails ophalen", _READ_ONLY_CLOSED),
 }
 
@@ -102,6 +103,17 @@ QuietPreference = Literal["belangrijk", "ok"] | None
 NonEmptyString = Annotated[
     str,
     Field(min_length=1, description="Niet-lege tekstwaarde."),
+]
+RouteName = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=80,
+        description=(
+            "Korte, natuurlijke routenaam die de routewens samenvat, bijvoorbeeld "
+            "'Heuvelrit rond Wetteren · 38 km'."
+        ),
+    ),
 ]
 PositiveKm = Annotated[
     float,
@@ -241,6 +253,16 @@ class RouteDetailsResult(TypedDict):
     hoogtemeters: float
     legs: list[dict[str, Any]]
     kwaliteit: dict[str, Any]
+
+
+class GpxDownloadResult(TypedDict):
+    draft: str
+    naam: str
+    download_url: str
+    expires_in: int | None
+    mime_type: str
+    bytes: int
+    sha256: str
 
 
 class ClimbSuggestionResult(TypedDict):

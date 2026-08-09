@@ -226,3 +226,38 @@ def publish_artifact(
         client=client,
     )
     return {"bytes": len(payload), "sha256": digest}
+
+
+def presigned_get_url(
+    relative: str,
+    *,
+    expires_in: int = 900,
+    content_type: str | None = None,
+    download_name: str | None = None,
+    client=None,
+) -> str:
+    """Maak een kortlevende GET-link voor exact één tenant-object."""
+    if not enabled():
+        raise StateError("AWS-state is niet geconfigureerd")
+    if not 60 <= expires_in <= 3600:
+        raise StateError("downloadlink moet 60 tot 3600 seconden geldig zijn")
+    params = {"Bucket": bucket(), "Key": key(relative)}
+    if content_type:
+        params["ResponseContentType"] = content_type
+    if download_name:
+        safe_name = (
+            download_name.replace('"', "").replace("\r", "").replace("\n", "")
+        )
+        params["ResponseContentDisposition"] = (
+            f'attachment; filename="{safe_name}"'
+        )
+    try:
+        return _client(client).generate_presigned_url(
+            "get_object",
+            Params=params,
+            ExpiresIn=expires_in,
+        )
+    except Exception as exc:
+        raise StateError(
+            f"S3-downloadlink maken mislukt: {_error_code(exc) or exc}"
+        ) from exc

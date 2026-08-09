@@ -142,6 +142,23 @@ def test_compact_output_adds_one_underway_line_when_pois_are_present():
     )
 
 
+def test_suggest_route_name_summarises_place_character_and_distance():
+    assert intents.suggest_route_name(
+        "Wetteren station",
+        target_km=None,
+        max_km=38,
+        doel="hoogtemeters",
+        activiteit="fietsen",
+    ) == "Heuvelrit rond Wetteren station · 38 km"
+    assert intents.suggest_route_name(
+        "50.8,3.7",
+        target_km=12,
+        max_km=None,
+        doel="toeren",
+        activiteit="trail",
+    ) == "Traillus rond je startpunt · 12 km"
+
+
 def test_plan_route_injects_route_and_export_functions():
     state = {
         "id": "abc123",

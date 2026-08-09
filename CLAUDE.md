@@ -25,8 +25,10 @@ Geef daarom niet automatisch `false` door voor een onbekende nullable keuze.
 `route_readiness` en de fijnmazige drafttools blijven beschikbaar als escape
 hatch, maar zijn niet nodig voor het normale gesprek.
 
-De compacte tools beperken round-trips en resultaatgrootte. Geef GPX en
-preview via de teruggegeven artifact-URI's. `route_details`
+De compacte tools beperken round-trips en resultaatgrootte. Geef `plan_route`
+altijd een korte, natuurlijke `naam` uit de routevraag. Gebruik `download_gpx`
+wanneer de gebruiker het bestand wil; geef previews via de artifact-URI's.
+`route_details`
 geeft legs en de volledige kwaliteitsmetrieken alleen wanneer de gebruiker
 erom vraagt.
 

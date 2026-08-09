@@ -21,6 +21,7 @@ class _FakeS3:
         self.objects = {}
         self.etags = {}
         self.counter = 0
+        self.presigned = None
 
     def put_object(self, **kwargs):
         key = kwargs["Key"]
@@ -64,6 +65,10 @@ class _FakeS3:
         for item in kwargs["Delete"]["Objects"]:
             self.delete_object(Key=item["Key"])
         return {}
+
+    def generate_presigned_url(self, operation, **kwargs):
+        self.presigned = (operation, kwargs)
+        return "https://state-test.s3.example/download?signature=test"
 
 
 @contextmanager
@@ -129,6 +134,28 @@ def test_artifact_metadata_contains_hash_and_size():
     assert payload == b"<gpx/>"
     assert result["bytes"] == 6
     assert metadata["sha256"] == result["sha256"]
+
+
+def test_artifact_presigned_url_is_tenant_scoped_and_short_lived():
+    client = _FakeS3()
+    with _aws_bucket(), tenant.use("abc"), aws_state.use_client(client):
+        aws_state.publish_artifact(
+            "draft1", "route.gpx", b"<gpx/>", "application/gpx+xml"
+        )
+        url = artifacts.temporary_download_url(
+            "draft1", "route.gpx", download_name="Heuvelrit.gpx"
+        )
+
+    assert url.startswith("https://state-test.s3.example/download")
+    operation, kwargs = client.presigned
+    assert operation == "get_object"
+    assert kwargs["ExpiresIn"] == 900
+    assert kwargs["Params"] == {
+        "Bucket": "state-test",
+        "Key": "tenants/abc/artifacts/draft1/route.gpx",
+        "ResponseContentType": "application/gpx+xml",
+        "ResponseContentDisposition": 'attachment; filename="Heuvelrit.gpx"',
+    }
 
 
 def test_tenant_delete_removes_only_the_requested_object_and_prefix():

@@ -243,6 +243,12 @@ MCP-resources:
 - `lusmaker://drafts/<id>/route.gpx` (`application/gpx+xml`);
 - `lusmaker://drafts/<id>/preview.html` (`text/html`).
 
+Geef `plan_route` bij voorkeur een korte `naam` die de routevraag samenvat.
+Wanneer die ontbreekt, maakt Lusmaker zelf een bruikbare naam uit startplaats,
+routekarakter en afstand. Met `download_gpx(draft_id)` krijgt een hosted client
+een private S3-downloadlink die na 15 minuten vervalt; lokaal verwijst de tool
+naar de bestaande MCP-resource.
+
 Pas profielantwoorden toe met `update_profile`. Een plaats vermijden of juist
 toestaan gaat via `adjust_route`; roep die daarna opnieuw aan tot `ready`.
 Hergebruik bij retries dezelfde `request_id`, zodat geen tweede draft ontstaat.
@@ -276,7 +282,9 @@ toolset. De IdP verzorgt de interactieve OAuth-flow en toestemming; Lusmaker
 is alleen resource server. Het RFC 9728-document staat op
 `/.well-known/oauth-protected-resource`. GPX en preview worden als
 token-gebonden URL onder `/files/<sub>/<draft>/<bestand>` teruggegeven; een
-token van een andere gebruiker krijgt geen toegang.
+token van een andere gebruiker krijgt geen toegang. De tool `download_gpx`
+maakt daarnaast op verzoek een kortlevende presigned S3-link die zonder lokale
+Lambda-state kan worden gedownload.
 
 Alleen voor lokaal HTTP-testen kan authenticatie expliciet uitgeschakeld
 worden; de opslag valt dan terug op de bestaande lokale paden:
