@@ -409,10 +409,34 @@ def _execute_request(
     goal = request["doel"]
     target_km = request.get("target_km")
     hard_max = request.get("max_km")
+    max_explicit = request.get("max_km_explicit", True)
     if goal == "kort" or hard_max is None:
         route_fn(d, climb_db)
-        actual = (d.get("computed") or {}).get("total_km")
-        if hard_max is not None and actual is not None and actual > hard_max:
+        actual = (d.get("computed") or {}).get("total_km") or 0.0
+        # Degenererende lus: een lus zonder klimmen of waypoints routeert tot
+        # 0 km (start == eind). Is er een afstandsdoel, maak er dan een echte
+        # round-trip-lus van i.p.v. een lege 0 km-route terug te geven. We
+        # gebruiken 'toeren' zodat er puur een rondrit komt, zonder klim-hunting.
+        wants_distance = target_km is not None or hard_max is not None
+        if d.get("loop") and not d.get("climbs") and wants_distance and actual < 0.3:
+            fill_target = target_km if target_km is not None else hard_max
+            ceiling = hard_max if (hard_max is not None and max_explicit) else max(hard_max or 0.0, fill_target * 1.2)
+            optimize_fn(
+                d,
+                climb_db,
+                max_km=ceiling,
+                fill=True,
+                fill_target_km=fill_target,
+                objective="toeren",
+            )
+            actual = (d.get("computed") or {}).get("total_km") or 0.0
+            if actual < 0.3:
+                raise IntentError(
+                    f"Ik kon geen lus van ~{fill_target:.0f} km maken vanaf deze "
+                    "startplaats. Probeer een iets grotere afstand of een andere start."
+                )
+            return
+        if hard_max is not None and actual > hard_max:
             raise IntentError(
                 f"kortste route is {actual:.1f} km en overschrijdt het harde "
                 f"maximum van {hard_max:.1f} km"
@@ -425,7 +449,7 @@ def _execute_request(
     # optimizer daarom extra marge zodat hij niet hard faalt op zo'n overschot;
     # fill_target_km blijft het doel, dus de route wordt niet onnodig opgerekt.
     optimize_ceiling = hard_max
-    if not request.get("max_km_explicit", True) and target_km is not None:
+    if not max_explicit and target_km is not None:
         optimize_ceiling = max(hard_max, target_km * 1.2)
 
     optimize_kwargs = {
