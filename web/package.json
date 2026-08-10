@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
+    "shots": "node e2e/mobile-shots.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
@@ -21,6 +22,7 @@
     "@types/node": "24.10.1",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
+    "playwright": "1.59.1",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"
   }
