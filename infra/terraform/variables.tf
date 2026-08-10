@@ -148,15 +148,16 @@ variable "cors_origins" {
 }
 
 variable "bedrock_model_id" {
-  description = "EU cross-region inference profile voor Claude in Amazon Bedrock."
+  description = "Bedrock model-id/inference-profile voor de chat-agent (eu-west-1)."
   type        = string
-  # Tijdelijk Nova Pro: Claude wacht op Marketplace-betaalactivatie
-  # (terugzetten naar eu.anthropic.claude-sonnet-4-6 zodra de billing-case rond is)
-  default = "eu.amazon.nova-pro-v1:0"
+  # Anthropic Claude hangt op de Marketplace-betaalblokkade (INVALID_PAYMENT_INSTRUMENT);
+  # OpenAI gpt-oss-120b is een geteste tool-calling-vervanger die nu wél werkt.
+  # Terug naar eu.anthropic.claude-sonnet-4-6 zodra de billing-case rond is.
+  default = "openai.gpt-oss-120b-1:0"
 
   validation {
-    condition     = can(regex("^eu\\.(anthropic\\.claude|amazon\\.nova)-[a-z0-9.:-]+$", var.bedrock_model_id))
-    error_message = "bedrock_model_id moet een Europees Anthropic Claude of Amazon Nova inference profile zijn."
+    condition     = can(regex("^(eu\\.(anthropic\\.claude|amazon\\.nova)|openai\\.gpt-oss|mistral\\.mistral|minimax\\.minimax|qwen\\.qwen|zai\\.glm)[a-z0-9.:-]+$", var.bedrock_model_id))
+    error_message = "bedrock_model_id moet een getest Bedrock-model zijn (eu. Claude/Nova, of openai.gpt-oss / mistral / minimax / qwen / zai)."
   }
 }
 

@@ -31,6 +31,16 @@ What we have verified/done already:
    receive "agreement has expired" e-mails with identical start/end dates.
 5. There is no SCP or IAM restriction (verified via policy simulation:
    aws-marketplace:Subscribe and ViewSubscriptions are allowed).
+6. On Aug 10, 2026 we ADDED A SECOND, NEW valid Mastercard and retried.
+   The problem persists identically: within seconds of subscribing we
+   receive an "offer accepted" e-mail immediately followed by an
+   "agreement has expired" e-mail, and Bedrock still returns
+   INVALID_PAYMENT_INSTRUMENT. Marketplace > Manage subscriptions shows
+   0 active subscriptions. This confirms the block is NOT a missing card
+   on file but a backend payment-authorization / account-verification
+   issue on your side.
+7. AWS Marketplace > Settings has no separate Marketplace payment method;
+   it uses the account default, which is a valid, verified card.
 
 Please check on your side why the payment authorization for Marketplace is
 failing (card verification state, processor decline reason, or account
