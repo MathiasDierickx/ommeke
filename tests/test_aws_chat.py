@@ -5,7 +5,13 @@ from __future__ import annotations
 from copy import deepcopy
 
 from lusmaker import tenant
-from lusmaker.aws_chat import BedrockRouteAgent, ConversationStore
+from lusmaker.aws_chat import (
+    ADJUST_ROUTE_SCHEMA,
+    PLAN_ROUTE_SCHEMA,
+    SYSTEM_PROMPT,
+    BedrockRouteAgent,
+    ConversationStore,
+)
 
 
 class FakeDynamo:
@@ -169,3 +175,9 @@ def test_bedrock_agent_executes_whitelisted_tool_and_accumulates_usage():
     tool_result = bedrock.calls[1]["messages"][-1]["content"][0]["toolResult"]
     assert tool_result["toolUseId"] == "tool-1"
     assert tool_result["content"][0]["json"]["draft"] == "abc123"
+
+
+def test_route_tool_contract_exposes_landmark_anchor_instruction():
+    assert PLAN_ROUTE_SCHEMA["properties"]["rond_plaats"]["minLength"] == 1
+    assert ADJUST_ROUTE_SCHEMA["properties"]["rond_plaats"]["minLength"] == 1
+    assert "zet die plek in rond_plaats" in SYSTEM_PROMPT

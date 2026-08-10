@@ -1,6 +1,8 @@
 """Lokale geocoder op basis van OSM-plaatsen en straatnamen."""
 import pickle
 import re
+import unicodedata
+import warnings
 
 from . import config, geo
 
@@ -11,14 +13,28 @@ def _load():
     if not config.GAZETTEER_PKL.exists():
         raise RuntimeError("gazetteer ontbreekt — draai eerst `lus build`")
     with open(config.GAZETTEER_PKL, "rb") as f:
-        return pickle.load(f)
+        gazetteer = pickle.load(f)
+    if "landmarks" not in gazetteer:
+        warnings.warn(
+            "gazetteer bevat nog geen landmarks — draai `lus build --force`",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        gazetteer["landmarks"] = []
+    return gazetteer
+
+
+def _normalise(value: str) -> str:
+    value = unicodedata.normalize("NFKD", value.casefold())
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return " ".join(re.findall(r"[a-z0-9]+", value))
 
 
 def _match_places(places, q):
-    ql = q.lower()
+    ql = _normalise(q)
     out = []
     for name, ptype, lat, lon in places:
-        nl = name.lower()
+        nl = _normalise(name)
         if nl == ql:
             rank = 0
         elif nl.startswith(ql):
@@ -30,6 +46,27 @@ def _match_places(places, q):
         out.append((rank, PLACE_PRIO.get(ptype, 9), name, ptype, lat, lon))
     out.sort()
     return [{"label": n, "type": t, "lat": la, "lon": lo} for _r, _p, n, t, la, lo in out]
+
+
+def _match_landmarks(landmarks, q):
+    ql = _normalise(q)
+    out = []
+    for name, kind, lat, lon in landmarks:
+        nl = _normalise(name)
+        if nl == ql:
+            rank = 0
+        elif nl.startswith(ql):
+            rank = 1
+        elif ql in nl:
+            rank = 2
+        else:
+            continue
+        out.append((rank, name.casefold(), name, kind, lat, lon))
+    out.sort()
+    return [
+        {"label": name, "type": "landmark", "kind": kind, "lat": lat, "lon": lon}
+        for _rank, _sort_name, name, kind, lat, lon in out
+    ]
 
 
 def _cluster(points, radius_m=1200.0):
@@ -92,29 +129,55 @@ def places_near_route(route_coords, radius_m: float = 400.0, gazetteer=None) -> 
     )
 
 
-def geocode(query: str, limit: int = 5) -> list[dict]:
-    gaz = _load()
+def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
+    gaz = _load() if gazetteer is None else gazetteer
+    landmarks = gaz.get("landmarks", [])
     parts = [p.strip() for p in query.split(",") if p.strip()]
     # huisnummers wegstrippen
     street_q = re.sub(r"\b\d+[a-zA-Z]?\b", "", parts[0]).strip() if parts else ""
 
     if len(parts) == 1:
-        hits = _match_places(gaz["places"], parts[0])
-        if hits:
-            return hits[:limit]
+        landmark_hits = _match_landmarks(landmarks, parts[0])
+        exact_landmarks = [
+            hit
+            for hit in landmark_hits
+            if _normalise(hit["label"]) == _normalise(parts[0])
+        ]
+        if exact_landmarks:
+            return exact_landmarks[:limit]
         pts = gaz["streets"].get(street_q.lower(), [])
         out = []
         for c in _cluster(pts):
             place = _nearest_place(gaz["places"], c["lat"], c["lon"])
             out.append({"label": f"{c['name']}, {place}" if place else c["name"],
                         "type": "street", "lat": c["lat"], "lon": c["lon"]})
-        return out[:limit]
+        if out:
+            return out[:limit]
+        place_hits = _match_places(gaz["places"], parts[0])
+        if place_hits:
+            return place_hits[:limit]
+        return landmark_hits[:limit]
 
     # "straat, plaats"
     place_hits = _match_places(gaz["places"], parts[-1])
     if not place_hits:
         return []
     p0 = place_hits[0]
+    landmark_hits = _match_landmarks(landmarks, parts[0])
+    exact_landmarks = [
+        hit
+        for hit in landmark_hits
+        if _normalise(hit["label"]) == _normalise(parts[0])
+    ]
+    if exact_landmarks:
+        landmark_hits = exact_landmarks
+    nearby_landmarks = [
+        hit
+        for hit in landmark_hits
+        if geo.haversine(hit["lat"], hit["lon"], p0["lat"], p0["lon"]) < 8000
+    ]
+    if nearby_landmarks:
+        return nearby_landmarks[:limit]
     pts = gaz["streets"].get(street_q.lower(), [])
     near = [(la, lo, nm) for la, lo, nm in pts if geo.haversine(la, lo, p0["lat"], p0["lon"]) < 6000]
     out = []

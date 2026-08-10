@@ -269,6 +269,91 @@ def test_round_trip_anchor_is_start_without_climbs():
     assert draft._round_trip_anchor(routed, {}) == ((50.0, 4.0), "start")
 
 
+def test_requested_round_trip_anchor_takes_priority_and_is_a_route_waypoint():
+    routed = _synthetic_routed_draft()
+    routed["climbs"] = []
+    routed["round_trip_anchor"] = {
+        "label": "Blaarmeersen",
+        "lat": 51.039,
+        "lon": 3.700,
+    }
+
+    assert draft._round_trip_anchor(routed, {}) == (
+        (51.039, 3.700),
+        "Blaarmeersen",
+    )
+    legs = draft._waypoints(routed, {})
+    assert legs[0]["from"] == "start"
+    assert legs[0]["to"] == "Blaarmeersen"
+    assert legs[0]["points"][-1] == (51.039, 3.700)
+    assert legs[-1]["to"] == "start"
+
+
+def test_round_trip_fill_uses_landmark_anchor_and_keeps_route_near_it():
+    routed = _synthetic_routed_draft()
+    routed["climbs"] = []
+    routed["computed"] = {
+        "total_km": 0.0,
+        "ascend_m": 0,
+        "descend_m": 0,
+        "legs": [],
+        "kwaliteit": {"heen_en_weer_m": 0},
+    }
+    routed["_geometry"] = []
+    routed["round_trip_anchor"] = {
+        "label": "Blaarmeersen",
+        "lat": 51.039,
+        "lon": 3.700,
+    }
+    calls = []
+
+    def round_trip_fn(anchor, distance_m, seed, **_preferences):
+        calls.append((anchor, distance_m, seed))
+        return {
+            "distance_m": 4_800,
+            "ascend_m": seed,
+            "coords": [
+                [anchor[0], anchor[1], 0],
+                [anchor[0] + 0.01, anchor[1], 5],
+                [anchor[0], anchor[1] + 0.01, 5],
+                [anchor[0], anchor[1], 0],
+            ],
+        }
+
+    def router(current, climb_db):
+        legs = draft._waypoints(current, climb_db)
+        current["computed"] = {
+            "total_km": 5.0,
+            "ascend_m": current["opvullingen"][-1]["seed"],
+            "descend_m": 0,
+            "legs": [{"opvulling": leg.get("opvulling", False)} for leg in legs],
+            "kwaliteit": {"heen_en_weer_m": 0},
+        }
+        current["_geometry"] = [
+            [[point[0], point[1], 0] for point in leg["points"]]
+            for leg in legs
+        ]
+
+    result = draft._fill_with_round_trip(
+        routed,
+        {},
+        budget_m=7_500,
+        router=router,
+        round_trip_fn=round_trip_fn,
+        objective="offroad",
+        popular_cells=set(),
+        target_total_m=5_000,
+    )
+
+    assert result["filled"] is True
+    assert calls == [((51.039, 3.700), 5_000.0, seed) for seed in range(5)]
+    route_points = [point for leg in routed["_geometry"] for point in leg]
+    assert min(
+        geo.haversine(51.039, 3.700, point[0], point[1])
+        for point in route_points
+    ) <= 300
+
+
 def test_waypoints_split_a_climb_at_an_interior_fill_anchor():
     routed = _synthetic_routed_draft()
     climb_db = _synthetic_climb_db()

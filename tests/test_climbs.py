@@ -17,6 +17,38 @@ def test_junction_refs_require_different_way_ids():
     assert osm._junction_refs(ways) == {20}
 
 
+def test_landmark_kind_covers_water_parks_and_protected_areas():
+    assert osm._landmark_kind({"leisure": "park"}) == "leisure:park"
+    assert osm._landmark_kind({"natural": "water"}) == "natural:water"
+    assert osm._landmark_kind({"water": "reservoir"}) == "water:reservoir"
+    assert (
+        osm._landmark_kind({"boundary": "protected_area"})
+        == "boundary:protected_area"
+    )
+    assert osm._landmark_kind({"leisure": "fitness_centre"}) is None
+
+
+def test_landmarks_are_deduplicated_by_normalised_name_within_100_metres():
+    landmarks = [
+        ("Provinciaal Domein", "leisure:park", 51.00000, 3.70000),
+        ("Provinciaal Dómein", "landuse:recreation_ground", 51.00030, 3.70000),
+        ("Provinciaal Domein", "leisure:park", 51.01000, 3.70000),
+    ]
+
+    deduped = osm._dedupe_landmarks(landmarks)
+
+    assert deduped == [landmarks[0], landmarks[2]]
+
+
+def test_landmark_centroid_uses_polygon_geometry():
+    centre = osm._centroid(
+        [(51.0, 3.0), (51.0, 3.2), (51.2, 3.2), (51.2, 3.0), (51.0, 3.0)]
+    )
+
+    assert round(centre[0], 6) == 51.1
+    assert round(centre[1], 6) == 3.1
+
+
 def test_order_chain_keeps_refs_parallel_to_coordinates():
     ways = [
         (11, [100, 101], [(50.0, 4.0), (50.001, 4.0)], {}),

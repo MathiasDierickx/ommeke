@@ -251,6 +251,7 @@ PLAN_ROUTE_SCHEMA = {
     "required": ["start"],
     "properties": {
         "start": {"type": "string", "minLength": 1, "maxLength": 160},
+        "rond_plaats": {"type": "string", "minLength": 1, "maxLength": 160},
         "target_km": {"type": "number", "exclusiveMinimum": 0},
         "max_km": {"type": "number", "exclusiveMinimum": 0},
         "tolerance_km": {"type": "number", "minimum": 0},
@@ -289,6 +290,7 @@ ADJUST_ROUTE_SCHEMA = {
         "max_km": {"type": "number", "exclusiveMinimum": 0},
         "tolerance_km": {"type": "number", "minimum": 0},
         "doel": {"type": "string", "enum": ["hoogtemeters", "kort", "toeren"]},
+        "rond_plaats": {"type": "string", "minLength": 1, "maxLength": 160},
         "geen_opvulling": {"type": "boolean"},
         "expected_revision": {"type": "integer", "minimum": 0},
     },
@@ -341,6 +343,8 @@ TOOL_CONFIG = {
 SYSTEM_PROMPT = """Je bent Lus, een Nederlandstalige routebouwer voor fiets- en traillussen.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
+Als de gebruiker vraagt om rond/langs een specifieke plek (park, plas, domein) te lopen/rijden,
+zet die plek in rond_plaats.
 Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in maximaal 80
 tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
 Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte vragen.
@@ -368,6 +372,7 @@ class RouteToolExecutor:
             values.setdefault("strict", None)
             values.setdefault("activiteit", "fietsen")
             values.setdefault("geen_opvulling", False)
+            values.setdefault("rond_plaats", None)
             return intents.plan_route(
                 **values,
                 profiel_naam="standaard",
@@ -382,6 +387,7 @@ class RouteToolExecutor:
             values.setdefault("vermijd_plaatsen", [])
             values.setdefault("niet_meer_vermijden", [])
             values.setdefault("sta_plaatsen_toe", [])
+            values.setdefault("rond_plaats", None)
             return intents.adjust_route(**values, check_readiness=True)
         if name == "list_routes":
             return {"drafts": draft.list_all()[:50]}

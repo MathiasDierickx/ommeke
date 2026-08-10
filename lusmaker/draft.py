@@ -401,6 +401,19 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
         legs.append({"from": f"{c['name']} (voet)", "to": f"{c['name']} (top)",
                      "points": via, "climb": cid, "hints": [name_hint] * len(via)})
         prev_label, prev_pt = f"{c['name']} (top)", top
+    round_anchor = d.get("round_trip_anchor")
+    if round_anchor:
+        anchor = (round_anchor["lat"], round_anchor["lon"])
+        anchor_label = round_anchor.get("label") or "rond-plek"
+        if geo.haversine(prev_pt[0], prev_pt[1], anchor[0], anchor[1]) >= 10.0:
+            legs.append(
+                {
+                    "from": prev_label,
+                    "to": anchor_label,
+                    "points": [prev_pt, anchor],
+                }
+            )
+        prev_label, prev_pt = anchor_label, anchor
     if d["loop"]:
         legs.append({"from": prev_label, "to": "start", "points": [prev_pt, start]})
     elif d.get("end"):
@@ -574,6 +587,13 @@ def _route(
 
     start_pt = (d["start"]["lat"], d["start"]["lon"])
     protect = [start_pt]
+    if d.get("round_trip_anchor"):
+        protect.append(
+            (
+                d["round_trip_anchor"]["lat"],
+                d["round_trip_anchor"]["lon"],
+            )
+        )
     avoid = list(place_areas(d))
     leg_details = []
     computed_legs = []
@@ -866,8 +886,9 @@ def probe(
     effective_profile = routing_preferences(d)["profile"]
     if d.get("loop") and not d.get("climbs"):
         preferences = routing_preferences(d)
+        anchor, _anchor_label = _round_trip_anchor(d, climb_db)
         exploratory = round_trip_fn(
-            (d["start"]["lat"], d["start"]["lon"]),
+            anchor,
             15_000.0,
             0,
             avoid_polygons=place_areas(d),
@@ -1087,6 +1108,12 @@ def _select_candidate(candidates: list[dict], objective, budget_km: float | None
 
 def _round_trip_anchor(d: dict, climb_db: dict) -> tuple[tuple[float, float], str]:
     """Kies het route-waypoint dat hemelsbreed het verst van start ligt."""
+    requested = d.get("round_trip_anchor")
+    if requested:
+        return (
+            (requested["lat"], requested["lon"]),
+            requested.get("label") or "rond-plek",
+        )
     start = (d["start"]["lat"], d["start"]["lon"])
     if not d.get("climbs"):
         return start, "start"

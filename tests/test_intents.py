@@ -271,6 +271,91 @@ def test_plan_route_passes_no_fill_to_optimizer():
     assert optimize_calls == [{"max_km": 10, "fill": False}]
 
 
+def test_plan_route_resolves_landmark_and_passes_it_as_round_trip_anchor():
+    state = _routed_draft()
+    state["climbs"] = []
+    state["computed"] = None
+    optimize_calls = []
+
+    def resolve_fn(query):
+        assert query == "Blaarmeersen, Gent"
+        return (
+            {"label": "Blaarmeersen", "lat": 51.039, "lon": 3.700},
+            [],
+        )
+
+    def optimize_fn(d, _db, **kwargs):
+        optimize_calls.append(kwargs)
+        assert d["round_trip_anchor"]["label"] == "Blaarmeersen"
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 5.0}
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        result = intents.plan_route(
+            "Blaarmeersen",
+            rond_plaats="Blaarmeersen, Gent",
+            target_km=5,
+            activiteit="trail",
+            create_fn=lambda **_kwargs: {"id": state["id"]},
+            load_fn=lambda _draft_id: state,
+            optimize_fn=optimize_fn,
+            climbs_fn=lambda: {},
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            resolve_fn=resolve_fn,
+            exports_root=Path(temp_dir),
+        )
+
+    assert optimize_calls == [
+        {
+            "max_km": 7.5,
+            "fill": True,
+            "objective": "offroad",
+            "fill_target_km": 5,
+        }
+    ]
+    assert result["status"] == "ready"
+    assert state["route_request"]["rond_plaats"] == "Blaarmeersen, Gent"
+
+
+def test_plan_route_defaults_landmark_loop_to_five_km():
+    state = _routed_draft()
+    state["climbs"] = []
+    state["computed"] = None
+    calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        calls.append(kwargs)
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 5.0}
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "Blaarmeersen",
+            rond_plaats="Blaarmeersen",
+            create_fn=lambda **_kwargs: {"id": state["id"]},
+            load_fn=lambda _draft_id: state,
+            optimize_fn=optimize_fn,
+            climbs_fn=lambda: {},
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            resolve_fn=lambda _query: (
+                {"label": "Blaarmeersen", "lat": 51.039, "lon": 3.700},
+                [],
+            ),
+            exports_root=Path(temp_dir),
+        )
+
+    assert calls[0]["fill_target_km"] == 5.0
+    assert calls[0]["max_km"] == 7.5
+
+
 def test_plan_route_passes_named_preference_profile_to_draft():
     state = _routed_draft()
     captured = {}
@@ -406,6 +491,52 @@ def test_adjust_route_forwards_offroad_goal_to_optimizer():
             "fill_target_km": 40,
         }
     ]
+
+
+def test_adjust_route_replaces_round_trip_anchor_before_rerouting():
+    state = _routed_draft()
+    state["climbs"] = []
+    calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        calls.append(kwargs)
+        assert d["round_trip_anchor"] == {
+            "label": "Blaarmeersen",
+            "lat": 51.039,
+            "lon": 3.700,
+        }
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 5.0}
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.adjust_route(
+            "abc123",
+            rond_plaats="Blaarmeersen, Gent",
+            target_km=5,
+            load_fn=lambda _draft_id: state,
+            optimize_fn=optimize_fn,
+            climbs_fn=lambda: {},
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            resolve_fn=lambda query: (
+                {"label": "Blaarmeersen", "lat": 51.039, "lon": 3.700},
+                [],
+            ),
+            exports_root=Path(temp_dir),
+        )
+
+    assert calls == [
+        {
+            "max_km": 7.5,
+            "fill": True,
+            "objective": "toeren",
+            "fill_target_km": 5,
+        }
+    ]
+    assert state["route_request"]["rond_plaats"] == "Blaarmeersen, Gent"
 
 
 def test_plan_route_stops_at_needs_input_before_optimization_and_export():

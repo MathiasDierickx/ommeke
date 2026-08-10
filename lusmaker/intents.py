@@ -14,6 +14,7 @@ from . import (
     climbs,
     config,
     draft,
+    geocode,
     gpx,
     heat,
     preview,
@@ -327,6 +328,7 @@ def _route_request(
     autovrij: bool | None,
     strict: bool | None,
     request_id: str | None,
+    rond_plaats: str | None,
     input_signature: dict,
 ) -> dict:
     hard_max = max_km
@@ -353,6 +355,7 @@ def _route_request(
         "expliciete_voorkeuren": explicit_preferences,
         "toegestane_plaatsen": [],
         "request_id": request_id,
+        "rond_plaats": rond_plaats,
         "input_signature": input_signature,
     }
 
@@ -410,7 +413,7 @@ def _execute_request(
     target_km = request.get("target_km")
     hard_max = request.get("max_km")
     max_explicit = request.get("max_km_explicit", True)
-    if goal == "kort" or hard_max is None:
+    if (goal == "kort" or hard_max is None) and not request.get("rond_plaats"):
         route_fn(d, climb_db)
         actual = (d.get("computed") or {}).get("total_km") or 0.0
         # Degenererende lus: een lus zonder klimmen of waypoints routeert tot
@@ -454,9 +457,13 @@ def _execute_request(
 
     optimize_kwargs = {
         "max_km": optimize_ceiling,
-        "fill": not request["geen_opvulling"],
+        "fill": True if request.get("rond_plaats") else not request["geen_opvulling"],
     }
-    if goal == "toeren":
+    if request.get("rond_plaats") and not d.get("climbs"):
+        optimize_kwargs["objective"] = (
+            "offroad" if request.get("activiteit") == "trail" else "toeren"
+        )
+    elif goal == "toeren":
         optimize_kwargs["objective"] = "toeren"
     elif goal == "offroad":
         optimize_kwargs["objective"] = "offroad"
@@ -522,6 +529,7 @@ def plan_route(
     profiel_naam: str | None = None,
     check_readiness: bool = False,
     request_id: str | None = None,
+    rond_plaats: str | None = None,
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -537,6 +545,7 @@ def plan_route(
     assess_fn=readiness.assess,
     profile_load_fn=profiles.load,
     find_request_fn=draft.find_by_request_id,
+    resolve_fn=geocode.resolve,
     exports_root: Path | None = None,
 ) -> dict:
     """Maak en routeer een lus, eventueel na een readiness-gesprek."""
@@ -548,6 +557,12 @@ def plan_route(
         raise IntentError(
             "request-id gebruikt 1-128 letters, cijfers, '.', '_', ':' of '-'"
         )
+    if rond_plaats is not None:
+        rond_plaats = rond_plaats.strip()
+        if not rond_plaats:
+            raise IntentError("rond-plaats mag niet leeg zijn")
+    if rond_plaats and target_km is None and max_km is None:
+        target_km = 5.0
     _validate_request(
         target_km=target_km,
         max_km=max_km,
@@ -562,6 +577,7 @@ def plan_route(
     input_signature = {
         "start": start.strip(),
         "region": region,
+        "rond_plaats": rond_plaats,
         "via_klimmen": list(via_klimmen),
         "vermijd_plaatsen": list(vermijd_plaatsen),
         "naam": naam,
@@ -590,6 +606,7 @@ def plan_route(
         autovrij=autovrij,
         strict=strict,
         request_id=request_id,
+        rond_plaats=rond_plaats,
         input_signature=input_signature,
     )
     existing = find_request_fn(request_id) if request_id is not None else None
@@ -597,18 +614,19 @@ def plan_route(
         stored_request = existing.get("route_request") or {}
         stored_signature = stored_request.get("input_signature")
         comparable_signature = input_signature
-        if (
-            isinstance(stored_signature, dict)
-            and "autovrij" not in stored_signature
-            and input_signature["autovrij"] is None
-        ):
-            # Bestaande T15-workflows blijven idempotent hervatbaar zolang de
-            # nieuwe voorkeur niet expliciet werd opgegeven.
-            comparable_signature = {
-                key: value
-                for key, value in input_signature.items()
-                if key != "autovrij"
-            }
+        if isinstance(stored_signature, dict):
+            # Oudere workflows blijven idempotent hervatbaar zolang later
+            # toegevoegde optionele invoer niet expliciet werd opgegeven.
+            for optional_key in ("autovrij", "rond_plaats"):
+                if (
+                    optional_key not in stored_signature
+                    and input_signature[optional_key] is None
+                ):
+                    comparable_signature = {
+                        key: value
+                        for key, value in comparable_signature.items()
+                        if key != optional_key
+                    }
         if stored_signature != comparable_signature:
             raise IntentError(
                 f"request-id '{request_id}' is al gebruikt voor een andere routewens"
@@ -646,7 +664,7 @@ def plan_route(
             )
         return compact_result(d, climb_db, files, request)
     route_name = naam.strip() if naam else suggest_route_name(
-        start,
+        rond_plaats or start,
         target_km=target_km,
         max_km=max_km,
         doel=doel,
@@ -676,6 +694,12 @@ def plan_route(
         for climb in _resolve_climbs(via_klimmen, climb_db):
             add_climb_fn(draft_id, climb["id"])
         d = load_fn(draft_id)
+        if rond_plaats:
+            anchor, _alternatives = resolve_fn(rond_plaats)
+            d["round_trip_anchor"] = anchor
+            d["opvullingen"] = []
+            d["computed"] = None
+            d.pop("_geometry", None)
         d["route_request"] = request
         save_fn(d)
         if check_readiness:
@@ -726,6 +750,7 @@ def adjust_route(
     profiel_naam: str | None = None,
     check_readiness: bool = False,
     expected_revision: int | None = None,
+    rond_plaats: str | None = None,
     *,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -741,12 +766,22 @@ def adjust_route(
     probe_fn=draft.probe,
     assess_fn=readiness.assess,
     profile_load_fn=profiles.load,
+    resolve_fn=geocode.resolve,
     exports_root: Path | None = None,
 ) -> dict:
     """Pas meerdere routewensen toe, routeer eenmaal en exporteer opnieuw."""
     d = load_fn(draft_id)
     draft.require_revision(d, expected_revision)
     previous_request = d.get("route_request") or {}
+    if rond_plaats is not None:
+        rond_plaats = rond_plaats.strip()
+        if not rond_plaats:
+            raise IntentError("rond-plaats mag niet leeg zijn")
+    effective_round_place = (
+        rond_plaats
+        if rond_plaats is not None
+        else previous_request.get("rond_plaats")
+    )
     effective_target = (
         target_km if target_km is not None else previous_request.get("target_km")
     )
@@ -755,11 +790,23 @@ def adjust_route(
         if tolerance_km is not None
         else previous_request.get("tolerance_km", 2.5)
     )
+    defaulted_round_distance = False
+    if (
+        effective_round_place
+        and effective_target is None
+        and max_km is None
+        and previous_request.get("max_km") is None
+    ):
+        effective_target = 5.0
+        defaulted_round_distance = True
     if max_km is not None:
         effective_max = max_km
         max_is_explicit = True
-    elif target_km is not None and not previous_request.get("max_km_explicit", False):
-        effective_max = target_km + effective_tolerance
+    elif (
+        (target_km is not None or defaulted_round_distance)
+        and not previous_request.get("max_km_explicit", False)
+    ):
+        effective_max = effective_target + effective_tolerance
         max_is_explicit = False
     elif (
         tolerance_km is not None
@@ -801,6 +848,7 @@ def adjust_route(
         "geen_opvulling": effective_no_fill,
         "profiel_naam": effective_profile,
         "activiteit": previous_request.get("activiteit", "fietsen"),
+        "rond_plaats": effective_round_place,
         "expliciete_voorkeuren": previous_request.get(
             "expliciete_voorkeuren", {}
         ),
@@ -823,6 +871,13 @@ def adjust_route(
         for place in niet_meer_vermijden:
             unavoid_place_fn(draft_id, place)
         d = load_fn(draft_id)
+        if effective_round_place:
+            anchor, _alternatives = resolve_fn(effective_round_place)
+            if d.get("round_trip_anchor") != anchor:
+                d["round_trip_anchor"] = anchor
+                d["opvullingen"] = []
+                d["computed"] = None
+                d.pop("_geometry", None)
         d["route_request"] = request
         save_fn(d)
         if check_readiness:
