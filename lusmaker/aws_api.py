@@ -59,7 +59,8 @@ def _route_item(item: dict[str, Any]) -> dict[str, Any]:
         "region": item.get("region"),
         "climbs": item.get("climbs") or [],
         "total_km": computed.get("total_km"),
-        "elevation_gain_m": computed.get("elevation_gain_m"),
+        # de engine schrijft de hoogtemeters als 'ascend_m'
+        "elevation_gain_m": computed.get("ascend_m"),
         "ready": bool(computed),
         "download_url": f"/api/routes/{item['id']}/gpx" if computed else None,
         "preview_url": f"/api/routes/{item['id']}/preview" if computed else None,
@@ -82,6 +83,39 @@ async def routes_list(_request: Request) -> JSONResponse:
         return _error(str(exc), 500, "routes_unavailable")
 
 
+def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str, Any]:
+    """Compacte polyline + klimmarkers zodat de webapp de kaart native tekent."""
+    legs = item.get("_geometry") or []
+    points: list[list[float]] = []
+    for leg in legs:
+        for pt in leg:
+            points.append([round(pt[0], 5), round(pt[1], 5)])
+    if len(points) > max_points:
+        step = len(points) / max_points
+        points = [points[int(i * step)] for i in range(max_points)] + [points[-1]]
+    markers = []
+    for cid in item.get("climbs") or []:
+        for meta, leg in zip(
+            (item.get("computed") or {}).get("legs", []), legs
+        ):
+            if meta.get("climb") == cid and leg:
+                top = leg[-1]
+                markers.append(
+                    {"lat": round(top[0], 5), "lon": round(top[1], 5), "id": cid}
+                )
+                break
+    start = item.get("start") or {}
+    return {
+        "points": points,
+        "climbs": markers,
+        "start": (
+            {"lat": start.get("lat"), "lon": start.get("lon"), "label": start.get("label")}
+            if start.get("lat") is not None
+            else None
+        ),
+    }
+
+
 async def route_detail(request: Request) -> JSONResponse:
     try:
         item = await asyncio.to_thread(draft.load, _draft_id(request))
@@ -89,6 +123,7 @@ async def route_detail(request: Request) -> JSONResponse:
         result["avoid_places"] = item.get("avoid_places") or []
         result["route_request"] = item.get("route_request") or {}
         result["computed"] = item.get("computed")
+        result["geometry"] = _route_geometry(item) if item.get("computed") else None
         return JSONResponse({"route": result})
     except draft.DraftError as exc:
         return _error(str(exc), 404, "route_not_found")
