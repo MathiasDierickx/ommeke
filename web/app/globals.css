@@ -96,7 +96,10 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .left-open .mobile-scrim { display: block; }
 
 /* Chat */
-.chat-panel { height: 100svh; min-width: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; background: var(--white); }
+.chat-panel { height: 100svh; min-width: 0; display: flex; flex-direction: column; background: var(--white); }
+.chat-panel > .messages { flex: 1 1 auto; min-height: 0; }
+.chat-panel > .composer { flex: 0 0 auto; }
+.chat-panel > .chat-head, .chat-panel > .error-banner { flex: 0 0 auto; }
 .chat-head { min-height: 4.25rem; padding: .55rem .65rem; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: .55rem; }
 .chat-head > div:first-of-type { min-width: 0; }
 .chat-kicker { color: var(--muted); font-size: .59rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
