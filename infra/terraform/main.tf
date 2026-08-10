@@ -373,6 +373,7 @@ resource "aws_lambda_function" "app" {
       LUSMAKER_STATE_BUCKET       = aws_s3_bucket.data.id
       LUSMAKER_TMP                = "/tmp/lusmaker"
       LUSMAKER_TOKEN_AUTH_METHODS = var.oauth_generate_secret ? "client_secret_basic,client_secret_post" : "none"
+      LUSMAKER_WEB_URL            = length(local.web_origins) > 0 ? local.web_origins[0] : ""
     }
   }
 
