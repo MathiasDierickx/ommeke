@@ -204,6 +204,12 @@ resource "aws_cognito_user_pool_client" "web" {
   generate_secret                      = false
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
+  # Self-hosted auth-UI: rechtstreekse InitiateAuth vanuit de browser i.p.v. de
+  # Cognito Hosted UI. USER_PASSWORD_AUTH (over HTTPS) + refresh volstaan.
+  explicit_auth_flows = [
+    "ALLOW_USER_PASSWORD_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
   allowed_oauth_scopes = [
     "openid",
     "email",

@@ -1,15 +1,16 @@
 "use client";
 
-import { Bike, LoaderCircle, Menu, X } from "lucide-react";
+import { LoaderCircle, Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
+import { AuthPanel } from "@/components/auth-panel";
 import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
 import { RouteDetail } from "@/components/route-detail";
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
-import { beginAuth, clearSession, finishAuth, loadSession, refreshSession } from "@/lib/auth";
+import { clearStored, currentSession, signOut } from "@/lib/cognito";
 import type { AuthSession, ChatMessage, Conversation, NearbyClimb, Route, RouteAdjustment } from "@/lib/types";
 
 export type WorkspaceView =
@@ -17,43 +18,15 @@ export type WorkspaceView =
   | { kind: "conversation"; id: string }
   | { kind: "route"; id: string };
 
-function LoginScreen({ error }: { error?: string }) {
-  const [working, setWorking] = useState<"login" | "signup" | null>(null);
-  const launch = async (mode: "login" | "signup") => {
-    setWorking(mode);
-    try { await beginAuth(mode); } catch { setWorking(null); }
-  };
-  return (
-    <main className="login-shell">
-      <div className="login-topography" aria-hidden="true">
-        <svg viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice">
-          {Array.from({ length: 11 }, (_, index) => <path key={index} d={`M -80 ${140 + index * 55} C 120 ${10 + index * 78}, 270 ${260 + index * 32}, 480 ${100 + index * 67} S 760 ${170 + index * 61}, 900 ${80 + index * 73}`} />)}
-          <path className="login-route-line" d="M90 730 C210 610 170 475 340 415 S520 250 690 165" />
-          <circle cx="90" cy="730" r="9" /><circle cx="690" cy="165" r="9" />
-        </svg>
-      </div>
-      <section className="login-content">
-        <div className="login-brand"><Logo /><span>Lusmaker</span></div>
-        <p className="eyebrow">Jouw routeatelier</p>
-        <h1>Zeg waar je wil rijden.<br />Kom terug met een lus.</h1>
-        <p className="login-copy">Lusmaker vertaalt je vraag naar een route die rekening houdt met afstand, ondergrond, verkeer en hoogtemeters.</p>
-        {error ? <p className="auth-error" role="alert">{error}</p> : null}
-        <div className="login-actions">
-          <button className="button button-primary" onClick={() => launch("signup")} disabled={working !== null}>{working === "signup" ? <LoaderCircle className="spin" /> : <Bike />}Account maken</button>
-          <button className="button button-quiet" onClick={() => launch("login")} disabled={working !== null}>{working === "login" ? <LoaderCircle className="spin" /> : null}Aanmelden</button>
-        </div>
-        <p className="login-note">Veilig aanmelden via Amazon Cognito · routes blijven privé</p>
-      </section>
-    </main>
-  );
-}
+// Module-scope: reset alleen bij een volledige page-load, niet bij
+// client-navigatie. Zo landt een ingelogde gebruiker bij het openen van de app
+// meteen op zijn laatste route, terwijl "Nieuwe route" gewoon blijft werken.
+let didInitialLanding = false;
 
 export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [authError, setAuthError] = useState<string>();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [conversationId, setConversationId] = useState<string>();
@@ -64,6 +37,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [leftOpen, setLeftOpen] = useState(false);
+  const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const messageEnd = useRef<HTMLDivElement>(null);
   const authStarted = useRef(false);
 
@@ -73,26 +47,15 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     let active = true;
     const resolve = async () => {
       try {
-        const code = searchParams.get("code");
-        const state = searchParams.get("state");
-        let next = loadSession();
-        if (code && state) {
-          const completed = await finishAuth(code, state);
-          next = completed.session;
-          router.replace(completed.returnTo);
-        } else if (next) {
-          next = await refreshSession(next);
-          if (!next) clearSession();
-        }
+        const next = await currentSession();
         if (active) setSession(next);
-      } catch (cause) {
-        clearSession();
-        if (active) setAuthError(cause instanceof Error ? cause.message : "Aanmelden mislukt.");
+      } catch {
+        clearStored();
       } finally { if (active) setAuthReady(true); }
     };
     void resolve();
     return () => { active = false; };
-  }, [router, searchParams]);
+  }, []);
 
   const loadWorkspace = useCallback(async (accessToken: string) => {
     const [conversationData, routeData] = await Promise.all([
@@ -101,6 +64,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     ]);
     setConversations(conversationData.conversations);
     setRoutes(routeData.routes);
+    setWorkspaceLoaded(true);
   }, []);
 
   const loadRoute = useCallback(async (routeId: string, accessToken: string) => {
@@ -114,6 +78,18 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!session) return;
     loadWorkspace(session.accessToken).catch((cause) => setError(cause instanceof Error ? cause.message : "Werkruimte laden mislukt."));
   }, [session, loadWorkspace]);
+
+  // Bij het openen van de app (volledige page-load) landt een ingelogde
+  // gebruiker meteen op zijn meest recente route i.p.v. het lege startscherm.
+  useEffect(() => {
+    if (didInitialLanding) return;
+    if (!authReady || !session || !workspaceLoaded) return;
+    didInitialLanding = true;
+    if (view.kind === "new" && routes.length) {
+      const latest = [...routes].sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
+      if (latest) router.replace(`/routes/${encodeURIComponent(latest.id)}`);
+    }
+  }, [authReady, session, workspaceLoaded, view.kind, routes, router]);
 
   useEffect(() => {
     if (!session || view.kind !== "conversation") return;
@@ -278,9 +254,18 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   };
 
   if (!authReady) return <div className="app-loading"><LoaderCircle className="spin" /> Lusmaker laden…</div>;
-  if (!session) return <LoginScreen error={authError} />;
+  if (!session) return <AuthPanel onAuthenticated={setSession} />;
 
-  const sidebar = <Sidebar conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} />;
+  const handleLogout = () => {
+    const current = session;
+    setSession(null);
+    setConversations([]);
+    setRoutes([]);
+    void signOut(current);
+    router.replace("/");
+  };
+
+  const sidebar = <Sidebar conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
   if (view.kind === "route") {
     return (
       <main className={`route-shell ${leftOpen ? "left-open" : ""}`}>

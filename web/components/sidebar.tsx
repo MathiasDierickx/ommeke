@@ -2,7 +2,6 @@
 
 import { LogOut, Map, MessageSquare, Plus, X } from "lucide-react";
 
-import { logout } from "@/lib/auth";
 import type { AuthSession, Conversation, Route } from "@/lib/types";
 import { Logo } from "./brand";
 
@@ -13,7 +12,7 @@ function formatDate(value?: string): string {
   return new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short" }).format(date);
 }
 
-export function Sidebar({ conversations, routes, selectedConversation, selectedRoute, onConversation, onRoute, onNew, onClose, session }: {
+export function Sidebar({ conversations, routes, selectedConversation, selectedRoute, onConversation, onRoute, onNew, onClose, session, onLogout }: {
   conversations: Conversation[];
   routes: Route[];
   selectedConversation?: string;
@@ -23,6 +22,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
   onNew: () => void;
   onClose: () => void;
   session: AuthSession;
+  onLogout: () => void;
 }) {
   return (
     <aside className="sidebar">
@@ -44,7 +44,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
           </div>
         </section>
       </nav>
-      <div className="profile-row"><span className="avatar">{(session.name || session.email || "L").slice(0, 1).toUpperCase()}</span><span><strong>{session.name || "Mijn account"}</strong><small>{session.email || "Cognito-gebruiker"}</small></span><button className="icon-button" onClick={logout} aria-label="Afmelden"><LogOut /></button></div>
+      <div className="profile-row"><span className="avatar">{(session.name || session.email || "L").slice(0, 1).toUpperCase()}</span><span><strong>{session.name || "Mijn account"}</strong><small>{session.email || "Cognito-gebruiker"}</small></span><button className="icon-button" onClick={onLogout} aria-label="Afmelden"><LogOut /></button></div>
     </aside>
   );
 }
