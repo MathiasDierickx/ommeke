@@ -8,9 +8,9 @@ import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
 import { RouteDetail } from "@/components/route-detail";
 import { Sidebar } from "@/components/sidebar";
-import { apiRequest, authenticatedBlob } from "@/lib/api";
+import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { beginAuth, clearSession, finishAuth, loadSession, refreshSession } from "@/lib/auth";
-import type { AuthSession, ChatMessage, Conversation, Route } from "@/lib/types";
+import type { AuthSession, ChatMessage, Conversation, NearbyClimb, Route, RouteAdjustment } from "@/lib/types";
 
 export type WorkspaceView =
   | { kind: "new" }
@@ -103,6 +103,13 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setRoutes(routeData.routes);
   }, []);
 
+  const loadRoute = useCallback(async (routeId: string, accessToken: string) => {
+    const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, accessToken);
+    setSelectedRoute(data.route);
+    setRoutes((current) => current.map((item) => item.id === data.route.id ? { ...item, ...data.route } : item));
+    return data.route;
+  }, []);
+
   useEffect(() => {
     if (!session) return;
     loadWorkspace(session.accessToken).catch((cause) => setError(cause instanceof Error ? cause.message : "Werkruimte laden mislukt."));
@@ -131,12 +138,12 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setSelectedRoute(null);
     setLoadingRoute(true);
     setError(undefined);
-    apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(view.id)}`, session.accessToken)
-      .then((data) => { if (active) setSelectedRoute(data.route); })
+    loadRoute(view.id, session.accessToken)
+      .then(() => undefined)
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Route laden mislukt."); })
       .finally(() => { if (active) setLoadingRoute(false); });
     return () => { active = false; };
-  }, [session, view]);
+  }, [session, view, loadRoute]);
 
   useEffect(() => {
     if (view.kind !== "new") return;
@@ -227,6 +234,49 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Route verwijderen mislukt."); }
   };
 
+  const adjustRoute = async (adjustment: RouteAdjustment) => {
+    if (!session || !selectedRoute) return;
+    setError(undefined);
+    try {
+      const data = await apiRequest<{ route: Route }>(`/api/routes/${selectedRoute.id}/adjust`, session.accessToken, {
+        method: "POST",
+        body: JSON.stringify({ ...adjustment, expected_revision: selectedRoute.revision }),
+      });
+      setSelectedRoute(data.route);
+      setRoutes((current) => current.map((item) => item.id === data.route.id ? { ...item, ...data.route } : item));
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 409) {
+        setError("De route is intussen gewijzigd. Je ziet nu de nieuwste versie; probeer je aanpassing opnieuw.");
+        await loadRoute(selectedRoute.id, session.accessToken).catch(() => undefined);
+        return;
+      }
+      setError(cause instanceof Error ? cause.message : "Route aanpassen mislukt.");
+    }
+  };
+
+  const loadNearbyClimbs = async (): Promise<NearbyClimb[]> => {
+    if (!session || !selectedRoute) return [];
+    try {
+      const data = await apiRequest<{ climbs: NearbyClimb[] }>(`/api/routes/${selectedRoute.id}/climbs-near?radius_km=15`, session.accessToken);
+      return data.climbs;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Klimmen laden mislukt.");
+      return [];
+    }
+  };
+
+  const shareRoute = async () => {
+    if (!session || !selectedRoute) return undefined;
+    try {
+      const result = await apiRequest<{ token: string; url: string }>(`/api/routes/${selectedRoute.id}/share`, session.accessToken, { method: "POST" });
+      await loadRoute(selectedRoute.id, session.accessToken);
+      return result;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Deellink maken mislukt.");
+      return undefined;
+    }
+  };
+
   if (!authReady) return <div className="app-loading"><LoaderCircle className="spin" /> Lusmaker laden…</div>;
   if (!session) return <LoginScreen error={authError} />;
 
@@ -237,7 +287,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onBack={() => router.push("/")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onBack={() => router.push("/")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }

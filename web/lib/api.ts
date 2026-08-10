@@ -4,6 +4,22 @@ function apiBase(): string {
   return value.replace(/\/$/, "");
 }
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function responseJson<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new ApiError(payload.error || `Request mislukt (${response.status})`, response.status);
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
 export async function apiRequest<T>(
   path: string,
   token: string,
@@ -18,12 +34,22 @@ export async function apiRequest<T>(
       ...init.headers,
     },
   });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error || `Request mislukt (${response.status})`);
-  }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  return responseJson<T>(response);
+}
+
+export async function publicApiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(`${apiBase()}${path}`, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...init.headers,
+    },
+  });
+  return responseJson<T>(response);
 }
 
 export async function authenticatedBlob(path: string, token: string): Promise<Blob> {
