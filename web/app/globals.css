@@ -285,7 +285,7 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
   .auth-success { color: var(--green); }
 
   .workspace { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
-  .sidebar { position: static; width: auto; box-shadow: none; transform: none; }
+  .sidebar { position: static; width: auto; height: 100svh; min-height: 0; box-shadow: none; transform: none; }
   .sidebar-close, .mobile-menu { display: none; }
   .mobile-scrim, .left-open .mobile-scrim { display: none; }
   .chat-head { min-height: 4.6rem; padding: .8rem 1.5rem; }
