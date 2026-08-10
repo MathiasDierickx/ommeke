@@ -37,5 +37,19 @@ export type Route = {
   elevation_gain_m?: number;
   ready: boolean;
   download_url?: string;
-  preview_url?: string;
+  geometry?: RouteGeometry | null;
+  computed?: {
+    kwaliteit?: {
+      kassei_m?: number;
+      offroad_pct?: number;
+      populair_pct?: number;
+    };
+  } | null;
+};
+
+export type RouteGeometry = {
+  points: [number, number][];
+  climbs: { lat: number; lon: number; id: string }[];
+  start: { lat: number; lon: number; label?: string } | null;
+  elevation?: number[];
 };
