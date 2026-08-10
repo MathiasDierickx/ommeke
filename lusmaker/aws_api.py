@@ -83,6 +83,32 @@ async def routes_list(_request: Request) -> JSONResponse:
         return _error(str(exc), 500, "routes_unavailable")
 
 
+def _elevation_profile(legs: list, *, samples: int = 120) -> list[dict[str, float]]:
+    """Cumulatieve-afstand/hoogte-reeks voor het hoogteprofiel in de bottom-sheet."""
+    import math
+
+    flat = [pt for leg in legs for pt in leg]
+    if len(flat) < 2 or not any(len(pt) > 2 and pt[2] is not None for pt in flat):
+        return []
+    profile: list[dict[str, float]] = []
+    dist = 0.0
+    prev = None
+    prev_ele = 0.0
+    for pt in flat:
+        if prev is not None:
+            p1, p2 = math.radians(prev[0]), math.radians(pt[0])
+            dl = math.radians(pt[1] - prev[1])
+            a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+            dist += 2 * 6371000.0 * math.asin(math.sqrt(a))
+        ele = pt[2] if len(pt) > 2 and pt[2] is not None else prev_ele
+        profile.append({"km": round(dist / 1000, 3), "ele": round(ele, 1)})
+        prev, prev_ele = pt, ele
+    if len(profile) > samples:
+        step = len(profile) / samples
+        profile = [profile[int(i * step)] for i in range(samples)] + [profile[-1]]
+    return profile
+
+
 def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str, Any]:
     """Compacte polyline + klimmarkers zodat de webapp de kaart native tekent."""
     legs = item.get("_geometry") or []
@@ -108,6 +134,7 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
     return {
         "points": points,
         "climbs": markers,
+        "elevation": _elevation_profile(legs),
         "start": (
             {"lat": start.get("lat"), "lon": start.get("lon"), "label": start.get("label")}
             if start.get("lat") is not None
