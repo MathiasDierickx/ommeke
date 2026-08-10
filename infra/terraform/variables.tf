@@ -152,7 +152,7 @@ variable "bedrock_model_id" {
   type        = string
   # Tijdelijk Nova Pro: Claude wacht op Marketplace-betaalactivatie
   # (terugzetten naar eu.anthropic.claude-sonnet-4-6 zodra de billing-case rond is)
-  default     = "eu.amazon.nova-pro-v1:0"
+  default = "eu.amazon.nova-pro-v1:0"
 
   validation {
     condition     = can(regex("^eu\\.(anthropic\\.claude|amazon\\.nova)-[a-z0-9.:-]+$", var.bedrock_model_id))
