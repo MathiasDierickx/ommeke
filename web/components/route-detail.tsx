@@ -3,7 +3,7 @@
 import { ArrowDownToLine, ArrowLeft, Bike, Check, Footprints, Menu, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { Route } from "@/lib/types";
+import type { Route, RouteGeometry } from "@/lib/types";
 import { Logo } from "./brand";
 import { RouteMap } from "./route-map";
 
@@ -17,26 +17,41 @@ function StatGrid({ route }: { route: Route }) {
   );
 }
 
-function ElevationSparkline({ values }: { values?: number[] }) {
-  const path = useMemo(() => {
-    if (!values || values.length < 2) return null;
-    const min = Math.min(...values);
-    const range = Math.max(1, Math.max(...values) - min);
-    return values.map((value, index) => {
-      const x = (index / (values.length - 1)) * 320;
-      const y = 54 - ((value - min) / range) * 46;
+const CHART_WIDTH = 320;
+const CHART_HEIGHT = 64;
+const CHART_TOP = 5;
+
+function ElevationSparkline({ values }: { values?: RouteGeometry["elevation"] }) {
+  const chart = useMemo(() => {
+    const points = values?.filter(({ km, ele }) => Number.isFinite(km) && Number.isFinite(ele));
+    if (!points || points.length < 2) return null;
+
+    const maxKm = Math.max(...points.map(({ km }) => km));
+    const minElevation = Math.min(...points.map(({ ele }) => ele));
+    const maxElevation = Math.max(...points.map(({ ele }) => ele));
+    if (maxKm <= 0) return null;
+
+    const elevationRange = Math.max(1, maxElevation - minElevation);
+    const line = points.map(({ km, ele }, index) => {
+      const x = (Math.max(0, km) / maxKm) * CHART_WIDTH;
+      const y = CHART_HEIGHT - ((ele - minElevation) / elevationRange) * (CHART_HEIGHT - CHART_TOP);
       return `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
+    return { line, minElevation, maxElevation };
   }, [values]);
-  if (!path) return null;
+  if (!chart) return null;
+
   return (
-    <div className="elevation-profile" aria-label="Hoogteprofiel">
-      <span>Hoogteprofiel</span>
-      <svg viewBox="0 0 320 60" preserveAspectRatio="none" role="img">
-        <path className="elevation-fill" d={`${path} L320,60 L0,60 Z`} />
-        <path className="elevation-line" d={path} />
+    <figure className="elevation-profile" aria-label={`Hoogteprofiel van ${Math.round(chart.minElevation)} tot ${Math.round(chart.maxElevation)} meter`}>
+      <figcaption>
+        <span>Hoogteprofiel</span>
+        <span>{Math.round(chart.minElevation)} m <span aria-hidden="true">—</span> {Math.round(chart.maxElevation)} m</span>
+      </figcaption>
+      <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio="none" role="img" aria-hidden="true">
+        <path className="elevation-fill" d={`${chart.line} L${CHART_WIDTH},${CHART_HEIGHT} L0,${CHART_HEIGHT} Z`} />
+        <path className="elevation-line" d={chart.line} />
       </svg>
-    </div>
+    </figure>
   );
 }
 

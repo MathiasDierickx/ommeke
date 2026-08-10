@@ -51,5 +51,5 @@ export type RouteGeometry = {
   points: [number, number][];
   climbs: { lat: number; lon: number; id: string }[];
   start: { lat: number; lon: number; label?: string } | null;
-  elevation?: number[];
+  elevation?: { km: number; ele: number }[];
 };

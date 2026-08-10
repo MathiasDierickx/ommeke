@@ -184,9 +184,10 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .route-stats dt { margin-bottom: .3rem; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: .59rem; }
 .route-stats dd { margin: 0; font: 400 1.28rem Georgia, serif; white-space: nowrap; }
 .route-stats small { color: var(--muted); font: .62rem Arial, sans-serif; }
-.elevation-profile { margin-top: .9rem; }
-.elevation-profile > span { color: var(--muted); font-size: .61rem; }
-.elevation-profile svg { width: 100%; height: 3.4rem; margin-top: .2rem; overflow: visible; }
+.elevation-profile { margin: .9rem 0 0; }
+.elevation-profile figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: .61rem; }
+.elevation-profile figcaption span:last-child { font-variant-numeric: tabular-nums; }
+.elevation-profile svg { display: block; width: 100%; height: 4rem; margin-top: .25rem; overflow: visible; }
 .elevation-fill { fill: rgba(36, 90, 67, .1); stroke: none; }
 .elevation-line { fill: none; stroke: var(--green); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
 .quality-chips { margin-top: .85rem; display: flex; flex-wrap: wrap; gap: .4rem; }
