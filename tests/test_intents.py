@@ -364,6 +364,47 @@ def test_adjust_route_batches_edits_before_one_reroute():
     ]
 
 
+def test_adjust_route_forwards_offroad_goal_to_optimizer():
+    state = _routed_draft()
+    state["route_request"] = {
+        "doel": "hoogtemeters",
+        "target_km": 40,
+        "max_km": 42.5,
+        "tolerance_km": 2.5,
+        "geen_opvulling": False,
+    }
+    calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        calls.append(kwargs)
+        d["computed"] = _routed_draft()["computed"]
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.adjust_route(
+            "abc123",
+            doel="offroad",
+            load_fn=lambda _draft_id: state,
+            optimize_fn=optimize_fn,
+            climbs_fn=_climbs,
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            exports_root=Path(temp_dir),
+        )
+
+    assert calls == [
+        {
+            "max_km": 42.5,
+            "fill": True,
+            "objective": "offroad",
+            "fill_target_km": 40,
+        }
+    ]
+
+
 def test_plan_route_stops_at_needs_input_before_optimization_and_export():
     state = {
         "id": "ask123",
