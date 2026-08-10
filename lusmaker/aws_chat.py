@@ -393,30 +393,64 @@ class BedrockRouteAgent:
             "LUSMAKER_BEDROCK_MODEL_ID", "eu.anthropic.claude-sonnet-4-6"
         )
 
+    def _converse(self, messages: list[dict[str, Any]], request_id: str) -> dict[str, Any]:
+        """Roep Bedrock aan met retry op transiente model-/throttlingfouten.
+
+        Nova produceert af en toe een ongeldige tool-use-sequentie
+        (ModelErrorException) of loopt tegen een minuutlimiet (ThrottlingException);
+        een korte herkansing lost dat meestal op zonder de gebruiker te storen.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                return self.client.converse(
+                    modelId=self.model_id,
+                    system=[{"text": SYSTEM_PROMPT}],
+                    messages=messages,
+                    toolConfig=TOOL_CONFIG,
+                    inferenceConfig={"maxTokens": 1400, "temperature": 0.2},
+                    requestMetadata={"tenant": tenant.current(), "request_id": request_id},
+                )
+            except Exception as exc:  # botocore ClientError-subklassen
+                name = type(exc).__name__
+                if name not in {"ModelErrorException", "ThrottlingException", "InternalServerException"}:
+                    raise
+                last_exc = exc
+                if attempt < 2:
+                    time.sleep(1.2 * (attempt + 1))
+        raise ChatError(
+            "De AI-dienst gaf een tijdelijke fout. Probeer je bericht opnieuw."
+        ) from last_exc
+
     def reply(
         self,
         history: list[dict[str, Any]],
         *,
         request_id: str,
     ) -> dict[str, Any]:
-        messages = [
-            {"role": item["role"], "content": [{"text": item["content"]}]}
-            for item in history[-MAX_HISTORY_MESSAGES:]
-            if item.get("role") in {"user", "assistant"} and item.get("content")
-        ]
+        # Bedrock vereist strikt afwisselende user/assistant-rollen die met
+        # 'user' beginnen. Mislukte turns laten soms twee user-berichten na
+        # elkaar staan (assistant-antwoord werd niet opgeslagen); zonder
+        # coalescing geeft dat een ModelErrorException en verliest het model de
+        # context. We voegen opeenvolgende gelijke rollen samen.
+        messages: list[dict[str, Any]] = []
+        for item in history[-MAX_HISTORY_MESSAGES:]:
+            role = item.get("role")
+            text = item.get("content")
+            if role not in {"user", "assistant"} or not text:
+                continue
+            if messages and messages[-1]["role"] == role:
+                messages[-1]["content"][0]["text"] += f"\n\n{text}"
+            else:
+                messages.append({"role": role, "content": [{"text": text}]})
+        while messages and messages[0]["role"] != "user":
+            messages.pop(0)
         route_ids: set[str] = set()
         tool_events: list[dict[str, Any]] = []
         usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
 
         for iteration in range(1, MAX_AGENT_ITERATIONS + 1):
-            response = self.client.converse(
-                modelId=self.model_id,
-                system=[{"text": SYSTEM_PROMPT}],
-                messages=messages,
-                toolConfig=TOOL_CONFIG,
-                inferenceConfig={"maxTokens": 1400, "temperature": 0.2},
-                requestMetadata={"tenant": tenant.current(), "request_id": request_id},
-            )
+            response = self._converse(messages, request_id)
             for key in usage:
                 usage[key] += int((response.get("usage") or {}).get(key, 0))
             message = (response.get("output") or {}).get("message") or {}
