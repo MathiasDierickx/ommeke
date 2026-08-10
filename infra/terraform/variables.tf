@@ -150,11 +150,13 @@ variable "cors_origins" {
 variable "bedrock_model_id" {
   description = "EU cross-region inference profile voor Claude in Amazon Bedrock."
   type        = string
-  default     = "eu.anthropic.claude-sonnet-4-6"
+  # Tijdelijk Nova Pro: Claude wacht op Marketplace-betaalactivatie
+  # (terugzetten naar eu.anthropic.claude-sonnet-4-6 zodra de billing-case rond is)
+  default     = "eu.amazon.nova-pro-v1:0"
 
   validation {
-    condition     = can(regex("^eu\\.anthropic\\.claude-[a-z0-9.-]+$", var.bedrock_model_id))
-    error_message = "bedrock_model_id moet een Europees Anthropic Claude inference profile zijn."
+    condition     = can(regex("^eu\\.(anthropic\\.claude|amazon\\.nova)-[a-z0-9.:-]+$", var.bedrock_model_id))
+    error_message = "bedrock_model_id moet een Europees Anthropic Claude of Amazon Nova inference profile zijn."
   }
 }
 
