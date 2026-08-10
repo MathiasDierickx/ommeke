@@ -419,8 +419,17 @@ def _execute_request(
             )
         return
 
+    # Een 'target_km' is een zacht doel ("ongeveer N km"), geen harde limiet.
+    # Zonder expliciete max_km is hard_max afgeleid als target+tolerance, maar
+    # een GraphHopper round-trip overschrijdt dat doel van nature licht. Geef de
+    # optimizer daarom extra marge zodat hij niet hard faalt op zo'n overschot;
+    # fill_target_km blijft het doel, dus de route wordt niet onnodig opgerekt.
+    optimize_ceiling = hard_max
+    if not request.get("max_km_explicit", True) and target_km is not None:
+        optimize_ceiling = max(hard_max, target_km * 1.2)
+
     optimize_kwargs = {
-        "max_km": hard_max,
+        "max_km": optimize_ceiling,
         "fill": not request["geen_opvulling"],
     }
     if goal == "toeren":

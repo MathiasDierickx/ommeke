@@ -397,7 +397,10 @@ def test_adjust_route_forwards_offroad_goal_to_optimizer():
 
     assert calls == [
         {
-            "max_km": 42.5,
+            # Zacht doel (geen expliciete max_km): de optimizer krijgt marge
+            # (target*1.2) zodat een round-trip die het doel licht overschrijdt
+            # niet hard faalt; fill_target_km blijft het eigenlijke doel.
+            "max_km": 48.0,
             "fill": True,
             "objective": "offroad",
             "fill_target_km": 40,
@@ -536,7 +539,9 @@ def test_plan_route_targets_tour_distance_and_reports_constraints():
 
     assert optimize_calls == [
         {
-            "max_km": 52.5,
+            # Zacht doel: optimizer-plafond krijgt marge (target*1.2 = 60);
+            # de gerapporteerde constraints blijven op het doelbudget gebaseerd.
+            "max_km": 60.0,
             "fill": True,
             "objective": "toeren",
             "fill_target_km": 50,

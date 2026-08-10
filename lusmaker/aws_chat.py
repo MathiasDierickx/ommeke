@@ -485,6 +485,7 @@ class BedrockRouteAgent:
             for tool_use in tool_uses:
                 started = time.monotonic()
                 name = tool_use.get("name", "")
+                error_detail: str | None = None
                 try:
                     output = self.tools.execute(
                         name,
@@ -496,15 +497,21 @@ class BedrockRouteAgent:
                         route_ids.add(draft_id)
                     status = "success"
                 except Exception as exc:
+                    error_detail = f"{type(exc).__name__}: {exc}"
                     output = {"error": str(exc)}
                     status = "error"
-                tool_events.append(
-                    {
-                        "name": name,
-                        "status": status,
-                        "duration_ms": round((time.monotonic() - started) * 1000),
-                    }
-                )
+                    print(
+                        f"[chat] tool {name} faalde (req={request_id}): {error_detail}",
+                        flush=True,
+                    )
+                event = {
+                    "name": name,
+                    "status": status,
+                    "duration_ms": round((time.monotonic() - started) * 1000),
+                }
+                if error_detail:
+                    event["error"] = error_detail[:300]
+                tool_events.append(event)
                 results.append(
                     {
                         "toolResult": {
