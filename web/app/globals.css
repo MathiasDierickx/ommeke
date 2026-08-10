@@ -80,6 +80,9 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .nav-label { padding: 0 .55rem .45rem; display: flex; justify-content: space-between; color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
 .nav-label svg { width: .9rem; height: .9rem; }
 .nav-items { display: grid; gap: .1rem; }
+.conversation-nav-items { max-height: min(42svh, 45rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(36, 90, 67, .25) transparent; }
+.conversation-nav-items::-webkit-scrollbar { width: 4px; }
+.conversation-nav-items::-webkit-scrollbar-thumb { border-radius: 999px; background: rgba(36, 90, 67, .25); }
 .nav-items button { min-height: 48px; min-width: 0; padding: .65rem .7rem; border: 0; border-radius: .65rem; text-align: left; background: transparent; cursor: pointer; }
 .nav-items button.active { background: rgba(36, 90, 67, .08); box-shadow: inset 3px 0 var(--green); }
 .nav-title, .nav-meta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

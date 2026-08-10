@@ -31,9 +31,9 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
       <nav className="sidebar-scroll" aria-label="Gesprekken en routes">
         <section>
           <div className="nav-label"><span>Gesprekken</span><MessageSquare /></div>
-          <div className="nav-items">
+          <div className="nav-items conversation-nav-items">
             {!conversations.length ? <p className="nav-empty">Nog geen gesprekken</p> : null}
-            {conversations.map((conversation) => <button key={conversation.id} className={selectedConversation === conversation.id ? "active" : ""} onClick={() => onConversation(conversation.id)}><span className="nav-title">{conversation.title}</span><span className="nav-meta">{conversation.preview || formatDate(conversation.created_at)}</span></button>)}
+            {conversations.slice(0, 15).map((conversation) => <button key={conversation.id} className={selectedConversation === conversation.id ? "active" : ""} onClick={() => onConversation(conversation.id)}><span className="nav-title">{conversation.title}</span><span className="nav-meta">{conversation.preview || formatDate(conversation.created_at)}</span></button>)}
           </div>
         </section>
         <section>

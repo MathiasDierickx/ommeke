@@ -12,14 +12,17 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
     if (!elementRef.current || !geometry?.points.length) return;
     let disposed = false;
     let cleanup = () => {};
+    let readyFrame = 0;
+    let sheetTimer = 0;
 
     void import("leaflet").then((L) => {
       if (disposed || !elementRef.current) return;
       const map = L.map(elementRef.current, { zoomControl: false, attributionControl: true });
       L.control.zoom({ position: "topright" }).addTo(map);
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
+        subdomains: "abc",
       }).addTo(map);
 
       const points = geometry.points.map(([lat, lon]) => L.latLng(lat, lon));
@@ -40,8 +43,15 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
         }).addTo(map).bindTooltip(climb.id);
       });
       map.fitBounds(line.getBounds(), { padding: [42, 42], maxZoom: 15 });
-      window.setTimeout(() => map.invalidateSize(), 0);
-      cleanup = () => map.remove();
+      map.whenReady(() => {
+        readyFrame = window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+        sheetTimer = window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
+      });
+      cleanup = () => {
+        window.cancelAnimationFrame(readyFrame);
+        window.clearTimeout(sheetTimer);
+        map.remove();
+      };
     });
 
     return () => {
