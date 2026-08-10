@@ -425,6 +425,8 @@ def _execute_request(
     }
     if goal == "toeren":
         optimize_kwargs["objective"] = "toeren"
+    elif goal == "offroad":
+        optimize_kwargs["objective"] = "offroad"
     if target_km is not None:
         optimize_kwargs["fill_target_km"] = target_km
     optimize_fn(d, climb_db, **optimize_kwargs)
@@ -752,8 +754,10 @@ def adjust_route(
         max_km=effective_max,
         tolerance_km=effective_tolerance,
     )
-    if effective_goal not in {"hoogtemeters", "kort", "toeren"}:
-        raise IntentError("doel moet 'hoogtemeters', 'kort' of 'toeren' zijn")
+    if effective_goal not in {"hoogtemeters", "offroad", "kort", "toeren"}:
+        raise IntentError(
+            "doel moet 'hoogtemeters', 'offroad', 'kort' of 'toeren' zijn"
+        )
     request = {
         **previous_request,
         "doel": effective_goal,

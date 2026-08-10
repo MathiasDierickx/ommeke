@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
+import secrets
 from typing import Any
 from urllib.parse import quote
 
@@ -13,7 +15,7 @@ import logging
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_state, draft, tenant
+from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -143,17 +145,204 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
     }
 
 
+def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
+    result = _route_item(item)
+    result["avoid_places"] = item.get("avoid_places") or []
+    result["route_request"] = item.get("route_request") or {}
+    result["computed"] = item.get("computed")
+    result["geometry"] = _route_geometry(item) if item.get("computed") else None
+    return result
+
+
+def public_route_payload(item: dict[str, Any]) -> dict[str, Any]:
+    """Stel expliciet een publieke allowlist samen, zonder labels of PII."""
+    computed = item.get("computed") or {}
+    geometry = _route_geometry(item) if computed else None
+    if geometry and geometry.get("start"):
+        geometry["start"].pop("label", None)
+    return {
+        "name": item.get("name") or "Naamloze route",
+        "activity": "trail" if item.get("profile") == "trail" else "fietsen",
+        "region": item.get("region"),
+        "climbs": item.get("climbs") or [],
+        "total_km": computed.get("total_km"),
+        "elevation_gain_m": computed.get("ascend_m"),
+        "geometry": geometry,
+        "kwaliteit": computed.get("kwaliteit") or {},
+    }
+
+
 async def route_detail(request: Request) -> JSONResponse:
     try:
         item = await asyncio.to_thread(draft.load, _draft_id(request))
-        result = _route_item(item)
-        result["avoid_places"] = item.get("avoid_places") or []
-        result["route_request"] = item.get("route_request") or {}
-        result["computed"] = item.get("computed")
-        result["geometry"] = _route_geometry(item) if item.get("computed") else None
-        return JSONResponse({"route": result})
+        return JSONResponse({"route": _route_detail_payload(item)})
     except draft.DraftError as exc:
         return _error(str(exc), 404, "route_not_found")
+
+
+def _string_list(body: dict[str, Any], name: str) -> list[str]:
+    value = body.get(name, [])
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        raise ChatError(f"{name} moet een lijst met tekstwaarden zijn")
+    return [item.strip() for item in value]
+
+
+async def route_adjust(request: Request) -> JSONResponse:
+    try:
+        draft_id = _draft_id(request)
+        await asyncio.to_thread(draft.load, draft_id)
+        body = await _json_body(request)
+        target_km = body.get("target_km")
+        if target_km is not None and (
+            isinstance(target_km, bool) or not isinstance(target_km, (int, float))
+        ):
+            raise ChatError("target_km moet een getal zijn")
+        expected_revision = body.get("expected_revision")
+        if expected_revision is not None and (
+            isinstance(expected_revision, bool) or not isinstance(expected_revision, int)
+        ):
+            raise ChatError("expected_revision moet een geheel getal zijn")
+        goal = body.get("doel")
+        goal_map = {"hm": "hoogtemeters", "offroad": "offroad", "toeren": "toeren", "kort": "kort"}
+        if goal is not None and goal not in goal_map:
+            raise ChatError("doel moet 'hm', 'offroad', 'toeren' of 'kort' zijn")
+        await asyncio.to_thread(
+            intents.adjust_route,
+            draft_id,
+            target_km=float(target_km) if target_km is not None else None,
+            voeg_klimmen_toe=_string_list(body, "voeg_klimmen_toe"),
+            verwijder_klimmen=_string_list(body, "verwijder_klimmen"),
+            vermijd_plaatsen=_string_list(body, "vermijd_plaatsen"),
+            sta_plaatsen_toe=_string_list(body, "sta_plaatsen_toe"),
+            doel=goal_map.get(goal),
+            check_readiness=False,
+            expected_revision=expected_revision,
+        )
+        item = await asyncio.to_thread(draft.load, draft_id)
+        return JSONResponse({"route": _route_detail_payload(item)})
+    except ChatError as exc:
+        return _error(str(exc))
+    except intents.IntentError as exc:
+        return _error(str(exc))
+    except draft.DraftError as exc:
+        return _error(str(exc), 409, "route_conflict")
+
+
+def _nearby_climbs(item: dict[str, Any], radius_km: float) -> list[dict[str, Any]]:
+    route_points = [point[:2] for leg in item.get("_geometry") or [] for point in leg]
+    if not route_points:
+        start = item.get("start") or {}
+        if start.get("lat") is not None and start.get("lon") is not None:
+            route_points = [[start["lat"], start["lon"]]]
+    if len(route_points) > 250:
+        step = len(route_points) / 250
+        route_points = [route_points[int(index * step)] for index in range(250)]
+    result = []
+    with draft.region_scope(item):
+        climb_db = climbs.all_climbs()
+    for climb in climb_db.values():
+        point = climb.get("mid") or climb.get("foot") or climb.get("top")
+        if not point or not route_points:
+            continue
+        distance_km = min(
+            geo.haversine(point[0], point[1], route[0], route[1])
+            for route in route_points
+        ) / 1000
+        if distance_km <= radius_km:
+            result.append(
+                {
+                    "id": climb["id"],
+                    "naam": climb.get("name") or climb["id"],
+                    "km": round(float(climb.get("length_m", 0)) / 1000, 1),
+                    "hm": round(float(climb.get("gain_m", 0))),
+                }
+            )
+    return sorted(result, key=lambda value: (value["naam"].casefold(), value["id"]))
+
+
+async def route_climbs_near(request: Request) -> JSONResponse:
+    try:
+        radius_km = float(request.query_params.get("radius_km", "15"))
+        if not 0 < radius_km <= 100:
+            raise ValueError
+        item = await asyncio.to_thread(draft.load, _draft_id(request))
+        return JSONResponse({"climbs": await asyncio.to_thread(_nearby_climbs, item, radius_km)})
+    except ValueError:
+        return _error("radius_km moet tussen 0 en 100 liggen")
+    except draft.DraftError as exc:
+        return _error(str(exc), 404, "route_not_found")
+
+
+def _share_url(request: Request, token: str) -> str:
+    base = (
+        os.environ.get("LUSMAKER_WEB_URL")
+        or request.headers.get("origin")
+        or str(request.base_url)
+    ).rstrip("/")
+    return f"{base}/s/{token}"
+
+
+async def route_share(request: Request) -> JSONResponse:
+    try:
+        draft_id = _draft_id(request)
+        item = await asyncio.to_thread(draft.load, draft_id)
+        token = item.get("share_token")
+        if not token:
+            for _attempt in range(3):
+                token = secrets.token_urlsafe(32)
+                try:
+                    await asyncio.to_thread(
+                        aws_sharing.store_reference, token, tenant.current(), draft_id
+                    )
+                    break
+                except aws_state.StateConflict:
+                    token = None
+            if not token:
+                return _error("deel-link kon niet worden gemaakt", 500, "share_failed")
+            item["share_token"] = token
+            try:
+                await asyncio.to_thread(draft.save, item)
+            except Exception:
+                await asyncio.to_thread(aws_sharing.delete_reference, token)
+                raise
+        return JSONResponse({"token": token, "url": _share_url(request, token)})
+    except draft.DraftError as exc:
+        return _error(str(exc), 404, "route_not_found")
+    except (aws_state.StateError, ValueError) as exc:
+        return _error(str(exc), 500, "share_failed")
+
+
+async def route_unshare(request: Request) -> Response:
+    try:
+        item = await asyncio.to_thread(draft.load, _draft_id(request))
+        token = item.pop("share_token", None)
+        if token:
+            await asyncio.to_thread(draft.save, item)
+            await asyncio.to_thread(aws_sharing.delete_reference, token)
+        return Response(status_code=204)
+    except draft.DraftError as exc:
+        return _error(str(exc), 404, "route_not_found")
+    except (aws_state.StateError, ValueError) as exc:
+        return _error(str(exc), 500, "share_failed")
+
+
+async def shared_route(request: Request) -> JSONResponse:
+    try:
+        token = request.path_params.get("token", "")
+        reference = await asyncio.to_thread(aws_sharing.load_reference, token)
+        if not reference:
+            return _error("deze deel-link bestaat niet of is ingetrokken", 404, "shared_route_not_found")
+        with tenant.use(reference["uid"]):
+            item = await asyncio.to_thread(draft.load, reference["draft_id"])
+        if item.get("share_token") != token:
+            return _error("deze deel-link bestaat niet of is ingetrokken", 404, "shared_route_not_found")
+        return JSONResponse({"route": public_route_payload(item)})
+    except (ValueError, draft.DraftError):
+        return _error("deze deel-link bestaat niet of is ingetrokken", 404, "shared_route_not_found")
+    except aws_state.StateError as exc:
+        return _error(str(exc), 500, "share_unavailable")
 
 
 async def route_update(request: Request) -> JSONResponse:

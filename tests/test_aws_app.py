@@ -127,6 +127,23 @@ def test_missing_bearer_token_returns_oauth_challenge():
     assert client.calls == []
 
 
+def test_shared_api_and_share_page_paths_are_public():
+    seen = []
+
+    async def public_app(scope, receive, send):
+        seen.append((scope["path"], tenant.current()))
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    app = CognitoAuthMiddleware(
+        public_app, client=FakeCognito(), auth_mode="cognito"
+    )
+    for path in ("/api/shared/abc", "/s/abc"):
+        start, _body = asyncio.run(_invoke(app, path))
+        assert start["status"] == 204
+    assert seen == [("/api/shared/abc", "anonymous"), ("/s/abc", "anonymous")]
+
+
 def test_valid_token_scopes_state_to_cognito_sub_and_is_cached():
     client = FakeCognito()
 

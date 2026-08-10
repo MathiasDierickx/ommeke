@@ -65,6 +65,14 @@ def key(relative: str) -> str:
     return f"tenants/{tenant.current()}/{relative}"
 
 
+def public_key(relative: str) -> str:
+    """Sleutel voor minimale, niet-tenantgebonden publieke indexdata."""
+    relative = relative.strip("/")
+    if not relative or ".." in relative.split("/"):
+        raise StateError("ongeldige publieke state-sleutel")
+    return f"public/{relative}"
+
+
 def _error_code(exc: Exception) -> str | None:
     response = getattr(exc, "response", None) or {}
     return (response.get("Error") or {}).get("Code")
@@ -131,6 +139,26 @@ def get_json(relative: str, *, client=None) -> tuple[dict | None, str | None]:
         raise StateError(f"ongeldige JSON in S3-state '{relative}'") from exc
 
 
+def get_public_json(relative: str, *, client=None) -> dict | None:
+    """Lees publieke indexdata buiten een tenantpartitie."""
+    if not enabled():
+        raise StateError("AWS-state is niet geconfigureerd")
+    try:
+        response = _client(client).get_object(
+            Bucket=bucket(), Key=public_key(relative)
+        )
+    except Exception as exc:
+        if _error_code(exc) in {"NoSuchKey", "404", "NotFound"}:
+            return None
+        raise StateError(
+            f"publieke S3-state lezen mislukt: {_error_code(exc) or exc}"
+        ) from exc
+    try:
+        return json.loads(response["Body"].read())
+    except json.JSONDecodeError as exc:
+        raise StateError(f"ongeldige publieke JSON-state '{relative}'") from exc
+
+
 def put_json(
     relative: str,
     value: dict,
@@ -148,6 +176,34 @@ def put_json(
         create_only=create_only,
         client=client,
     )
+
+
+def put_public_json(
+    relative: str, value: dict, *, create_only: bool = False, client=None
+) -> dict:
+    """Schrijf minimale publieke indexdata buiten een tenantpartitie."""
+    if not enabled():
+        raise StateError("AWS-state is niet geconfigureerd")
+    payload = (json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+    kwargs = {
+        "Bucket": bucket(),
+        "Key": public_key(relative),
+        "Body": payload,
+        "ContentType": "application/json",
+        "Metadata": {},
+    }
+    if create_only:
+        kwargs["IfNoneMatch"] = "*"
+    try:
+        return _client(client).put_object(**kwargs)
+    except Exception as exc:
+        if _error_code(exc) in {
+            "PreconditionFailed", "ConditionalRequestConflict", "409", "412"
+        }:
+            raise StateConflict("publieke S3-state is intussen gewijzigd") from exc
+        raise StateError(
+            f"publieke S3-state schrijven mislukt: {_error_code(exc) or exc}"
+        ) from exc
 
 
 def list_json(relative_prefix: str, *, client=None) -> list[dict]:
@@ -180,6 +236,18 @@ def delete(relative: str, *, client=None) -> None:
     except Exception as exc:
         raise StateError(
             f"S3-object verwijderen mislukt: {_error_code(exc) or exc}"
+        ) from exc
+
+
+def delete_public(relative: str, *, client=None) -> None:
+    """Verwijder exact één object uit de publieke index."""
+    if not enabled():
+        raise StateError("AWS-state is niet geconfigureerd")
+    try:
+        _client(client).delete_object(Bucket=bucket(), Key=public_key(relative))
+    except Exception as exc:
+        raise StateError(
+            f"publieke S3-state verwijderen mislukt: {_error_code(exc) or exc}"
         ) from exc
 
 

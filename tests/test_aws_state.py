@@ -110,6 +110,24 @@ def test_s3_json_state_is_tenant_scoped_and_conditional():
         assert aws_state.list_json("drafts", client=client)[0]["revision"] == 2
 
 
+def test_public_json_index_is_not_tenant_scoped():
+    client = _FakeS3()
+    with _aws_bucket(), tenant.use("user-one"):
+        aws_state.put_public_json(
+            "shares/token.json",
+            {"uid": "user-one", "draft_id": "a"},
+            create_only=True,
+            client=client,
+        )
+    with _aws_bucket(), tenant.use("user-two"):
+        assert aws_state.get_public_json("shares/token.json", client=client) == {
+            "uid": "user-one",
+            "draft_id": "a",
+        }
+        aws_state.delete_public("shares/token.json", client=client)
+    assert client.objects == {}
+
+
 def test_unsafe_and_already_safe_tenant_ids_cannot_collide():
     client = _FakeS3()
     with _aws_bucket(), tenant.use("auth0|user-one"):

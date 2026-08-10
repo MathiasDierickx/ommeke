@@ -30,6 +30,7 @@ PUBLIC_PATHS = {
     "/.well-known/oauth-protected-resource",
     "/.well-known/oauth-protected-resource/mcp",
 }
+PUBLIC_PREFIXES = ("/api/shared/", "/s/")
 
 
 def _header(scope: dict, name: str) -> str | None:
@@ -162,6 +163,7 @@ class CognitoAuthMiddleware:
             self.auth_mode == "none"
             or method == "OPTIONS"
             or path in PUBLIC_PATHS
+            or path.startswith(PUBLIC_PREFIXES)
         ):
             with tenant.use("anonymous" if self.auth_mode == "none" else None):
                 await self.app(scope, receive, send)
@@ -263,6 +265,31 @@ def create_app(
             Route(
                 "/api/routes/{draft_id}/preview",
                 aws_api.route_preview,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/routes/{draft_id}/adjust",
+                aws_api.route_adjust,
+                methods=["POST"],
+            ),
+            Route(
+                "/api/routes/{draft_id}/climbs-near",
+                aws_api.route_climbs_near,
+                methods=["GET"],
+            ),
+            Route(
+                "/api/routes/{draft_id}/share",
+                aws_api.route_share,
+                methods=["POST"],
+            ),
+            Route(
+                "/api/routes/{draft_id}/share",
+                aws_api.route_unshare,
+                methods=["DELETE"],
+            ),
+            Route(
+                "/api/shared/{token}",
+                aws_api.shared_route,
                 methods=["GET"],
             ),
             Route(
