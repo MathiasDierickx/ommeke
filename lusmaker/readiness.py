@@ -281,10 +281,15 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
 
     questions.sort(key=lambda question: (question["prioriteit"], question["id"]))
     unknown = [question["id"] for question in questions]
-    # ``klaar`` is een workflowbeslissing: zolang we nog een concrete vraag
-    # teruggeven moet een MCP-client niet alvast gaan optimaliseren.
-    ready = not questions
-    visible = questions[:3]
+    # ``klaar`` is een workflowbeslissing: zolang we nog een BLOKKERENDE vraag
+    # teruggeven moet een MCP-client niet alvast gaan optimaliseren. De
+    # plaatskern-vraag is niet-blokkerend: door een dorpskern rijden is normaal
+    # voor een lus, dus die mag de eerste route (incl. preview) niet tegenhouden;
+    # wie een plaats wil mijden zegt dat expliciet via adjust_route.
+    non_blocking = {"vermijd_plaatsen"}
+    blocking = [q for q in questions if q["id"] not in non_blocking]
+    ready = not blocking
+    visible = blocking[:3]
     if not visible:
         advice = "profiel is klaar; routeer nu met optimize"
     else:

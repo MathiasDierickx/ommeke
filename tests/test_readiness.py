@@ -167,32 +167,21 @@ def test_trail_weight_rule_offers_popularity_only_with_walking_layer():
     assert "populaire wandelroutes" in with_walking["vragen"][0]["vraag"]
 
 
-def test_place_rule_batches_all_centres_and_excludes_resolved_places():
+def test_place_crossings_do_not_block_route_completion():
+    # Door dorpskernen rijden is normaal voor een lus: de plaatsvraag mag de
+    # eerste route (incl. preview) niet blokkeren. Met een verder volledig
+    # profiel is de readiness dus 'klaar' ondanks gepasseerde kernen.
     profile = profiles.default_document()
     places = [
         {"label": "Start", "type": "town", "afstand_m": 0},
         {"label": "Doordorp", "type": "village", "afstand_m": 120},
         {"label": "Kwatrecht", "type": "village", "afstand_m": 220},
-        {"label": "doordorp", "type": "village", "afstand_m": 320},
     ]
 
     result = readiness.assess(_draft(places=places), profile, {})
-    question = result["vragen"][0]
 
-    assert question["id"] == "vermijd_plaatsen"
-    assert "Doordorp, Kwatrecht" in question["vraag"]
-    assert question["opties"]["ok"] == {
-        "doel": "draft",
-        "patch": {"allow_places": ["Doordorp", "Kwatrecht"]},
-    }
-    assert question["opties"]["kies_zelf"] == {
-        "doel": "draft",
-        "vervolg": (
-            "gebruik adjust_route met sta_plaatsen_toe en vermijd_plaatsen"
-        ),
-    }
-    profile["voorkeuren"]["vermijd_plaatsen"] = ["Doordorp", "Kwatrecht"]
-    assert _question_ids(readiness.assess(_draft(places=places), profile, {})) == []
+    assert result["klaar"] is True
+    assert "vermijd_plaatsen" not in _question_ids(result)
 
     allowed = _draft(places=places)
     allowed["route_request"] = {
