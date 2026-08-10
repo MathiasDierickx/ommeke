@@ -14,7 +14,17 @@ from . import draft, intents, tenant
 
 MAX_PROMPT_CHARS = 4000
 MAX_HISTORY_MESSAGES = 20
-MAX_AGENT_ITERATIONS = 5
+MAX_AGENT_ITERATIONS = 8
+
+
+import re as _re
+
+_THINKING_RE = _re.compile(r"<thinking>.*?</thinking>", _re.DOTALL | _re.IGNORECASE)
+
+
+def _clean_answer(text: str) -> str:
+    """Strip Nova's uitgelekte <thinking>-blokken en trim."""
+    return _THINKING_RE.sub("", text or "").strip()
 
 
 class ChatError(RuntimeError):
@@ -460,9 +470,9 @@ class BedrockRouteAgent:
             messages.append({"role": "assistant", "content": content})
 
             if not tool_uses:
-                answer = "\n".join(text_parts).strip()
+                answer = _clean_answer("\n".join(text_parts))
                 if not answer:
-                    raise ChatError("Claude gaf geen antwoord terug")
+                    raise ChatError("Het model gaf geen antwoord terug")
                 return {
                     "content": answer,
                     "route_ids": sorted(route_ids),
@@ -506,7 +516,24 @@ class BedrockRouteAgent:
                 )
             messages.append({"role": "user", "content": results})
 
-        raise ChatError("Claude bereikte de limiet van vijf toolrondes")
+        # Iteratielimiet bereikt (Nova blijft soms tool-calls stapelen zonder af
+        # te ronden). Als er al een route klaarstaat, lever die met een nette
+        # boodschap i.p.v. een harde fout.
+        if route_ids:
+            return {
+                "content": (
+                    "Je route staat klaar — open de kaart hieronder. "
+                    "Stel gerust een vervolgvraag om hem bij te sturen."
+                ),
+                "route_ids": sorted(route_ids),
+                "tools": tool_events,
+                "usage": usage,
+                "iterations": MAX_AGENT_ITERATIONS,
+            }
+        raise ChatError(
+            "Het duurde te lang om je route samen te stellen. Probeer het opnieuw "
+            "of formuleer je vraag iets concreter."
+        )
 
 
 def send_message(
