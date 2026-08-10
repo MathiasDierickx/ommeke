@@ -286,9 +286,15 @@ data "aws_iam_policy_document" "lambda" {
     sid = "ReadWriteTenantState"
     actions = [
       "s3:GetObject",
-      "s3:PutObject"
+      "s3:PutObject",
+      "s3:DeleteObject"
     ]
-    resources = ["${aws_s3_bucket.data.arn}/tenants/*"]
+    # tenants/* = privé draftstate per gebruiker; public/* = deel-referenties
+    # (alleen {uid, draft_id}) voor read-only share-links.
+    resources = [
+      "${aws_s3_bucket.data.arn}/tenants/*",
+      "${aws_s3_bucket.data.arn}/public/*"
+    ]
   }
 
   statement {

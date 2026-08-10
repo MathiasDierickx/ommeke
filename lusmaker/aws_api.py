@@ -210,10 +210,22 @@ async def route_adjust(request: Request) -> JSONResponse:
         goal_map = {"hm": "hoogtemeters", "offroad": "offroad", "toeren": "toeren", "kort": "kort"}
         if goal is not None and goal not in goal_map:
             raise ChatError("doel moet 'hm', 'offroad', 'toeren' of 'kort' zijn")
+        # Bij een UI-bewerking is de gevraagde afstand autoritair: geef altijd
+        # een ruime, expliciete max_km mee zodat een nieuwe target (of een
+        # doel-wissel op een route die net over het oude budget zat) niet botst
+        # met een strakke max_km uit de oorspronkelijke chatvraag.
+        current = await asyncio.to_thread(draft.load, draft_id)
+        current_km = (current.get("computed") or {}).get("total_km")
+        effective_target = (
+            float(target_km) if target_km is not None
+            else (float(current_km) if current_km is not None else None)
+        )
+        effective_max = (effective_target + 3.0) if effective_target is not None else None
         await asyncio.to_thread(
             intents.adjust_route,
             draft_id,
             target_km=float(target_km) if target_km is not None else None,
+            max_km=effective_max,
             voeg_klimmen_toe=_string_list(body, "voeg_klimmen_toe"),
             verwijder_klimmen=_string_list(body, "verwijder_klimmen"),
             vermijd_plaatsen=_string_list(body, "vermijd_plaatsen"),
