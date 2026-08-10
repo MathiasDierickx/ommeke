@@ -190,9 +190,11 @@ def _string_list(body: dict[str, Any], name: str) -> list[str]:
 
 
 async def route_adjust(request: Request) -> JSONResponse:
+    route_found = False
     try:
         draft_id = _draft_id(request)
         await asyncio.to_thread(draft.load, draft_id)
+        route_found = True
         body = await _json_body(request)
         target_km = body.get("target_km")
         if target_km is not None and (
@@ -227,7 +229,9 @@ async def route_adjust(request: Request) -> JSONResponse:
     except intents.IntentError as exc:
         return _error(str(exc))
     except draft.DraftError as exc:
-        return _error(str(exc), 409, "route_conflict")
+        if route_found:
+            return _error(str(exc), 409, "route_conflict")
+        return _error(str(exc), 404, "route_not_found")
 
 
 def _nearby_climbs(item: dict[str, Any], radius_km: float) -> list[dict[str, Any]]:
