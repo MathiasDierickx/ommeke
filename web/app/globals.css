@@ -22,6 +22,8 @@ button, textarea, input { font: inherit; }
 button { color: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
+/* Leaflet tekent kaart-/route-SVG's op eigen maat — de icoonregel mag die niet verkleinen */
+.leaflet-container svg, .leaflet-overlay-pane svg { width: auto; height: auto; stroke-width: initial; }
 
 .app-loading { min-height: 100svh; display: flex; align-items: center; justify-content: center; gap: .7rem; color: var(--green); }
 .spin { animation: spin .9s linear infinite; }
