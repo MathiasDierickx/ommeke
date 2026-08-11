@@ -469,7 +469,27 @@ def _execute_request(
         optimize_kwargs["objective"] = "offroad"
     if target_km is not None:
         optimize_kwargs["fill_target_km"] = target_km
-    optimize_fn(d, climb_db, **optimize_kwargs)
+    try:
+        optimize_fn(d, climb_db, **optimize_kwargs)
+    except draft.DraftError:
+        # Bij een hard budget (expliciete max_km) is falen terecht. Bij een zacht
+        # doel schoot een ver klim-anker de basisroute over het doel; val dan
+        # terug op een pure round-trip-lus richting het doel (geen klim-hunting)
+        # zodat de gebruiker altijd een route krijgt i.p.v. een fout.
+        if max_explicit:
+            raise
+        fill_target = target_km if target_km is not None else hard_max
+        d["climbs"] = []
+        d["computed"] = None
+        d.pop("_geometry", None)
+        optimize_fn(
+            d,
+            climb_db,
+            max_km=max(optimize_ceiling, (fill_target or 0.0) * 1.6),
+            fill=True,
+            fill_target_km=fill_target,
+            objective="toeren",
+        )
 
 
 def _export_files(
