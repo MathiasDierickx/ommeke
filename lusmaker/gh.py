@@ -60,7 +60,11 @@ def _area_ev_works(name: str, probe_post=None) -> bool:
         post("/route", body)
         return True
     except GhError as e:
-        if name in str(e):
+        message = str(e)
+        # Ontbrekende area meldt GH als "Area '<naam>' wasn't found" — dus
+        # zonder de in_-prefix. Herken zowel de EV-naam als de kale areanaam.
+        area_name = name.removeprefix("in_")
+        if name in message or (area_name in message and "wasn't found" in message):
             return False
         # andere fout (bv. geen route): variabele zelf werd geaccepteerd
         return True

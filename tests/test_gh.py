@@ -46,3 +46,21 @@ def test_area_rules_are_omitted_without_capabilities_but_osm_rule_remains():
     assert body["custom_model"]["priority"] == [
         {"if": "surface == COBBLESTONE", "multiply_by": "0.25"},
     ]
+
+
+def test_probe_detects_missing_area_without_in_prefix_in_error():
+    # GH meldt een ontbrekende area als "Area 'kassei_tvl' wasn't found" —
+    # zonder de in_-prefix. De probe moet dat als ontbrekend herkennen.
+    def missing(_path, _body):
+        raise gh.GhError(
+            "GraphHopper: Cannot compile expression: Area 'kassei_tvl' wasn't found"
+        )
+
+    def present(_path, _body):
+        raise gh.GhError("GraphHopper: Connection between locations not found")
+
+    gh._area_ev_works.cache_clear()
+    assert gh._area_ev_works("in_kassei_tvl", missing) is False
+    gh._area_ev_works.cache_clear()
+    assert gh._area_ev_works("in_kassei_tvl", present) is True
+    gh._area_ev_works.cache_clear()
