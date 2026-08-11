@@ -45,7 +45,7 @@ variable "region_slug" {
 }
 
 variable "lambda_memory_mb" {
-  description = "Lambda-geheugen; 10240 MB voor de all-Vlaanderen GraphHopper-graaf."
+  description = "Lambda-geheugen; accountquota capt dit op 3008 MB."
   type        = number
   default     = 3008
 
@@ -56,9 +56,9 @@ variable "lambda_memory_mb" {
 }
 
 variable "lambda_ephemeral_storage_mb" {
-  description = "Schrijfbare /tmp voor de gekopieerde GraphHopper-cache."
+  description = "Schrijfbare /tmp voor de gekopieerde GraphHopper-cache (all-Vlaanderen graaf)."
   type        = number
-  default     = 3008
+  default     = 10240
 
   validation {
     condition     = var.lambda_ephemeral_storage_mb >= 512 && var.lambda_ephemeral_storage_mb <= 10240
