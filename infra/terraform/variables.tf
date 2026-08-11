@@ -147,6 +147,13 @@ variable "cors_origins" {
   default     = []
 }
 
+variable "google_maps_api_key" {
+  description = "Google Maps Platform key (Geocoding + Places) voor POI-fallback; leeg = uit."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "bedrock_model_id" {
   description = "Bedrock model-id/inference-profile voor de chat-agent (eu-west-1)."
   type        = string

@@ -41,6 +41,7 @@ jobs:
       TF_VAR_region_slug: ${{ vars.LUSMAKER_REGION_SLUG || 'vlaanderen' }}
       TF_VAR_oauth_callback_urls: ${{ vars.OAUTH_CALLBACK_URLS_JSON }}
       TF_VAR_web_callback_urls: ${{ vars.WEB_CALLBACK_URLS_JSON }}
+      TF_VAR_google_maps_api_key: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
 
     steps:
