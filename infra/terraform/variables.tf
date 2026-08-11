@@ -47,7 +47,7 @@ variable "region_slug" {
 variable "lambda_memory_mb" {
   description = "Lambda-geheugen; 10240 MB voor de all-Vlaanderen GraphHopper-graaf."
   type        = number
-  default     = 10240
+  default     = 3008
 
   validation {
     condition     = var.lambda_memory_mb >= 1769 && var.lambda_memory_mb <= 10240
@@ -58,7 +58,7 @@ variable "lambda_memory_mb" {
 variable "lambda_ephemeral_storage_mb" {
   description = "Schrijfbare /tmp voor de gekopieerde GraphHopper-cache."
   type        = number
-  default     = 10240
+  default     = 3008
 
   validation {
     condition     = var.lambda_ephemeral_storage_mb >= 512 && var.lambda_ephemeral_storage_mb <= 10240
@@ -81,7 +81,7 @@ variable "max_concurrency" {
 variable "java_opts" {
   description = "JVM heapinstellingen binnen het Lambda-geheugen."
   type        = string
-  default     = "-Xms512m -Xmx6g"
+  default     = "-Xms256m -Xmx2g"
 }
 
 variable "oauth_callback_urls" {
