@@ -260,8 +260,9 @@ def _registered(slug: str, home: Path) -> config.Region | None:
 
 
 def _default_build(region: config.Region, pbf_url: str) -> dict:
-    from . import climbs, data, gh_config, osm
+    from . import climbs, data, gh_config, heat, osm
 
+    tvl_areas: list[str] = []
     with config.use_region(region.slug):
         setup_result = data.setup(pbf_url=pbf_url)
         extract = osm.build_extract(force=True)
@@ -271,12 +272,23 @@ def _default_build(region: config.Region, pbf_url: str) -> dict:
             json.dumps({"climbs": {}, "failed": []}), encoding="utf-8"
         )
         detected = climbs.detect_auto(extract)
+        # Toerisme-Vlaanderen kassei/drukte-lagen → custom_areas (kassei_tvl/
+        # druk_tvl) zodat kassei- en drukke-weg-vermijding regio-breed werkt.
+        # Best-effort: valt de WFS uit, dan bouwt de pack door zonder die areas
+        # (de routing degradeert netjes zonder ze).
+        try:
+            heat.fetch_vlaanderen()
+            tvl_areas = heat.build().get("areas", [])
+            print(f"[provision] TVl custom_areas: {tvl_areas}", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 — pack mag hier niet op breken
+            print(f"[provision] TVl-lagen overgeslagen: {exc}", file=sys.stderr)
         gh_files = gh_config.write_gh_files()
     return {
         "setup": setup_result,
         "wegen_in_regio": len(extract["ways"]),
         "plaatsen": len(extract["places"]),
         "auto_klimmen": len(detected["auto"]),
+        "tvl_areas": tvl_areas,
         "gh_files": gh_files,
     }
 
