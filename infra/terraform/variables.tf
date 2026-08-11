@@ -45,9 +45,9 @@ variable "region_slug" {
 }
 
 variable "lambda_memory_mb" {
-  description = "Lambda-geheugen; 3008 MB werkt ook in accounts met de lage startquota."
+  description = "Lambda-geheugen; 10240 MB voor de all-Vlaanderen GraphHopper-graaf."
   type        = number
-  default     = 3008
+  default     = 10240
 
   validation {
     condition     = var.lambda_memory_mb >= 1769 && var.lambda_memory_mb <= 10240
@@ -81,7 +81,7 @@ variable "max_concurrency" {
 variable "java_opts" {
   description = "JVM heapinstellingen binnen het Lambda-geheugen."
   type        = string
-  default     = "-Xms256m -Xmx2g"
+  default     = "-Xms512m -Xmx6g"
 }
 
 variable "oauth_callback_urls" {
