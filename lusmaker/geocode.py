@@ -4,7 +4,7 @@ import re
 import unicodedata
 import warnings
 
-from . import config, geo
+from . import config, geo, google_geocode
 
 PLACE_PRIO = {"city": 0, "town": 1, "municipality": 2, "village": 3, "suburb": 4, "hamlet": 5}
 
@@ -189,7 +189,27 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
     return out[:limit]
 
 
-def resolve(query: str) -> tuple[dict, list[dict]]:
+_DEFAULT_GOOGLE_RESOLVER = object()
+
+
+def _is_generic_place_fallback(query: str, hits: list[dict]) -> bool:
+    """Herken ``straat/POI niet gevonden, plaats zelf gebruikt`` als zwak."""
+    if len(hits) != 1 or "note" not in hits[0]:
+        return False
+    parts = [part.strip() for part in query.split(",") if part.strip()]
+    return (
+        len(parts) > 1
+        and hits[0].get("type") in PLACE_PRIO
+        and _normalise(parts[0]) != _normalise(hits[0].get("label", ""))
+    )
+
+
+def resolve(
+    query: str,
+    *,
+    gazetteer=None,
+    google_resolver=_DEFAULT_GOOGLE_RESOLVER,
+) -> tuple[dict, list[dict]]:
     """Los een plaatsnaam of ``lat,lon`` op tot één punt en alternatieven."""
     parts = query.split(",")
     if len(parts) == 2:
@@ -199,7 +219,16 @@ def resolve(query: str) -> tuple[dict, list[dict]]:
         except ValueError:
             pass
 
-    hits = geocode(query, limit=5)
+    hits = geocode(query, limit=5, gazetteer=gazetteer)
+    if not hits or _is_generic_place_fallback(query, hits):
+        resolver = (
+            google_geocode.resolve
+            if google_resolver is _DEFAULT_GOOGLE_RESOLVER
+            else google_resolver
+        )
+        google_hit = resolver(query) if resolver is not None else None
+        if google_hit is not None:
+            return google_hit, hits[1:]
     if not hits:
         raise RuntimeError(
             f"'{query}' niet gevonden — probeer 'straat, plaats' of 'lat,lon'"

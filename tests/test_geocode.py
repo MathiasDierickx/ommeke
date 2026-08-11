@@ -101,3 +101,75 @@ def test_old_gazetteer_defaults_landmarks_and_requests_force_rebuild():
 
     assert gazetteer["landmarks"] == []
     assert "lus build --force" in str(caught[0].message)
+
+
+def test_resolve_falls_back_to_google_when_local_geocoder_has_no_hits():
+    gazetteer = {"places": [], "streets": {}, "landmarks": []}
+    calls = []
+    google_hit = {
+        "label": "Café Tonneke",
+        "lat": 50.9956,
+        "lon": 3.8786,
+        "type": "google",
+        "source": "places",
+    }
+
+    def google_resolver(query):
+        calls.append(query)
+        return google_hit
+
+    primary, alternatives = geocode.resolve(
+        "café Tonneke Wetteren",
+        gazetteer=gazetteer,
+        google_resolver=google_resolver,
+    )
+
+    assert primary == google_hit
+    assert alternatives == []
+    assert calls == ["café Tonneke Wetteren"]
+
+
+def test_resolve_uses_google_for_weak_local_place_fallback():
+    gazetteer = {
+        "places": [("Wetteren", "town", 51.006, 3.884)],
+        "streets": {},
+        "landmarks": [],
+    }
+    google_hit = {
+        "label": "Café Tonneke",
+        "lat": 50.9956,
+        "lon": 3.8786,
+        "type": "google",
+        "source": "places",
+    }
+
+    primary, alternatives = geocode.resolve(
+        "Café Tonneke, Wetteren",
+        gazetteer=gazetteer,
+        google_resolver=lambda _query: google_hit,
+    )
+
+    assert primary == google_hit
+    assert alternatives == []
+
+
+def test_resolve_does_not_bill_google_for_strong_local_hit():
+    gazetteer = {
+        "places": [],
+        "streets": {},
+        "landmarks": [
+            ("Blaarmeersen", "leisure:recreation_ground", 51.039, 3.7)
+        ],
+    }
+
+    def google_resolver(_query):
+        raise AssertionError("Google mag voor een lokale landmark-hit niet draaien")
+
+    primary, alternatives = geocode.resolve(
+        "Blaarmeersen",
+        gazetteer=gazetteer,
+        google_resolver=google_resolver,
+    )
+
+    assert primary == {"label": "Blaarmeersen", "lat": 51.039, "lon": 3.7}
+    assert alternatives == []
