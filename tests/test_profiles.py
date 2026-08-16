@@ -106,6 +106,7 @@ def test_new_draft_stores_and_routes_with_profile():
                 end=None,
                 profile="trail",
             )
+            d["route_request"] = {"heat_activity": "trail"}
             calls = []
 
             def router(_points, **kwargs):
@@ -129,6 +130,7 @@ def test_new_draft_stores_and_routes_with_profile():
     assert stored["profile"] == "trail"
     assert calls
     assert all(call["profile"] == "trail" for call in calls)
+    assert all(call["heat_activity"] == "trail" for call in calls)
 
 
 def test_write_gh_files_adds_trail_profile_and_model():

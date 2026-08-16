@@ -44,6 +44,24 @@ POI_NAMES = {
 }
 
 
+def heat_activity_for(
+    activiteit: str | None, profiel_naam: str | None
+) -> str | None:
+    """Leid de heat-taxonomie af uit activiteit en profielnaam."""
+    if activiteit == "trail":
+        return "trail"
+    if activiteit != "fietsen":
+        return None
+    profile = (profiel_naam or "").casefold()
+    if "koers" in profile or "race" in profile:
+        return "koersfiets"
+    if "gravel" in profile:
+        return "gravel"
+    if "mtb" in profile:
+        return "mtb"
+    return "stadsfiets"
+
+
 def suggest_route_name(
     start: str,
     *,
@@ -352,6 +370,7 @@ def _route_request(
         "geen_opvulling": geen_opvulling,
         "profiel_naam": profiel_naam,
         "activiteit": activiteit,
+        "heat_activity": heat_activity_for(activiteit, profiel_naam),
         "expliciete_voorkeuren": explicit_preferences,
         "toegestane_plaatsen": [],
         "request_id": request_id,
@@ -880,6 +899,9 @@ def adjust_route(
             key=str.casefold,
         ),
     }
+    request["heat_activity"] = heat_activity_for(
+        request["activiteit"], effective_profile
+    )
     with draft.region_scope(d):
         climb_db = climbs_fn()
         for climb in _resolve_climbs(verwijder_klimmen, climb_db):

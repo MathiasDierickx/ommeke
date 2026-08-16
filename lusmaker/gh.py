@@ -5,6 +5,7 @@ import urllib.request
 from functools import lru_cache
 
 from . import config
+from .heat import ACTIVITIES, PAVED_PREFERENCE_ACTIVITIES
 
 
 class GhError(RuntimeError):
@@ -40,7 +41,7 @@ def info() -> dict:
         raise GhError(f"GraphHopper niet bereikbaar op {config.GH_URL}: {e}") from e
 
 
-@lru_cache(maxsize=8)
+@lru_cache(maxsize=16)
 def _area_ev_works(name: str, probe_post=None) -> bool:
     """Probeer of een ingebakken ``in_<area>`` encoded value bestaat.
 
@@ -74,8 +75,14 @@ def _area_ev_works(name: str, probe_post=None) -> bool:
 
 def available_area_evs(probe_post=None) -> frozenset[str]:
     """Welke ingebakken area-EV's bruikbaar zijn (probe-gebaseerd, gecachet)."""
+    names = (
+        "in_kassei_tvl",
+        "in_druk_tvl",
+        *(f"in_popular_{activity}" for activity in ACTIVITIES),
+        "in_onverhard",
+    )
     return frozenset(
-        name for name in ("in_kassei_tvl", "in_druk_tvl")
+        name for name in names
         if _area_ev_works(name, probe_post)
     )
 
@@ -125,7 +132,8 @@ TRAIL_OFFROAD_PRIORITY = [
 def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   strict: bool = False, avoid_cobbles: bool = False,
                   avoid_concrete: bool = False, avoid_busy: bool = False,
-                  profile: str = "", area_evs: set[str] | frozenset[str] | None = None) -> dict:
+                  profile: str = "", area_evs: set[str] | frozenset[str] | None = None,
+                  heat_activity: str | None = None) -> dict:
     """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes."""
     area_evs = available_area_evs() if area_evs is None else frozenset(area_evs)
     custom = {"priority": list(STRICT_PRIORITY) if strict else []}
@@ -139,6 +147,18 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
         custom["priority"] = custom["priority"] + list(AVOID_CONCRETE_PRIORITY)
     if avoid_busy and "in_druk_tvl" in area_evs:
         custom["priority"].append(dict(AVOID_BUSY_PRIORITY))
+    activity_ev = f"in_popular_{heat_activity}" if heat_activity else None
+    if activity_ev in area_evs:
+        custom["priority"].append(
+            {"if": f"!{activity_ev}", "multiply_by": "0.85"}
+        )
+    if (
+        heat_activity in PAVED_PREFERENCE_ACTIVITIES
+        and "in_onverhard" in area_evs
+    ):
+        custom["priority"].append(
+            {"if": "in_onverhard", "multiply_by": "0.55"}
+        )
     if avoid_polygons:
         features = []
         for k, item in enumerate(avoid_polygons):
@@ -186,6 +206,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           details: bool = False,
           profile: str = config.GH_PROFILE, start_heading: float | None = None,
           point_hints: list | None = None, *,
+          heat_activity: str | None = None,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
@@ -198,6 +219,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     avoid_busy: zachte voorkeur voor autovrije/verkeersarme wegen.
     details: per-segment surface/road_class in het resultaat ("details").
     profile: GraphHopper-profiel, standaard het bestaande fietsprofiel.
+    heat_activity: activiteit voor de request-side populariteitsvoorkeur.
     """
     body = {
         "points": [[lon, lat] for lat, lon in points_latlon],
@@ -223,6 +245,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     body["custom_model"] = _custom_model(
         avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
         avoid_busy, profile=profile, area_evs=area_evs,
+        heat_activity=heat_activity,
     )
 
     data = post_fn("/route", body)
@@ -234,6 +257,7 @@ def round_trip(point, distance_m: float, seed: int,
                priority_factor: float = 0.30, strict: bool = False,
                avoid_cobbles: bool = False, avoid_concrete: bool = False,
                avoid_busy: bool = False, details: bool = False, *,
+               heat_activity: str | None = None,
                area_evs: set[str] | frozenset[str] | None = None,
                post_fn=_post) -> dict:
     """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
@@ -252,6 +276,7 @@ def round_trip(point, distance_m: float, seed: int,
         "custom_model": _custom_model(
             avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
             avoid_busy, profile=profile, area_evs=area_evs,
+            heat_activity=heat_activity,
         ),
     }
     if details:

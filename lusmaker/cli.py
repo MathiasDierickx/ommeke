@@ -301,6 +301,16 @@ def cmd_heat_build(args):
     return heat.build(min_passes=args.min_passes, osm_min_points=args.osm_min_points)
 
 
+def cmd_heat_seed(args):
+    from . import heat
+
+    return heat.seed(
+        args.source,
+        args.activity,
+        min_passes=args.min_passes,
+    )
+
+
 def cmd_heat_fetch_osm(args):
     from . import heat
 
@@ -606,6 +616,14 @@ def main(argv=None):
     s.add_argument("--min-passes", type=int, default=1, help="min. aantal eigen ritten per cel")
     s.add_argument("--osm-min-points", type=int, default=30, help="min. OSM-tracepunten per cel")
     s.set_defaults(func=cmd_heat_build)
+    s = hsub.add_parser(
+        "seed", help="GPX-routes per activiteit aan de heat-databank toevoegen"
+    )
+    _region_arg(s)
+    s.add_argument("--source", required=True, help="map met GPX-bestanden")
+    s.add_argument("--activity", required=True, metavar="LABEL")
+    s.add_argument("--min-passes", type=int, default=1)
+    s.set_defaults(func=cmd_heat_seed)
     s = hsub.add_parser("fetch-osm", help="publieke OSM GPS-traces downloaden (eenmalig)")
     _region_arg(s)
     s.add_argument("--max-pages", type=int, default=150)
