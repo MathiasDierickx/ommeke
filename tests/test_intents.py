@@ -159,6 +159,16 @@ def test_suggest_route_name_summarises_place_character_and_distance():
     ) == "Traillus rond je startpunt · 12 km"
 
 
+def test_heat_activity_for_maps_activity_and_profile_name():
+    assert intents.heat_activity_for("trail", "race") == "trail"
+    assert intents.heat_activity_for("fietsen", "snelle koers") == "koersfiets"
+    assert intents.heat_activity_for("fietsen", "RACE") == "koersfiets"
+    assert intents.heat_activity_for("fietsen", "gravel avontuur") == "gravel"
+    assert intents.heat_activity_for("fietsen", "mtb technisch") == "mtb"
+    assert intents.heat_activity_for("fietsen", None) == "stadsfiets"
+    assert intents.heat_activity_for("wandelen", "standaard") is None
+
+
 def test_plan_route_injects_route_and_export_functions():
     state = {
         "id": "abc123",

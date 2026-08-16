@@ -657,6 +657,18 @@ def routing_preferences(d: dict) -> dict:
     return effective
 
 
+def _heat_activity(d: dict) -> str | None:
+    request = d.get("route_request") or {}
+    if "heat_activity" in request:
+        return request["heat_activity"]
+    from .intents import heat_activity_for
+
+    return heat_activity_for(
+        request.get("activiteit"),
+        request.get("profiel_naam") or d.get("profile_doc"),
+    )
+
+
 def objective_for_draft(d: dict, objective):
     """Gebruik profielgewichten tenzij de aanroep een objective overschrijft."""
     if objective is not None:
@@ -739,6 +751,7 @@ def _route(
             "avoid_busy": preferences["avoid_busy"],
             "details": True,
             "profile": preferences["profile"],
+            "heat_activity": _heat_activity(d),
         }
         if post_fn is not None:
             route_kwargs["post_fn"] = post_fn
@@ -938,6 +951,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
         try:
             preferences = {
                 **routing,
+                "heat_activity": _heat_activity(d),
             }
             if weighted:
                 preferences["details"] = True
@@ -1025,6 +1039,7 @@ def probe(
             avoid_concrete=preferences["avoid_concrete"],
             avoid_busy=preferences["avoid_busy"],
             profile=preferences["profile"],
+            heat_activity=_heat_activity(d),
             details=True,
         )
         route_coords = [
@@ -1297,6 +1312,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     preferences = {
         **routing_preferences(d),
         "avoid_polygons": place_areas(d),
+        "heat_activity": _heat_activity(d),
     }
     candidates = []
     for seed in range(5):

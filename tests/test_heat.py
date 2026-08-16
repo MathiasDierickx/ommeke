@@ -266,6 +266,99 @@ def test_build_without_walking_data_keeps_single_popular_area():
     assert cached["areas"] == ["popular"]
 
 
+def test_seed_counts_routes_once_per_cell_and_build_applies_min_passes():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        source = root / "bron"
+        source.mkdir()
+        _write_gpx(source / "eerste.gpx")
+        _write_gpx(source / "tweede.gpx")
+        (source / "te-kort.gpx").write_text(
+            '<gpx><trk><trkseg><trkpt lat="50.8" lon="3.7" />'
+            "</trkseg></trk></gpx>"
+        )
+        with _isolated_home(root / "home"):
+            result = heat.seed(source, "mtb", min_passes=2)
+            with open(config.HEAT_PKL, "rb") as handle:
+                seeded = pickle.load(handle)
+            built = heat.build(min_passes=2)
+            geojson = json.loads(
+                (config.CUSTOM_AREAS / "popular.geojson").read_text()
+            )
+
+    expected = heat._track_cells(
+        [(50.8 + index * 0.0001, 3.7) for index in range(10)]
+    )
+    assert result["tracks"] == 2
+    assert result["cellen_per_activiteit"] == {"mtb": len(expected)}
+    assert seeded["activity_cells"]["mtb"] == {
+        cell: 2 for cell in expected
+    }
+    assert built["activiteit_cellen"] == {"mtb": len(expected)}
+    assert built["onverhard_cellen"] == len(expected)
+    assert [feature["id"] for feature in geojson["features"]] == [
+        "popular_mtb",
+        "onverhard",
+    ]
+
+
+def test_seed_rejects_unknown_activity_with_fixed_taxonomy():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            heat.seed(temp_dir, "skeeleren")
+        except ValueError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("onbekende activiteit werd aanvaard")
+
+    assert "skeeleren" not in heat.ACTIVITIES
+    assert all(activity in message for activity in heat.ACTIVITIES)
+
+
+def test_build_writes_activity_areas_and_excludes_paved_use_from_unpaved():
+    mtb_only = heat.geo.cell(50.80, 3.70)
+    trail_only = heat.geo.cell(50.82, 3.72)
+    also_race = heat.geo.cell(50.84, 3.74)
+    below_threshold = heat.geo.cell(50.86, 3.76)
+    city_only = heat.geo.cell(50.88, 3.78)
+    activity_cells = {
+        "koersfiets": {also_race: 1},
+        "stadsfiets": {city_only: 2},
+        "mtb": {mtb_only: 2, also_race: 2, below_threshold: 1},
+        "trail": {trail_only: 2},
+    }
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            config.ensure_dirs()
+            with open(config.HEAT_PKL, "wb") as handle:
+                pickle.dump({"activity_cells": activity_cells}, handle)
+            result = heat.build(min_passes=2)
+            geojson = json.loads(
+                (config.CUSTOM_AREAS / "popular.geojson").read_text()
+            )
+            with open(config.HEAT_PKL, "rb") as handle:
+                cached = pickle.load(handle)
+
+    features = {feature["id"]: feature for feature in geojson["features"]}
+    assert list(features) == [
+        "popular_stadsfiets",
+        "popular_mtb",
+        "popular_trail",
+        "onverhard",
+    ]
+    assert features["popular_stadsfiets"] == heat._area_feature(
+        "popular_stadsfiets", {city_only}
+    )
+    assert features["popular_mtb"] == heat._area_feature(
+        "popular_mtb", {mtb_only, also_race}
+    )
+    assert features["onverhard"] == heat._area_feature(
+        "onverhard", {mtb_only, trail_only}
+    )
+    assert result["onverhard_cellen"] == 2
+    assert cached["activity_cells"] == activity_cells
+
+
 def test_features_near_route_applies_distances_and_global_poi_cap():
     route = [(50.0, 4.0), (50.0, 4.1)]
     pois = [

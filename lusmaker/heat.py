@@ -3,7 +3,8 @@
 Drop GPX-bestanden (Strava/Garmin bulk-export, toertocht-parcours) in
 ~/.lusmaker/heat/. `lus heat build` rastert ze samen met gecachete OSM-traces
 en Toerisme Vlaanderen-routes op het ~130 m-celgrid. Het quiet-profiel krijgt
-de custom area "popular"; met wandeldata krijgt trail "popular_trail".
+de custom area "popular"; met wandeldata krijgt trail "popular_trail". Via
+`lus heat seed` komen daar activiteit-specifieke en onverhard-area's bij.
 
 Let op: de area wordt bij de GRAAF-IMPORT ingebakken; na `heat build` moet de
 graph-cache weg en GraphHopper herstarten (instructie in de output).
@@ -14,6 +15,7 @@ import pickle
 import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from pathlib import Path
 from urllib.parse import urlencode
 
 from . import config, gh_config, geo
@@ -24,6 +26,20 @@ from . import config, gh_config, geo
 # (record c91e9b9d-6465-4dec-beeb-16fdc6d759a0) en GetCapabilities.
 TOERISME_VLAANDEREN_WFS = "https://geodata.toerismevlaanderen.be/geoserver/wfs"
 VLAANDEREN_CACHE_VERSION = 2
+
+ACTIVITIES = (
+    "koersfiets",
+    "stadsfiets",
+    "gravel",
+    "mtb",
+    "trail",
+    "wegloop",
+    "wandelen",
+)
+PAVED_PREFERENCE_ACTIVITIES = frozenset(
+    {"koersfiets", "stadsfiets", "wegloop"}
+)
+UNPAVED_SIGNAL_ACTIVITIES = frozenset({"mtb", "trail"})
 
 
 def _wfs_url(layer: str) -> str:
@@ -111,6 +127,59 @@ def _track_cells(pts) -> set:
                 cells.add(geo.cell(*p))
         cells.add(geo.cell(*pts[i]))
     return cells
+
+
+def _load_heat() -> dict:
+    if not config.HEAT_PKL.exists():
+        return {}
+    with open(config.HEAT_PKL, "rb") as handle:
+        data = pickle.load(handle)
+    return data if isinstance(data, dict) else {}
+
+
+def seed(
+    source: str | Path, activity: str, *, min_passes: int = 1
+) -> dict:
+    """Voeg GPX-routes toe aan de ruwe teller voor één activiteit."""
+    if activity not in ACTIVITIES:
+        raise ValueError(
+            f"activiteit moet een van deze waarden zijn: {', '.join(ACTIVITIES)}"
+        )
+    if min_passes < 1:
+        raise ValueError("min-passes moet minstens 1 zijn")
+    source = Path(source)
+    if not source.is_dir():
+        raise ValueError(f"seed-bron is geen map: {source}")
+
+    config.ensure_dirs()
+    data = _load_heat()
+    activity_cells = data.get("activity_cells")
+    if not isinstance(activity_cells, dict):
+        activity_cells = {}
+    counts = activity_cells.setdefault(activity, {})
+
+    tracks = 0
+    for path in sorted(source.glob("*.gpx")):
+        points = _parse_gpx(path)
+        if len(points) < 10:
+            continue
+        tracks += 1
+        for cell in _track_cells(points):
+            counts[cell] = counts.get(cell, 0) + 1
+
+    data["activity_cells"] = activity_cells
+    with open(config.HEAT_PKL, "wb") as handle:
+        pickle.dump(data, handle)
+    return {
+        "tracks": tracks,
+        "activiteit": activity,
+        "min_passes": min_passes,
+        "cellen_per_activiteit": {
+            name: len(activity_cells[name])
+            for name in ACTIVITIES
+            if activity_cells.get(name)
+        },
+    }
 
 
 def _rects(cells) -> list[list[list[float]]]:
@@ -654,6 +723,10 @@ def _area_feature(area_id: str, cells: set) -> dict:
 def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
     config.ensure_dirs()
     files = sorted(config.HEAT_DIR.glob("*.gpx"))
+    previous_heat = _load_heat()
+    activity_cells = previous_heat.get("activity_cells")
+    if not isinstance(activity_cells, dict):
+        activity_cells = {}
 
     cell_sources = defaultdict(set)
     for fi, f in enumerate(files):
@@ -675,7 +748,32 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
     popular_trail = (own | vlaanderen["wandel"]) if vlaanderen["wandel"] else set()
     cobble_tvl = vlaanderen_data_cached["wegdek"].get("kassei", set())
     busy_tvl = vlaanderen_data_cached["druk"]
-    if not popular and not popular_trail and not cobble_tvl and not busy_tvl:
+    activity_areas = {}
+    for activity in ACTIVITIES:
+        counts = activity_cells.get(activity)
+        if not isinstance(counts, dict):
+            continue
+        cells = {cell for cell, count in counts.items() if count >= min_passes}
+        if cells:
+            activity_areas[activity] = cells
+    unpaved_used = set().union(
+        *(activity_areas.get(activity, set()) for activity in UNPAVED_SIGNAL_ACTIVITIES)
+    )
+    paved_used = set().union(
+        *(
+            set((activity_cells.get(activity) or {}).keys())
+            for activity in PAVED_PREFERENCE_ACTIVITIES
+            if isinstance(activity_cells.get(activity), dict)
+        )
+    )
+    unpaved = unpaved_used - paved_used
+    if (
+        not popular
+        and not popular_trail
+        and not cobble_tvl
+        and not busy_tvl
+        and not activity_areas
+    ):
         raise RuntimeError(
             f"geen data: drop GPX-ritten in {config.HEAT_DIR}, draai "
             "`lus heat fetch-osm` en/of `lus heat fetch-vlaanderen`"
@@ -695,6 +793,14 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
         geojson["features"].append(_area_feature("kassei_tvl", cobble_tvl))
     if busy_tvl:
         geojson["features"].append(_area_feature("druk_tvl", busy_tvl))
+    for activity in ACTIVITIES:
+        cells = activity_areas.get(activity)
+        if cells:
+            geojson["features"].append(
+                _area_feature(f"popular_{activity}", cells)
+            )
+    if unpaved:
+        geojson["features"].append(_area_feature("onverhard", unpaved))
     area_ids = [feature["id"] for feature in geojson["features"]]
     (config.CUSTOM_AREAS / "popular.geojson").write_text(json.dumps(geojson))
     with open(config.HEAT_PKL, "wb") as f:
@@ -702,6 +808,7 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
             {
                 "cells": popular,
                 "trail_cells": popular_trail,
+                "activity_cells": activity_cells,
                 "areas": area_ids,
                 "files": len(files),
                 "min_passes": min_passes,
@@ -727,6 +834,11 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
         "trail_polygonen": len(trail_rects),
         "kassei_tvl_cellen": len(cobble_tvl),
         "druk_tvl_cellen": len(busy_tvl),
+        "activiteit_cellen": {
+            activity: len(cells)
+            for activity, cells in activity_areas.items()
+        },
+        "onverhard_cellen": len(unpaved),
         "areas": area_ids,
         "km_corridor": round(len(popular) * 0.13 * 0.13 / 0.13, 1),
         "toepassen": "rm -rf ~/.lusmaker/gh/graph-cache && docker compose restart graphhopper (herimport ~5 min)",
@@ -737,12 +849,20 @@ def status() -> dict:
     files = sorted(config.HEAT_DIR.glob("*.gpx"))
     out = {"heat_dir": str(config.HEAT_DIR), "gpx_bestanden": [f.name for f in files]}
     if config.HEAT_PKL.exists():
-        with open(config.HEAT_PKL, "rb") as f:
-            h = pickle.load(f)
+        h = _load_heat()
+        activity_cells = h.get("activity_cells")
+        if not isinstance(activity_cells, dict):
+            activity_cells = {}
         out["actief"] = {
-            "cellen": len(h["cells"]),
+            "cellen": len(h.get("cells", set())),
             "trail_cellen": len(h.get("trail_cells", set())),
-            "min_passes": h["min_passes"],
+            "min_passes": h.get("min_passes"),
+            "activiteit_cellen": {
+                activity: len(cells)
+                for activity in ACTIVITIES
+                for cells in [activity_cells.get(activity)]
+                if isinstance(cells, dict) and cells
+            },
         }
     else:
         out["actief"] = None
@@ -752,12 +872,11 @@ def status() -> dict:
 def popular_cells(profile: str = "quiet", *, fallback: bool = True) -> set | None:
     if not config.HEAT_PKL.exists():
         return None
-    with open(config.HEAT_PKL, "rb") as f:
-        heat = pickle.load(f)
+    heat = _load_heat()
     if profile == "trail":
         trail_cells = heat.get("trail_cells")
         if trail_cells:
             return trail_cells
         if not fallback:
             return None
-    return heat["cells"]
+    return heat.get("cells")
