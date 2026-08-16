@@ -100,7 +100,22 @@ def test_old_gazetteer_defaults_landmarks_and_requests_force_rebuild():
                 config.GAZETTEER_PKL = previous
 
     assert gazetteer["landmarks"] == []
+    assert gazetteer["waterways"] == {}
     assert "lus build --force" in str(caught[0].message)
+    assert any("waterlopen" in str(warning.message) for warning in caught)
+
+
+def test_waterway_segments_matches_normalised_name_and_tolerates_old_data():
+    segments = [
+        [(51.00, 3.70), (51.01, 3.71)],
+        [(51.01, 3.71), (51.02, 3.72)],
+    ]
+    gazetteer = {"waterways": {"de schelde": segments}}
+
+    assert geocode.waterway_segments(
+        "  De Schélde ", gazetteer=gazetteer
+    ) == segments
+    assert geocode.waterway_segments("De Schelde", gazetteer={}) == []
 
 
 def test_resolve_falls_back_to_google_when_local_geocoder_has_no_hits():

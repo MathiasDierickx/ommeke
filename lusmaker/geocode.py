@@ -21,6 +21,13 @@ def _load():
             stacklevel=2,
         )
         gazetteer["landmarks"] = []
+    if "waterways" not in gazetteer:
+        warnings.warn(
+            "gazetteer bevat nog geen waterlopen — draai `lus build --force`",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        gazetteer["waterways"] = {}
     return gazetteer
 
 
@@ -92,6 +99,14 @@ def _nearest_place(places, lat, lon):
         if best is None or d < best[0]:
             best = (d, name)
     return best[1] if best else None
+
+
+def waterway_segments(
+    name: str, gazetteer=None
+) -> list[list[tuple[float, float]]]:
+    """Geef alle OSM-segmenten van een exact benoemde waterloop."""
+    gaz = _load() if gazetteer is None else gazetteer
+    return gaz.get("waterways", {}).get(_normalise(name), [])
 
 
 def places_near_route(route_coords, radius_m: float = 400.0, gazetteer=None) -> list[dict]:

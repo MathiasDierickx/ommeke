@@ -329,6 +329,7 @@ def _route_request(
     strict: bool | None,
     request_id: str | None,
     rond_plaats: str | None,
+    langs_water: str | None,
     input_signature: dict,
 ) -> dict:
     hard_max = max_km
@@ -356,6 +357,7 @@ def _route_request(
         "toegestane_plaatsen": [],
         "request_id": request_id,
         "rond_plaats": rond_plaats,
+        "langs_water": langs_water,
         "input_signature": input_signature,
     }
 
@@ -413,6 +415,15 @@ def _execute_request(
     target_km = request.get("target_km")
     hard_max = request.get("max_km")
     max_explicit = request.get("max_km_explicit", True)
+    if d.get("water_via"):
+        route_fn(d, climb_db)
+        actual = (d.get("computed") or {}).get("total_km") or 0.0
+        if max_explicit and hard_max is not None and actual > hard_max:
+            raise IntentError(
+                f"route is {actual:.1f} km en overschrijdt het harde "
+                f"maximum van {hard_max:.1f} km"
+            )
+        return
     if (goal == "kort" or hard_max is None) and not request.get("rond_plaats"):
         route_fn(d, climb_db)
         actual = (d.get("computed") or {}).get("total_km") or 0.0
@@ -530,6 +541,33 @@ def _resolve_climbs(names: list[str], climb_db: dict) -> list[dict]:
     return resolved
 
 
+def _set_water_via(d: dict, request: dict, water_fn) -> bool:
+    """Zet persistente water-via-punten, of schakel de feature stil uit."""
+    previous_via = d.pop("water_via", None)
+    if previous_via:
+        d["computed"] = None
+        d.pop("_geometry", None)
+    name = request.get("langs_water")
+    distance_km = request.get("target_km") or request.get("max_km")
+    if not name or distance_km is None:
+        return False
+    segments = water_fn(name)
+    via = draft.water_via_points(
+        (d["start"]["lat"], d["start"]["lon"]),
+        segments,
+        distance_km,
+    )
+    if not via:
+        return False
+    d["water_via"] = via
+    # Een waterloop en rond-plek zijn alternatieve lusankers; water wint.
+    d.pop("round_trip_anchor", None)
+    d["opvullingen"] = []
+    d["computed"] = None
+    d.pop("_geometry", None)
+    return True
+
+
 def plan_route(
     start: str,
     region: str | None = None,
@@ -550,6 +588,7 @@ def plan_route(
     check_readiness: bool = False,
     request_id: str | None = None,
     rond_plaats: str | None = None,
+    langs_water: str | None = None,
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -566,6 +605,7 @@ def plan_route(
     profile_load_fn=profiles.load,
     find_request_fn=draft.find_by_request_id,
     resolve_fn=geocode.resolve,
+    water_fn=geocode.waterway_segments,
     exports_root: Path | None = None,
 ) -> dict:
     """Maak en routeer een lus, eventueel na een readiness-gesprek."""
@@ -581,7 +621,11 @@ def plan_route(
         rond_plaats = rond_plaats.strip()
         if not rond_plaats:
             raise IntentError("rond-plaats mag niet leeg zijn")
-    if rond_plaats and target_km is None and max_km is None:
+    if langs_water is not None:
+        langs_water = langs_water.strip()
+        if not langs_water:
+            raise IntentError("langs-water mag niet leeg zijn")
+    if rond_plaats and not langs_water and target_km is None and max_km is None:
         target_km = 5.0
     _validate_request(
         target_km=target_km,
@@ -598,6 +642,7 @@ def plan_route(
         "start": start.strip(),
         "region": region,
         "rond_plaats": rond_plaats,
+        "langs_water": langs_water,
         "via_klimmen": list(via_klimmen),
         "vermijd_plaatsen": list(vermijd_plaatsen),
         "naam": naam,
@@ -627,6 +672,7 @@ def plan_route(
         strict=strict,
         request_id=request_id,
         rond_plaats=rond_plaats,
+        langs_water=langs_water,
         input_signature=input_signature,
     )
     existing = find_request_fn(request_id) if request_id is not None else None
@@ -637,7 +683,7 @@ def plan_route(
         if isinstance(stored_signature, dict):
             # Oudere workflows blijven idempotent hervatbaar zolang later
             # toegevoegde optionele invoer niet expliciet werd opgegeven.
-            for optional_key in ("autovrij", "rond_plaats"):
+            for optional_key in ("autovrij", "rond_plaats", "langs_water"):
                 if (
                     optional_key not in stored_signature
                     and input_signature[optional_key] is None
@@ -714,7 +760,8 @@ def plan_route(
         for climb in _resolve_climbs(via_klimmen, climb_db):
             add_climb_fn(draft_id, climb["id"])
         d = load_fn(draft_id)
-        if rond_plaats:
+        water_active = _set_water_via(d, request, water_fn)
+        if rond_plaats and not water_active:
             anchor, _alternatives = resolve_fn(rond_plaats)
             d["round_trip_anchor"] = anchor
             d["opvullingen"] = []
@@ -771,6 +818,7 @@ def adjust_route(
     check_readiness: bool = False,
     expected_revision: int | None = None,
     rond_plaats: str | None = None,
+    langs_water: str | None = None,
     *,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -787,6 +835,7 @@ def adjust_route(
     assess_fn=readiness.assess,
     profile_load_fn=profiles.load,
     resolve_fn=geocode.resolve,
+    water_fn=geocode.waterway_segments,
     exports_root: Path | None = None,
 ) -> dict:
     """Pas meerdere routewensen toe, routeer eenmaal en exporteer opnieuw."""
@@ -797,6 +846,15 @@ def adjust_route(
         rond_plaats = rond_plaats.strip()
         if not rond_plaats:
             raise IntentError("rond-plaats mag niet leeg zijn")
+    if langs_water is not None:
+        langs_water = langs_water.strip()
+        if not langs_water:
+            raise IntentError("langs-water mag niet leeg zijn")
+    effective_water = (
+        langs_water
+        if langs_water is not None
+        else previous_request.get("langs_water")
+    )
     effective_round_place = (
         rond_plaats
         if rond_plaats is not None
@@ -869,6 +927,7 @@ def adjust_route(
         "profiel_naam": effective_profile,
         "activiteit": previous_request.get("activiteit", "fietsen"),
         "rond_plaats": effective_round_place,
+        "langs_water": effective_water,
         "expliciete_voorkeuren": previous_request.get(
             "expliciete_voorkeuren", {}
         ),
@@ -891,7 +950,8 @@ def adjust_route(
         for place in niet_meer_vermijden:
             unavoid_place_fn(draft_id, place)
         d = load_fn(draft_id)
-        if effective_round_place:
+        water_active = _set_water_via(d, request, water_fn)
+        if effective_round_place and not water_active:
             anchor, _alternatives = resolve_fn(effective_round_place)
             if d.get("round_trip_anchor") != anchor:
                 d["round_trip_anchor"] = anchor
