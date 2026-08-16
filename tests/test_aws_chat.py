@@ -180,4 +180,7 @@ def test_bedrock_agent_executes_whitelisted_tool_and_accumulates_usage():
 def test_route_tool_contract_exposes_landmark_anchor_instruction():
     assert PLAN_ROUTE_SCHEMA["properties"]["rond_plaats"]["minLength"] == 1
     assert ADJUST_ROUTE_SCHEMA["properties"]["rond_plaats"]["minLength"] == 1
+    assert PLAN_ROUTE_SCHEMA["properties"]["langs_water"]["maxLength"] == 120
+    assert ADJUST_ROUTE_SCHEMA["properties"]["langs_water"]["maxLength"] == 120
     assert "zet die plek in rond_plaats" in SYSTEM_PROMPT
+    assert "zet die naam in `langs_water`" in SYSTEM_PROMPT

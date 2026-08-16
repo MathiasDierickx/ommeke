@@ -202,6 +202,7 @@ def new(start: dict, name: str | None, loop: bool, end: dict | None, strict: boo
         "avoid_busy": avoid_busy,
         "avoid_places": [],  # [{label, lat, lon, radius_km, factor}]
         "climbs": [],    # geordende lijst klim-ids
+        "water_via": [],  # persistente via-punten op een benoemde waterloop
         "opvullingen": [],  # persistente round_trip-legs met via-punten
         "computed": None,
     }
@@ -365,12 +366,139 @@ def unavoid_place(
     return summary(d)
 
 
+def _project_on_line(start, a, b) -> tuple[float, float]:
+    """Projecteer een punt lokaal vlak op een kort lat/lon-lijnstuk."""
+    import math
+
+    lon_scale = math.cos(math.radians((a[0] + b[0] + start[0]) / 3.0))
+    ax = (a[1] - start[1]) * lon_scale
+    ay = a[0] - start[0]
+    bx = (b[1] - start[1]) * lon_scale
+    by = b[0] - start[0]
+    dx, dy = bx - ax, by - ay
+    denominator = dx * dx + dy * dy
+    position = 0.0 if denominator == 0 else -(ax * dx + ay * dy) / denominator
+    position = max(0.0, min(1.0, position))
+    return (
+        a[0] + (b[0] - a[0]) * position,
+        a[1] + (b[1] - a[1]) * position,
+    )
+
+
+def _trim_path(path, distance_m: float) -> list[tuple[float, float]]:
+    out = [path[0]]
+    traversed = 0.0
+    for a, b in zip(path, path[1:]):
+        length = geo.haversine(a[0], a[1], b[0], b[1])
+        if length <= 0:
+            continue
+        if traversed + length >= distance_m:
+            position = (distance_m - traversed) / length
+            out.append(
+                (
+                    a[0] + (b[0] - a[0]) * position,
+                    a[1] + (b[1] - a[1]) * position,
+                )
+            )
+            break
+        out.append(b)
+        traversed += length
+    return out
+
+
+def _point_along_path(path, distance_m: float) -> tuple[float, float]:
+    traversed = 0.0
+    for a, b in zip(path, path[1:]):
+        length = geo.haversine(a[0], a[1], b[0], b[1])
+        if length <= 0:
+            continue
+        if traversed + length >= distance_m:
+            position = (distance_m - traversed) / length
+            return (
+                a[0] + (b[0] - a[0]) * position,
+                a[1] + (b[1] - a[1]) * position,
+            )
+        traversed += length
+    return path[-1]
+
+
+def water_via_points(
+    start_latlon, segments, target_km, *, max_points=8
+) -> list[tuple[float, float]]:
+    """Kies deterministische via-punten vanaf de dichtste waterlooplocatie."""
+    if not segments or target_km <= 0 or max_points <= 0:
+        return []
+
+    start = tuple(start_latlon)
+    best = None
+    for segment_index, raw_segment in enumerate(segments):
+        segment = [tuple(point) for point in raw_segment]
+        if not segment:
+            continue
+        if len(segment) == 1:
+            projected = segment[0]
+            candidates = [(-1, projected)]
+        else:
+            candidates = [
+                (point_index, _project_on_line(start, a, b))
+                for point_index, (a, b) in enumerate(zip(segment, segment[1:]))
+            ]
+        for point_index, projected in candidates:
+            key = (
+                geo.haversine(start[0], start[1], projected[0], projected[1]),
+                segment_index,
+                point_index,
+            )
+            if best is None or key < best[0]:
+                best = (key, segment, point_index, projected)
+    if best is None:
+        return []
+
+    _key, segment, point_index, projected = best
+    if point_index < 0:
+        path = [projected]
+    else:
+        forward = [projected, *segment[point_index + 1 :]]
+        backward = [projected, *reversed(segment[: point_index + 1])]
+        # Bij gelijke lengte wint de oorspronkelijke OSM-richting.
+        path = (
+            forward
+            if geo.path_length(forward) >= geo.path_length(backward)
+            else backward
+        )
+    available_m = geo.path_length(path)
+    travel_m = min(target_km * 500.0, available_m)
+    if travel_m <= 0:
+        return [projected]
+    path = _trim_path(path, travel_m)
+    if max_points == 1:
+        return [path[-1]]
+    return [
+        _point_along_path(path, travel_m * index / (max_points - 1))
+        for index in range(max_points)
+    ]
+
+
 def _waypoints(d: dict, climb_db: dict) -> list[dict]:
     """Reeks legs; een klim-leg krijgt [voet, midden, top] zodat de route
     effectief de helling zelf omhoog rijdt."""
     start = (d["start"]["lat"], d["start"]["lon"])
     legs = []
     prev_label, prev_pt = "start", start
+    water_via = [tuple(point) for point in d.get("water_via", [])]
+    if water_via:
+        points = [start]
+        for point in water_via:
+            if point != points[-1]:
+                points.append(point)
+        legs.append(
+            {
+                "from": "start",
+                "to": "waterloop",
+                "points": points,
+            }
+        )
+        prev_label, prev_pt = "waterloop", water_via[-1]
     for cid in d["climbs"]:
         c = climb_db.get(cid)
         if not c:
@@ -401,7 +529,7 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
         legs.append({"from": f"{c['name']} (voet)", "to": f"{c['name']} (top)",
                      "points": via, "climb": cid, "hints": [name_hint] * len(via)})
         prev_label, prev_pt = f"{c['name']} (top)", top
-    round_anchor = d.get("round_trip_anchor")
+    round_anchor = None if water_via else d.get("round_trip_anchor")
     if round_anchor:
         anchor = (round_anchor["lat"], round_anchor["lon"])
         anchor_label = round_anchor.get("label") or "rond-plek"

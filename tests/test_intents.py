@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from lusmaker import artifacts, config, intents
+from lusmaker import artifacts, config, draft, geo, intents
 
 
 def _climb(climb_id, name, length_m=1000, avg_pct=4.0):
@@ -354,6 +354,154 @@ def test_plan_route_defaults_landmark_loop_to_five_km():
 
     assert calls[0]["fill_target_km"] == 5.0
     assert calls[0]["max_km"] == 7.5
+
+
+def test_water_via_points_follow_longest_direction_for_half_target():
+    river = [(51.0, 3.0 + index * 0.01) for index in range(11)]
+    start = (51.001, 3.04)
+
+    first = draft.water_via_points(start, [river], 6)
+    second = draft.water_via_points(start, [river], 6)
+
+    assert first == second
+    assert draft.water_via_points(start, [], 6) == []
+    assert len(first) == 8
+    assert all(abs(lat - 51.0) < 1e-9 for lat, _lon in first)
+    assert first[0][1] == 3.04
+    assert all(a[1] <= b[1] for a, b in zip(first, first[1:]))
+    assert 2_950 <= geo.path_length(first) <= 3_050
+
+
+def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
+    river = [(51.0, 3.0 + index * 0.01) for index in range(11)]
+    state = {
+        "id": "water1",
+        "name": "waterlus",
+        "start": {"label": "Teststad", "lat": 51.001, "lon": 3.05},
+        "loop": True,
+        "climbs": [],
+        "avoid_places": [],
+        "computed": None,
+    }
+    routed_points = []
+
+    def route_fn(d, climb_db):
+        legs = draft._waypoints(d, climb_db)
+        routed_points.extend(legs[0]["points"])
+        assert legs[-1]["to"] == "start"
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 6.1}
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("een waterlooproute mag de optimizer niet gebruiken")
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "Teststad",
+            target_km=6,
+            langs_water="Testrivier",
+            rond_plaats="Genegeerde plek",
+            create_fn=lambda **_kwargs: {"id": state["id"]},
+            load_fn=lambda _draft_id: state,
+            route_fn=route_fn,
+            optimize_fn=unexpected,
+            climbs_fn=lambda: {},
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            resolve_fn=unexpected,
+            water_fn=lambda name: [river] if name == "Testrivier" else [],
+            exports_root=Path(temp_dir),
+        )
+
+    via = state["water_via"]
+    assert routed_points == [
+        (state["start"]["lat"], state["start"]["lon"]),
+        *via,
+    ]
+    assert all(abs(lat - 51.0) < 1e-9 for lat, _lon in via)
+    assert 2_950 <= geo.path_length(via) <= 3_050
+    assert state["route_request"]["langs_water"] == "Testrivier"
+    assert state["route_request"]["input_signature"]["langs_water"] == "Testrivier"
+
+
+def test_adjust_route_replaces_waterway_via_before_one_reroute():
+    river = [(51.0, 3.0 + index * 0.01) for index in range(11)]
+    state = _routed_draft()
+    state["climbs"] = []
+    state["route_request"] = {
+        "doel": "hoogtemeters",
+        "target_km": 6,
+        "max_km": 8.5,
+        "max_km_explicit": False,
+        "tolerance_km": 2.5,
+        "geen_opvulling": False,
+    }
+    calls = []
+
+    def route_fn(d, _db):
+        calls.append(list(d["water_via"]))
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 6.0}
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("een waterlooproute mag de optimizer niet gebruiken")
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.adjust_route(
+            "abc123",
+            langs_water="Testrivier",
+            load_fn=lambda _draft_id: state,
+            route_fn=route_fn,
+            optimize_fn=unexpected,
+            climbs_fn=lambda: {},
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            water_fn=lambda _name: [river],
+            exports_root=Path(temp_dir),
+        )
+
+    assert calls == [state["water_via"]]
+    assert state["route_request"]["langs_water"] == "Testrivier"
+
+
+def test_plan_route_without_waterway_data_falls_back_to_normal_route():
+    state = _routed_draft()
+    state["climbs"] = []
+    state["computed"] = None
+    calls = []
+
+    def route_fn(d, _db):
+        calls.append("route")
+        assert not d.get("water_via")
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 6.0}
+
+    def export_fn(_d, _db, path):
+        return {"file": path}
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "Teststad",
+            target_km=6,
+            doel="kort",
+            langs_water="Onbekende rivier",
+            create_fn=lambda **_kwargs: {"id": state["id"]},
+            load_fn=lambda _draft_id: state,
+            route_fn=route_fn,
+            climbs_fn=lambda: {},
+            export_gpx_fn=export_fn,
+            export_preview_fn=export_fn,
+            save_fn=lambda _d: None,
+            water_fn=lambda _name: [],
+            exports_root=Path(temp_dir),
+        )
+
+    assert calls == ["route"]
 
 
 def test_plan_route_passes_named_preference_profile_to_draft():

@@ -25,9 +25,10 @@ LANDMARK_VALUES = {
     "tourism": {"attraction", "theme_park", "zoo", "viewpoint", "museum", "park"},
 }
 LANDMARK_KEYS = (*LANDMARK_VALUES, "water", "boundary")
+WATERWAY_VALUES = {"river", "canal"}
 MAX_LANDMARK_POINTS = 2_000
 MAX_LANDMARKS = 100_000
-EXTRACT_FORMAT_VERSION = 3
+EXTRACT_FORMAT_VERSION = 4
 
 
 def _in_bbox(lat: float, lon: float) -> bool:
@@ -122,7 +123,7 @@ def _dedupe_landmarks(landmarks, radius_m: float = 100.0) -> list[tuple]:
 
 
 def build_extract(force: bool = False) -> dict:
-    """Parse de Belgium-PBF en cache wegen, plaatsen en landmarks in de bbox."""
+    """Parse de PBF en cache wegen, plaatsen, landmarks en waterlopen."""
     if config.EXTRACT_PKL.exists() and not force:
         with open(config.EXTRACT_PKL, "rb") as f:
             extract = pickle.load(f)
@@ -164,6 +165,7 @@ def build_extract(force: bool = False) -> dict:
         file=sys.stderr,
     )
     ways = []
+    waterways = []
     ref_owner: dict[int, int] = {}
     junction_refs: set[int] = set()
     fp = (
@@ -171,7 +173,7 @@ def build_extract(force: bool = False) -> dict:
         .with_locations()
         .with_areas(osmium.filter.KeyFilter(*LANDMARK_KEYS))
         .with_filter(osmium.filter.EntityFilter(osmium.osm.WAY | osmium.osm.AREA))
-        .with_filter(osmium.filter.KeyFilter("highway", *LANDMARK_KEYS))
+        .with_filter(osmium.filter.KeyFilter("highway", "waterway", *LANDMARK_KEYS))
     )
     n_seen = 0
     for obj in fp:
@@ -195,6 +197,15 @@ def build_extract(force: bool = False) -> dict:
                 if obj.tags.get("name"):
                     tags = {k: obj.tags[k] for k in KEEP_TAGS if k in obj.tags}
                     ways.append((obj.id, refs, coords, tags))
+            waterway = obj.tags.get("waterway")
+            if (
+                waterway in WATERWAY_VALUES
+                and obj.tags.get("name")
+                and any(_in_bbox(*point) for point in coords)
+            ):
+                waterways.append(
+                    (obj.tags["name"], waterway, coords[:MAX_LANDMARK_POINTS])
+                )
             kind = _landmark_kind(obj.tags)
             centre = _centroid(coords) if kind and obj.tags.get("name") else None
         else:
@@ -213,8 +224,8 @@ def build_extract(force: bool = False) -> dict:
         ):
             landmarks.append((obj.tags["name"], kind, centre[0], centre[1]))
     print(
-        f"[build]   {len(ways)} benoemde wegen, {len(junction_refs)} kruispunten "
-        f"en {len(landmarks)} landmarks in regio",
+        f"[build]   {len(ways)} benoemde wegen, {len(junction_refs)} kruispunten, "
+        f"{len(landmarks)} landmarks en {len(waterways)} waterlopen in regio",
         file=sys.stderr,
     )
 
@@ -223,6 +234,7 @@ def build_extract(force: bool = False) -> dict:
         "ways": ways,
         "places": places,
         "landmarks": landmarks,
+        "waterways": waterways,
         "junction_refs": junction_refs,
     }
     config.ensure_dirs()
@@ -232,10 +244,12 @@ def build_extract(force: bool = False) -> dict:
 
 
 def build_gazetteer(extract: dict, force: bool = False) -> dict:
-    """Kleine lokale geocoder-index voor plaatsen, straten en landmarks."""
+    """Kleine lokale index voor plaatsen, straten, landmarks en waterlopen."""
     if config.GAZETTEER_PKL.exists() and not force:
         with open(config.GAZETTEER_PKL, "rb") as f:
-            return pickle.load(f)
+            gazetteer = pickle.load(f)
+        gazetteer.setdefault("waterways", {})
+        return gazetteer
 
     streets: dict[str, list] = {}
     for _wid, _refs, coords, tags in extract["ways"]:
@@ -247,10 +261,14 @@ def build_gazetteer(extract: dict, force: bool = False) -> dict:
             pts.append((round(coords[0][0], 5), round(coords[0][1], 5), name))
 
     landmarks = _dedupe_landmarks(extract.get("landmarks", []))
+    waterways: dict[str, list] = {}
+    for name, _kind, coords in extract.get("waterways", []):
+        waterways.setdefault(_normalise_name(name), []).append(coords)
     gaz = {
         "places": extract["places"],
         "streets": streets,
         "landmarks": landmarks,
+        "waterways": waterways,
     }
     print(f"[build]   {len(landmarks)} unieke landmarks in gazetteer", file=sys.stderr)
     with open(config.GAZETTEER_PKL, "wb") as f:

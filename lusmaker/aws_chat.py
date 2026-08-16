@@ -252,6 +252,7 @@ PLAN_ROUTE_SCHEMA = {
     "properties": {
         "start": {"type": "string", "minLength": 1, "maxLength": 160},
         "rond_plaats": {"type": "string", "minLength": 1, "maxLength": 160},
+        "langs_water": {"type": "string", "minLength": 1, "maxLength": 120},
         "target_km": {"type": "number", "exclusiveMinimum": 0},
         "max_km": {"type": "number", "exclusiveMinimum": 0},
         "tolerance_km": {"type": "number", "minimum": 0},
@@ -291,6 +292,7 @@ ADJUST_ROUTE_SCHEMA = {
         "tolerance_km": {"type": "number", "minimum": 0},
         "doel": {"type": "string", "enum": ["hoogtemeters", "kort", "toeren"]},
         "rond_plaats": {"type": "string", "minLength": 1, "maxLength": 160},
+        "langs_water": {"type": "string", "minLength": 1, "maxLength": 120},
         "geen_opvulling": {"type": "boolean"},
         "expected_revision": {"type": "integer", "minimum": 0},
     },
@@ -345,6 +347,8 @@ Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_ro
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
 Als de gebruiker vraagt om rond/langs een specifieke plek (park, plas, domein) te lopen/rijden,
 zet die plek in rond_plaats.
+Als de gebruiker zo lang mogelijk langs een benoemde waterloop (rivier of kanaal, bv. de Schelde,
+de Leie, een kanaal) wil rijden of lopen, zet die naam in `langs_water` (niet in `rond_plaats`).
 Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in maximaal 80
 tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
 Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte vragen.
@@ -373,6 +377,7 @@ class RouteToolExecutor:
             values.setdefault("activiteit", "fietsen")
             values.setdefault("geen_opvulling", False)
             values.setdefault("rond_plaats", None)
+            values.setdefault("langs_water", None)
             return intents.plan_route(
                 **values,
                 profiel_naam="standaard",
@@ -388,6 +393,7 @@ class RouteToolExecutor:
             values.setdefault("niet_meer_vermijden", [])
             values.setdefault("sta_plaatsen_toe", [])
             values.setdefault("rond_plaats", None)
+            values.setdefault("langs_water", None)
             return intents.adjust_route(**values, check_readiness=True)
         if name == "list_routes":
             return {"drafts": draft.list_all()[:50]}
