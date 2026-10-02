@@ -243,3 +243,29 @@ vereist dat de werkelijk draaiende Lambda dezelfde build gebruikt.
 Deze staging verandert de ingebouwde GraphHopper-areas niet. De nieuwe scores,
 wegdekaanvulling en voorzieningen werken via de Python-engine; directe nieuwe
 voorkeurgebieden binnen GraphHopper blijven een afzonderlijke graafbuild.
+
+### Gecontroleerde AWS-release — 2 oktober 2026
+
+Code `e0184676ad6019f91eea8b79e1d6b2f613a1cb8d` is succesvol uitgerold via
+[deployment 37049853861](https://github.com/MathiasDierickx/ommeke/actions/runs/37049853861).
+De rechtstreeks opgevraagde publieke `/health` antwoordde `status=ok`, met
+bronbuild `1416c14a993c016b26b7fd8f1252b9228da2b93271be2b6298ebb819190038e2`,
+178.899 features en 18 lagen. AWS gebruikt dus dezelfde bronbuild als lokaal.
+CI, de controle op de actieve bronbuild en de ongeauthenticeerde API/MCP-gates
+slaagden. De offline suite bevatte 277 geslaagde tests. Er is geen nieuwe
+live routekwaliteitstest of GraphHopper-graafherimport uitgevoerd.
+
+De eerste uitrol legde een verschil tussen build- en runtimegebruiker bloot:
+tijdelijke packmappen en metadata hadden rechten 700/600. De Lambda-gebruiker
+kon het pack daardoor niet lezen en de readiness-check bleef wachten. De
+cloudstaging zet uitsluitend het gecontroleerde publieke pack nu op 755 voor
+mappen en 644 voor bestanden, inclusief de versiepointer. Een regressietest
+controleert lees- en doorgangsrechten voor een andere runtimegebruiker.
+De lokale installatie behoudt haar oorspronkelijke rechten.
+
+De alleen-lezen workflow `diagnose-aws.yml` kan via GitHub OIDC de Lambda-status
+en gefilterde opstartfouten raadplegen, ook zonder lokale AWS-credentials:
+
+```sh
+gh workflow run diagnose-aws.yml --ref main
+```
