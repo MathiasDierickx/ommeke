@@ -15,7 +15,7 @@ import logging
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant
+from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant, quotas, requests
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -238,6 +238,9 @@ async def route_adjust(request: Request) -> JSONResponse:
         return JSONResponse({"route": _route_detail_payload(item)})
     except ChatError as exc:
         return _error(str(exc))
+    except quotas.QuotaExceeded as exc:
+        return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
+                            headers={"Retry-After": str(exc.retry_after)})
     except intents.IntentError as exc:
         return _error(str(exc))
     except draft.DraftError as exc:
@@ -472,14 +475,21 @@ async def conversation_send(request: Request) -> JSONResponse:
         content = body.get("content")
         if not isinstance(content, str):
             return _error("content moet tekst zijn")
-        result = await asyncio.to_thread(send_message, conversation_id, content)
+        result = await asyncio.to_thread(send_message, conversation_id, content, request_id=body.get("request_id"))
         return JSONResponse(result, status_code=201)
+    except quotas.QuotaExceeded as exc:
+        return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
+                            headers={"Retry-After": str(exc.retry_after)})
+    except requests.RequestConflict as exc:
+        return _error(str(exc), 409, "request_conflict")
+    except ValueError as exc:
+        return _error(str(exc))
     except ChatNotFound as exc:
         return _error(str(exc), 404, "conversation_not_found")
     except ChatError as exc:
         return _error(str(exc), 422, "chat_failed")
     except Exception as exc:
-        logger.exception("chatbericht mislukt (conversation=%s)", conversation_id)
+        logger.error("chatbericht mislukt (%s)", type(exc).__name__)
         detail = str(exc)
         if "Marketplace" in detail or "PAYMENT_INSTRUMENT" in detail:
             message = (
@@ -493,7 +503,7 @@ async def conversation_send(request: Request) -> JSONResponse:
                 "Bedrock-servicequota voor het model staat mogelijk nog op 0."
             )
         else:
-            message = "Claude kon dit bericht niet verwerken. Probeer het opnieuw."
+            message = "De AI-dienst kon dit bericht niet verwerken. Probeer het opnieuw."
         return _error(message, 502, "model_unavailable")
 
 
@@ -507,3 +517,13 @@ async def conversation_delete(request: Request) -> Response:
         return _error(str(exc), 404, "conversation_not_found")
     except ChatError as exc:
         return _error(str(exc))
+
+
+async def conversation_request_status(request: Request) -> JSONResponse:
+    try:
+        cid = request.path_params["conversation_id"]
+        await asyncio.to_thread(ConversationStore().get, cid)
+        result = await asyncio.to_thread(requests.status, f"chat:{cid}", request.path_params["request_id"])
+        return JSONResponse(result)
+    except (ValueError, ChatError) as exc:
+        return _error(str(exc), 404)

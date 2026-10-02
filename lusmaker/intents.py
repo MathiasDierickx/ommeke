@@ -1,6 +1,7 @@
 """Composiet-intenties met compacte, LLM-gerichte route-output."""
 
 from __future__ import annotations
+from . import quotas
 
 import copy
 import difflib
@@ -587,6 +588,7 @@ def _set_water_via(d: dict, request: dict, water_fn) -> bool:
     return True
 
 
+@quotas.metered("route")
 def plan_route(
     start: str,
     region: str | None = None,
@@ -821,6 +823,7 @@ def plan_route(
     return compact_result(d, climb_db, files, request)
 
 
+@quotas.metered("route")
 def adjust_route(
     draft_id: str,
     voeg_klimmen_toe: list[str] = [],

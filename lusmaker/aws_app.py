@@ -19,6 +19,7 @@ import contextlib
 
 from starlette.routing import Mount, Route
 
+from .telemetry import MetricsMiddleware
 from . import __version__, tenant
 from . import aws_api
 from .mcp_server import hosted_mcp
@@ -240,6 +241,7 @@ def create_app(
                 oauth_protected_resource,
                 methods=["GET"],
             ),
+            Route("/api/conversations/{conversation_id}/requests/{request_id}", aws_api.conversation_request_status, methods=["GET"]),
             Route("/api/me", aws_api.me, methods=["GET"]),
             Route("/api/routes", aws_api.routes_list, methods=["GET"]),
             Route(
@@ -320,9 +322,9 @@ def create_app(
             Mount("/", app=mcp_app),
         ]
     )
-    return CognitoAuthMiddleware(
+    return MetricsMiddleware(CognitoAuthMiddleware(
         routed, client=cognito_client, auth_mode=auth_mode
-    )
+    ))
 
 
 app = create_app()

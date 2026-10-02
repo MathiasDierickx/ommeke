@@ -1,5 +1,6 @@
 """Ad-hoc regioprovisioning, voortgang en herbruikbare regiopacks."""
 from __future__ import annotations
+from . import quotas
 
 import argparse
 import io
@@ -562,6 +563,7 @@ def provision(
         raise
 
 
+@quotas.metered("provision")
 def ensure_region(
     place: str,
     *,

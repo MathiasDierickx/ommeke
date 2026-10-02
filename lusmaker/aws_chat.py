@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import os
+import json
 import time
 import uuid
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from . import draft, intents, tenant
+from . import draft, intents, tenant, quotas, requests, telemetry
 
 
 MAX_PROMPT_CHARS = 4000
@@ -425,6 +426,9 @@ class BedrockRouteAgent:
         last_exc: Exception | None = None
         for attempt in range(3):
             try:
+                # UTF-8 bytes form a conservative input-token upper bound.
+                reserved = len(json.dumps([messages, SYSTEM_PROMPT, TOOL_CONFIG], ensure_ascii=False).encode()) + 1400
+                quotas.consume("tokens", amount=reserved)
                 return self.client.converse(
                     modelId=self.model_id,
                     system=[{"text": SYSTEM_PROMPT}],
@@ -561,6 +565,7 @@ def send_message(
     *,
     store: ConversationStore | None = None,
     agent: BedrockRouteAgent | None = None,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     clean_content = content.strip()
     if not clean_content:
@@ -568,17 +573,24 @@ def send_message(
     if len(clean_content) > MAX_PROMPT_CHARS:
         raise ChatError(f"bericht mag maximaal {MAX_PROMPT_CHARS} tekens bevatten")
     store = store or ConversationStore()
-    user_message = store.add_message(conversation_id, "user", clean_content)
-    history = store.messages(conversation_id)
-    agent = agent or BedrockRouteAgent()
-    result = agent.reply(
-        history,
-        request_id=f"{conversation_id}:{user_message['id']}",
-    )
-    assistant_message = store.add_message(
-        conversation_id,
-        "assistant",
-        result["content"],
-        route_ids=result["route_ids"],
-    )
-    return {"message": assistant_message, **result}
+    store.get(conversation_id)
+    def execute():
+        quotas.consume("chat", request_id=request_id)
+        user_message = store.add_message(conversation_id, "user", clean_content)
+        history = store.messages(conversation_id)
+        route_agent = agent or BedrockRouteAgent()
+        result = route_agent.reply(
+            history,
+            request_id=f"{conversation_id}:{user_message['id']}",
+        )
+        assistant_message = store.add_message(
+            conversation_id,
+            "assistant",
+            result["content"],
+            route_ids=result["route_ids"],
+        )
+        telemetry.emit("chat", input_tokens=result.get("usage", {}).get("inputTokens", 0),
+                       output_tokens=result.get("usage", {}).get("outputTokens", 0),
+                       iterations=result.get("iterations", 0), success=True)
+        return {"message": assistant_message, **result}
+    return requests.once(f"chat:{conversation_id}", request_id, {"content": clean_content}, execute)
