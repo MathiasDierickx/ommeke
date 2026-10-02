@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, SharedRoute } from "@/lib/types";
 import { Logo } from "./brand";
+import { OfflineRoute } from "./offline-route";
 import { ReturnRoute } from "./return-route";
 import { RouteMap } from "./route-map";
 
@@ -174,6 +175,7 @@ export function RouteDetail({
           ) : null}
           <div className="route-actions">
             <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
+            {route.ready && <OfflineRoute route={route} />}
             {onReturn && route.ready && <ReturnRoute onReturn={onReturn} />}
             {onDownloadFit && <button className="button" onClick={onDownloadFit} disabled={!route.ready}>Download FIT</button>}
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>
