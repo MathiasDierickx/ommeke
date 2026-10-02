@@ -41,6 +41,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [quickBusy,setQuickBusy]=useState(false);
+  const [answerComplete, setAnswerComplete] = useState(false);
   const [progress, setProgress] = useState<ProgressEvent|null>(null);
   const [error, setError] = useState<string>();
   const [leftOpen, setLeftOpen] = useState(false);
@@ -112,6 +113,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   useEffect(() => {
     if (!session || view.kind !== "conversation") return;
     let active = true;
+    setAnswerComplete(false);
     setConversationId(view.id);
     try {
       const answer = sessionStorage.getItem(`ommeke-answer:${view.id}`);
@@ -145,6 +147,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   useEffect(() => {
     if (view.kind !== "new") return;
+    setAnswerComplete(false);
     setConversationId(undefined);
     setMessages([]);
     setSelectedRoute(null);
@@ -185,6 +188,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     sendLock.current = true;
     setBusy(true);
     setProgress(null);
+    setAnswerComplete(false);
     setError(undefined);
     setPrompt("");
     let id = conversationId;
@@ -215,9 +219,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       const result = chatReply(await apiStream<unknown>(`/api/conversations/${id}/messages/stream`, session.accessToken, { content, request_id: pending.id }, setProgress));
       try { sessionStorage.removeItem(storageKey); } catch { /* opslag is optioneel */ }
       setMessages((current) => mergeById(current, [result.message]));
-      setBusy(false);
+      setProgress({stage:"library",message:"Je antwoord is klaar. Ik werk je routebibliotheek bij."});
       await loadWorkspace(session.accessToken).catch(() => setError("Je antwoord is opgeslagen. De bibliotheek kon nog niet worden vernieuwd."));
-      router.replace(`/chats/${encodeURIComponent(id)}`);
+      setAnswerComplete(true);
     } catch (cause) {
       setPrompt(content);
       setMessages(current => current.filter(message => message.id !== optimistic.id));
@@ -377,7 +381,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
           {!messages.length && !busy && session ? <QuickPlan onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
           {!messages.length && !busy && !quickBusy ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
-          {busy ? <RouteProgress event={progress} /> : null}
+          {busy || answerComplete ? <RouteProgress event={progress} complete={answerComplete} /> : null}
           <div ref={messageEnd} />
         </div>
         <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy || quickBusy} />

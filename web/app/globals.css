@@ -346,12 +346,12 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .route-constraints ul { padding-left: 20px; margin: 6px 0 0; }
 
 .quick-plan { max-width: 42rem; margin: 1rem auto; padding: 1.2rem; border: 1px solid #d5ddd5; border-radius: 12px; }
-.quick-plan form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; }
+.quick-plan fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; }
 .quick-plan label { display: grid; gap: .4rem; }
 .quick-plan input,.quick-plan select,.quick-plan button { min-width: 0; min-height: 44px; padding: .6rem; border: 1px solid #bbc9bd; border-radius: 6px; }
 .quick-plan input { width: 100%; }
 .quick-plan button { cursor: pointer; margin: .2rem; }
-@media(max-width: 480px) { .quick-plan form { grid-template-columns: 1fr; } }
+@media(max-width: 480px) { .quick-plan fieldset { grid-template-columns: 1fr; } }
 
 .poi-filter { position: absolute; top: 75px; right: 12px; z-index: 450; padding: .5rem; background: white; border-radius: 8px; max-width: calc(100% - 24px); }
 .route-progress { margin: 20px 0; padding: 18px 20px; border-left: 3px solid #39765c; background: #edf3ee; border-radius: 4px 12px 12px 4px; max-width: 640px; }
@@ -371,3 +371,14 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .route-journey p, .route-journey small { font-size: 13px; line-height: 1.5; }
 .route-journey input { max-width: 100%; display: block; padding: 10px; font: inherit; }
 .route-journey summary { min-height: 44px; padding-top: 10px; cursor: pointer; }
+
+.quick-plan fieldset:disabled { opacity: .65; }
+.quick-result { margin-top: 24px; border-top: 1px solid #d5ddd5; padding-top: 16px; }
+.quick-result h3 { margin: 0; }
+.quick-result p { line-height: 1.5; }
+.quick-result button { background: #245740; color: white; border-color: #245740; }
+.quick-result button:hover { background: #193e2d; }
+.route-progress-complete { background: transparent; padding-block: 10px; }
+@media (prefers-reduced-motion: reduce) { .route-progress .spin { animation: none; } }
+
+.quick-result .quick-plan-again { background: transparent; color: #245740; border-color: transparent; }
