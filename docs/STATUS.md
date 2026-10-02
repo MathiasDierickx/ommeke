@@ -1,5 +1,45 @@
 # Inventaris en voortgang
 
+## Actuele uitvoering — 2 oktober 2026, avond
+
+De expliciete opdracht om te deployen vervangt voor deze sessie het eerdere
+pushverbod. AWS SSO naar `ommeke-prod` werkt nu voor account `384268138628`
+(`meander-prod`). GitHub Actions deployt naar dat account; de frontend staat op
+https://ommeke.vercel.app. Het publieke brondatapack is actief. De lokale
+GraphHopper-runtime en `~/.lusmaker` zijn tijdens deze uitbreiding niet gewijzigd.
+
+Nieuwe onderdelen zijn ingecheckt en worden in echte Chrome-proeven gecontroleerd:
+modelvrij routeformulier, lokale plaatsnaam bij GPS-coördinaten, terugweg met
+budget/revisiecontrole, FIT-course-export, GPX-cues, POI-filter, kandidaatcache,
+CLI-intent-evals, SSE-voortgang en een expliciet lokaal bewaarde offline route.
+De offline kaart bevat een routelijn en hoogteprofiel, nog geen achtergrondtegels.
+
+Offline bewijs: 295 Python-tests inclusief drie bestaande regressiecassettes,
+9 frontendtests, TypeScript en productiebuild. De eerste browsertest vond een
+ontbrekend standaardprofiel in de snelplanner; daarvoor bestaat nu ook een
+integratietest door de echte intentielaag. De eerste SSE-proef vond een race
+bij het lezen van de POST-body; de reparatie leest die body vóór streaming en
+heeft een aparte regressietest. Een groene deployment alleen is geen E2E-bewijs.
+
+| Issue | Nieuwe implementatie | Resterend bewijs / werk |
+|---|---|---|
+| #12 | SSE-stappen uit backend/engine, heartbeats, werkelijk eindresultaat; antwoord blijft zichtbaar | Snelplanner (39,320 km), chatroute (app 19,9 km), eindantwoord/kaart/download en ongeldige-invoerproef live geslaagd; chat duurde 61,716 s |
+| #19 | Cache van kandidaatroutering per optimize-run; hit/miss-tellers | Losse warme GH-service, LM-import en p50/p95-doel nog niet gerealiseerd |
+| #20 | Bredene op geïsoleerde kustdata getest; coördinatenvalidatie verbeterd | Volledig Vlaanderen-pack en gestructureerde dekkingsfout nog niet afgerond |
+| #21 | FIT-encoder met CRC/parserproeven, GPX-cues, API/CLI/webdownload | Live nieuw gegenereerde cues en echt Garmin-toestel nog controleren; directe providerpush uitgesteld |
+| #22 | Snelplanner met GPS, afstand, activiteit, doel, quota/receipts, vraagknoppen | Browserproef na standaardprofielfix geslaagd; nieuwe mobiele layout nog controleren |
+| #23 | `lus eval-model`, eerste-toolscoring, verbruik/latentie/optionele kosten | Suite bevat ook synthetische cases en MCP-only gevallen; geen modelmigratiebesluit op ruwe score; Claude-betaling nog extern |
+| #24 | Budgetrollbackteller toegevoegd | Hints/richting en kandidaatpariteit nog niet gewijzigd; cassettes onveranderd |
+| #25 | `reroute_from` in CLI/MCP/chat/API/web; oorspronkelijke draft behouden bij budgetfout | Live omleidingsproef en toestemming voor GPS op toestel |
+| #26 | Service worker met offline shell; 10 expliciet bewaarde routes, routelijn/GPS/hoogteprofiel; wissen bij logout | Achtergrondtegels ontbreken; vliegtuigmodus nog niet live geverifieerd |
+| #27 | OSM-extractie, afstand tot/langs route, kaartfilter en export-POI's | Productiepack moet nieuwe OSM-POI's bevatten; café-via-wens nog niet geïmplementeerd |
+| #28 | Contact in user-agent, bronvermelding in webkaart/gedeelde kaart/HTML | Geen lokale graafherimport of verwijdering van legacy-seeds uitgevoerd |
+
+Pilotgebruikers (#7), platformreview (#17), echte fietscomputer (#21) en juridische
+acceptatie (#6) blijven externe acceptatie. Die worden niet als voltooid gemarkeerd.
+
+## Historische inventaris vóór de uitrol
+
 Stand 2 oktober 2026, lokale main. [Bord](https://github.com/users/MathiasDierickx/projects/2).
 De bestaande engine, CLI, MCP, AWS API, Bedrock-chat, OAuth/Cognito, webapp,
 GPX/delen, regionale packs en drie regressiecassettes vormen de basis.

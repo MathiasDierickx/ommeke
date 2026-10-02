@@ -80,3 +80,49 @@ Bewaar vraag, engine-/packversie, route-JSON, GPX, wachttijd, constraint_report
 en handmatige bruikbaarheidsbeoordeling. Gebruik voor water en ankers echte
 lokale coördinaten. Leg afwijkingen vast op issue #4. Cassette-opname en live
 smoke blijven expliciete reviewerhandelingen; ze horen niet in offline CI.
+
+## Productieproeven van 2 oktober, avond
+
+Op expliciete opdracht zijn GitHub/AWS/Vercel-uitrollen en browserproeven nu
+wel uitgevoerd, in de persoonlijke Chrome van de eigenaar. De historische
+reviewer-only-paragraaf hierboven beschrijft de eerdere offline iteratie.
+
+- AWS-run `37054008559`: uitbreiding met snelplanner, terugweg, FIT en POI's.
+- AWS-run `37054942458`: eerste SSE-implementatie. Live proef vond een race
+  tussen de POST-body en de disconnectlistener; dus geen geslaagde E2E-acceptatie.
+- Reparatie `171fdd8`: body lezen vóór starten van StreamingResponse; een nieuwe
+  test borgt het eenmalig lezen vóór de response. De herhaalde browserproef
+  toont nu echte voortgang vóór afronding, onder meer de ondergrondcontrole.
+- De snelplanner miste aanvankelijk `profiel_naam=standaard`. Reparatie
+  `70b30de` wordt gedekt door een test die de echte intentielaag doorloopt.
+- Een bestaande 50-km-route opent met kaart, hoogteprofiel en routekwaliteit.
+  GPX en FIT zijn via de echte downloadknoppen in Chrome opgehaald. GPX:
+  1.237 trackpunten, 80.880 bytes. FIT: 49.667 bytes, `.FIT`-header en geldige
+  bestands-CRC. Dit is geen Garmin-toestelacceptatie.
+
+De SSE-client test gesplitste UTF-8, CRLF op chunkgrenzen, heartbeats, terminale
+fouten en een verbroken stream zonder resultaat. Geen test stuurt een echte
+netwerkcall vanuit de offline suite. Totaal: 295 Python-tests en 9 Node-tests.
+
+Herhaalde snelplannerproef, productie-route `ca3e8a`: gevraagd 40 km vanuit
+Wetteren, fiets/toeren. Resultaat 39,320 km uit 1.007 GPX-trackpunten, sluiting
+0,00 m, 199 GPX-routepunten met navigatiecues. Nieuw FIT-bestand 61.561 bytes
+met geldige CRC. Chrome toonde achtereenvolgens de ondergrondcontrole en
+lusvariant 2 vóór het eindresultaat. De routekaart toont 39,3 km / 416 m.
+Offline bewaren en de afzonderlijke routeshell tonen de bewaarde revisie,
+routelijn en hoogteprofiel; vliegtuigmodus en GPS-ontvangst zijn niet bewezen.
+Backend-herstelrun `37055797218` en frontend-CI `37056666279` zijn geslaagd;
+Vercel meldt success voor `c04c35a`.
+
+Chatproef: “Maak een rustige fietsroute van ongeveer 20 km vanuit Wetteren.
+Kasseien en beton zijn oké, vermijd drukke wegen waar mogelijk. Noem deze route
+E2E voortgang Wetteren.” Resultaat route `1f159f`, in de app 19,9 km / 237 m.
+Gedownloade GPX: 547 punten, geodetisch 19,847 km, sluiting 0 m, 104 cues.
+CloudWatch meet 61,716 s voor `/api/conversations/:id/messages/stream`.
+Het antwoord bleef in het gesprek; de routeknop opende de bijbehorende kaart.
+De geautomatiseerde routeberekening blijft dus te traag voor het 15-s-doel van #19.
+
+Foutproef: snelplanner met start `91,3` toont een begrijpelijke
+coördinatenfout en de knop “Nieuwe poging voorbereiden”; spinner stopt.
+Desktopcontrole op 1512 × 767: geen horizontale overflow op route- en
+offlinepagina. Deze ronde bewijst geen nieuwe mobiele, Garmin- of GPS-acceptatie.
