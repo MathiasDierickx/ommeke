@@ -643,9 +643,9 @@ async def route_feedback(request: Request) -> JSONResponse:
 
 async def conversation_message_stream(request: Request) -> Response:
     from .streaming import response
-    return response(request, conversation_send)
+    return await response(request, conversation_send)
 
 
 async def route_plan_stream(request: Request) -> Response:
     from .streaming import response
-    return response(request, route_plan)
+    return await response(request, route_plan)

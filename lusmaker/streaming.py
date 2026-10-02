@@ -9,7 +9,11 @@ def frame(event, data):
     return f'event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n'
 
 
-def response(request, handler, *, heartbeat_seconds=10):
+async def response(request, handler, *, heartbeat_seconds=10):
+    # Consume the POST body before StreamingResponse starts its concurrent
+    # disconnect listener, which also reads the ASGI receive channel.
+    if request is not None:
+        await request.body()
     async def events():
         queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
