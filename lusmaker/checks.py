@@ -17,7 +17,7 @@ GROUPS = {
     "api": ["aws_app", "aws_chat", "aws_sharing", "aws_state", "draft_storage", "user_scope", "oauth", "quotas", "account", "pagination", "telemetry", "requests", "pilot", "route_library"],
     "mcp": ["mcp", "mcp_evals", "appsdk", "artifacts", "preview", "contracts"],
     "infra": ["aws_deploy"],
-    "tooling": ["checks", "e2e_prod", "metrics"],
+    "tooling": ["checks", "e2e_prod", "metrics", "local_chat"],
 }
 
 

@@ -268,6 +268,19 @@ class ConversationStore:
 
 TOOL_CONFIG = {
     "tools": [
+        {"toolSpec": {
+            "name": "nearby_places", "description": "Zoek OSM-parkings, hotels, stranden of oversteekplaatsen rond geverifieerde coördinaten. Geeft bronnen en toegangstags, geen veiligheidsgarantie.",
+            "inputSchema": {"json": {"type": "object", "required": ["lat", "lon", "kind"],
+                "properties": {"lat": {"type": "number"}, "lon": {"type": "number"},
+                    "kind": {"type": "string", "enum": ["parking", "hotel", "beach", "crossing"]},
+                    "radius_m": {"type": "number", "minimum": 1, "maximum": 2000}}, "additionalProperties": False}},
+        }},
+        {"toolSpec": {
+            "name": "lookup_place",
+            "description": "Zoek een hotel, parking of plaats afzonderlijk op vóór het plannen. Een gevonden punt bewijst geen toegang of kindvriendelijkheid.",
+            "inputSchema": {"json": {"type": "object", "required": ["query"],
+                "properties": {"query": {"type": "string"}}, "additionalProperties": False}},
+        }},
         {
             "toolSpec": {
                 "name": "plan_route",
@@ -322,7 +335,12 @@ Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte v
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
 zeg dat GPX en preview rechts in de routebibliotheek staan. Hou antwoorden praktisch en kort.
 Een wandeling gebruikt het trail-voetgangersprofiel, maar is daarmee niet geverifieerd kindvriendelijk.
+Zoek onbekende hotels en parkings eerst afzonderlijk met lookup_place op. Gebruik alleen teruggegeven coördinaten.
+Gebruik nearby_places zodra coördinaten van het hotel bekend zijn om de nabije parking en het strand op te zoeken.
+Een gebiedscentrum is geen ingang. Meld expliciet als je dit als voorlopig startpunt gebruikt; kies nooit private parkings zonder toestemming.
 Je hebt geen algemene webzoektool. Verzin geen hoteladres, parkinguitgang, veilige oversteek of strandtoegang.
+Een geocoderresultaat is een kandidaat, geen bewijs dat een parking bij het hotel hoort of toegankelijk is.
+Gebruik voor wandelingen doel=toeren; stel bij 3 km tolerance_km=0.3 in. Antwoord altijd in het Nederlands.
 De functie langs_water geldt voor rivieren en kanalen, niet voor een garantie van maximale strandlengte.
 Meld expliciet wanneer zulke wensen niet door tools zijn geverifieerd. Een concept of needs_input is geen voltooide route.
 Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een user-id."""
@@ -334,6 +352,11 @@ class RouteToolExecutor:
     def execute(
         self, name: str, arguments: dict[str, Any], *, request_id: str
     ) -> dict[str, Any]:
+        if name == "nearby_places":
+            from .place_search import nearby_places
+            return nearby_places(**arguments)
+        if name == "lookup_place":
+            return lookup_place(str(arguments.get("query", "")))
         if name == "plan_route":
             allowed = set(PLAN_ROUTE_SCHEMA["properties"])
             values = {key: value for key, value in arguments.items() if key in allowed}
@@ -371,6 +394,17 @@ class RouteToolExecutor:
         if name == "route_details":
             return intents.route_details(str(arguments.get("draft_id", "")))
         raise ChatError(f"onbekende route-tool '{name}'")
+
+
+def lookup_place(query, *, resolver=None):
+    from . import geocode
+    if not query.strip() or len(query) > 300:
+        raise ValueError("geef een zoekterm van 1 tot 300 tekens")
+    point, alternatives = (resolver or geocode.resolve)(query)
+    return {"query": query, "candidate": point, "alternatives": alternatives,
+            "verification": {"parking_access": "unknown", "beach_access": "unknown",
+                             "child_friendly": "unknown"},
+            "warning": "Kaartlocatie; exacte ingang, actuele toegang en kindvriendelijkheid zijn niet geverifieerd."}
 
 
 class BedrockRouteAgent:

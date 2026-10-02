@@ -22,7 +22,8 @@ LANDMARK_VALUES = {
     "landuse": {
         "recreation_ground", "forest", "meadow", "village_green", "cemetery",
     },
-    "tourism": {"attraction", "theme_park", "zoo", "viewpoint", "museum", "park"},
+    "tourism": {"attraction", "theme_park", "zoo", "viewpoint", "museum", "park", "hotel", "guest_house", "camp_site"},
+    "amenity": {"parking"},
 }
 LANDMARK_KEYS = (*LANDMARK_VALUES, "water", "boundary")
 WATERWAY_VALUES = {"river", "canal"}

@@ -461,6 +461,20 @@ def main(argv=None):
         raise SystemExit(0)
     check.set_defaults(func=run_checks)
 
+    from .local_chat import command as chat_command
+    chat = sub.add_parser("chat", help="voer een vrije routeprompt lokaal uit met de hosted routeagent")
+    chat.add_argument("prompt")
+    chat.add_argument("--workspace", default=".route-data/local-chat")
+    chat.add_argument("--session", help="vervolg een lokaal gesprek")
+    chat.add_argument("--region")
+    chat.add_argument("--gh-url", help="URL van een reeds draaiende GraphHopper")
+    chat.add_argument("--aws-profile")
+    chat.add_argument("--aws-region", default="eu-west-1")
+    chat.add_argument("--model")
+    chat.add_argument("--provider", choices=["codex", "bedrock"], default="codex")
+    chat.add_argument("--timeout", type=int, default=600, help="maximale Codex-looptijd in seconden")
+    chat.set_defaults(func=chat_command)
+
     s = sub.add_parser("setup", help="download OSM-extract + DEM en schrijf GraphHopper-config")
     _region_arg(s)
     s.set_defaults(func=cmd_setup)
@@ -761,7 +775,7 @@ def main(argv=None):
 
     args = p.parse_args(argv)
     try:
-        if args.cmd in {"region", "profile", "check"}:
+        if args.cmd in {"region", "profile", "check", "chat"}:
             result = args.func(args)
         else:
             with config.use_region(getattr(args, "region", None)):
