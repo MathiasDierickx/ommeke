@@ -1,0 +1,33 @@
+name: Diagnose AWS startup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  diagnose:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      FUNCTION_NAME: ${{ vars.PROJECT_NAME || 'lusmaker' }}-${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      - name: Lees Lambda-status en recente opstartfouten
+        run: |
+          aws lambda get-function-configuration --function-name "$FUNCTION_NAME" \
+            --query '{State:State,LastUpdateStatus:LastUpdateStatus,Reason:LastUpdateStatusReason,Modified:LastModified}'
+          START=$(python -c 'import time; print(int((time.time()-1800)*1000))')
+          for PATTERN in '"ERROR"' '"Exception"' '"Routedatapack"' '"INIT_REPORT"'; do
+            aws logs filter-log-events --log-group-name "/aws/lambda/$FUNCTION_NAME" \
+              --start-time "$START" --filter-pattern "$PATTERN" --limit 30 \
+              --query 'events[].{timestamp:timestamp,message:message}'
+          done
