@@ -171,3 +171,13 @@ def test_corrupt_summary_falls_back_and_new_save_moves_route_to_front():
         assert client.body_reads == 1
         draft.save(a, expected_revision=1)
         assert route_library.page()['items'][0]['id'] == 'a'
+
+
+def test_zero_length_and_invalid_drafts_are_not_downloadable_routes():
+    from lusmaker import aws_api
+    for distance in (0, -1, float('nan'), float('inf'), True, None):
+        item = example('empty')
+        item['computed']['total_km'] = distance
+        result = aws_api._route_detail_payload(item)
+        assert result['ready'] is False
+        assert result['download_url'] is None and result['geometry'] is None

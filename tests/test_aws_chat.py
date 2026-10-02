@@ -184,3 +184,18 @@ def test_route_tool_contract_exposes_landmark_anchor_instruction():
     assert ADJUST_ROUTE_SCHEMA["properties"]["langs_water"]["maxLength"] == 120
     assert "zet die plek in rond_plaats" in SYSTEM_PROMPT
     assert "zet die naam in `langs_water`" in SYSTEM_PROMPT
+
+
+def test_iteration_limit_does_not_present_needs_input_as_ready():
+    class RepeatingModel:
+        def converse(self, **kwargs):
+            return {'output': {'message': {'content': [{'toolUse': {'toolUseId': 'pending', 'name': 'plan_route', 'input': {}}}]}}}
+    class PendingTools:
+        def execute(self, *args, **kwargs):
+            return {'status': 'needs_input', 'draft': 'pending-route'}
+    result = BedrockRouteAgent(client=RepeatingModel(), tool_executor=PendingTools()).reply(
+        [{'role': 'user', 'content': 'Een kindvriendelijke strandwandeling van 3 km'}], request_id='test')
+    assert result['route_ids'] == ['pending-route']
+    assert result['ready_route_ids'] == []
+    assert 'nog niet klaar' in result['content']
+    assert 'Je route staat klaar' not in result['content']

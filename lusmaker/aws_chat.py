@@ -321,6 +321,10 @@ tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige
 Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte vragen.
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
 zeg dat GPX en preview rechts in de routebibliotheek staan. Hou antwoorden praktisch en kort.
+Een wandeling gebruikt het trail-voetgangersprofiel, maar is daarmee niet geverifieerd kindvriendelijk.
+Je hebt geen algemene webzoektool. Verzin geen hoteladres, parkinguitgang, veilige oversteek of strandtoegang.
+De functie langs_water geldt voor rivieren en kanalen, niet voor een garantie van maximale strandlengte.
+Meld expliciet wanneer zulke wensen niet door tools zijn geverifieerd. Een concept of needs_input is geen voltooide route.
 Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een user-id."""
 
 
@@ -438,6 +442,7 @@ class BedrockRouteAgent:
         while messages and messages[0]["role"] != "user":
             messages.pop(0)
         route_ids: set[str] = set()
+        ready_route_ids: set[str] = set()
         tool_events: list[dict[str, Any]] = []
         usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
 
@@ -458,6 +463,7 @@ class BedrockRouteAgent:
                 return {
                     "content": answer,
                     "route_ids": sorted(route_ids),
+                    "ready_route_ids": sorted(ready_route_ids),
                     "tools": tool_events,
                     "usage": usage,
                     "iterations": iteration,
@@ -477,6 +483,10 @@ class BedrockRouteAgent:
                     draft_id = output.get("draft") if isinstance(output, dict) else None
                     if isinstance(draft_id, str):
                         route_ids.add(draft_id)
+                        if output.get("status") == "ready":
+                            ready_route_ids.add(draft_id)
+                        elif output.get("status") == "needs_input":
+                            ready_route_ids.discard(draft_id)
                     status = "success"
                 except Exception as exc:
                     error_detail = f"{type(exc).__name__}: {exc}"
@@ -511,10 +521,13 @@ class BedrockRouteAgent:
         if route_ids:
             return {
                 "content": (
-                    "Je route staat klaar — open de kaart hieronder. "
-                    "Stel gerust een vervolgvraag om hem bij te sturen."
+                    "Je route staat klaar — open de kaart hieronder. Stel gerust een vervolgvraag om hem bij te sturen."
+                    if ready_route_ids else
+                    "Er is een routeconcept opgeslagen, maar de wandeling of rit is nog niet klaar. "
+                    "Controleer de ontbrekende routewensen in het gesprek; dit concept is nog geen bruikbare route."
                 ),
                 "route_ids": sorted(route_ids),
+                "ready_route_ids": sorted(ready_route_ids),
                 "tools": tool_events,
                 "usage": usage,
                 "iterations": MAX_AGENT_ITERATIONS,

@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import quote
 
 import logging
+import math
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -51,6 +52,8 @@ def _draft_id(request: Request) -> str:
 
 def _route_item(item: dict[str, Any]) -> dict[str, Any]:
     computed = item.get("computed") or {}
+    distance = computed.get("total_km")
+    ready = isinstance(distance, (int, float)) and not isinstance(distance, bool) and math.isfinite(distance) and distance > 0
     return {
         "id": item["id"],
         "revision": int(item.get("revision", 0)),
@@ -63,9 +66,9 @@ def _route_item(item: dict[str, Any]) -> dict[str, Any]:
         "total_km": computed.get("total_km"),
         # de engine schrijft de hoogtemeters als 'ascend_m'
         "elevation_gain_m": computed.get("ascend_m"),
-        "ready": bool(computed),
-        "download_url": f"/api/routes/{item['id']}/gpx" if computed else None,
-        "preview_url": f"/api/routes/{item['id']}/preview" if computed else None,
+        "ready": ready,
+        "download_url": f"/api/routes/{item['id']}/gpx" if ready else None,
+        "preview_url": f"/api/routes/{item['id']}/preview" if ready else None,
     }
 
 
@@ -161,7 +164,7 @@ def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
     result["avoid_places"] = item.get("avoid_places") or []
     result["route_request"] = item.get("route_request") or {}
     result["computed"] = item.get("computed")
-    result["geometry"] = _route_geometry(item) if item.get("computed") else None
+    result["geometry"] = _route_geometry(item) if result["ready"] else None
     return result
 
 

@@ -8,7 +8,7 @@ import { AuthPanel } from "@/components/auth-panel";
 import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
 import { RouteDetail } from "@/components/route-detail";
-import { mergeById, pendingPrompt, type PendingPrompt } from "@/lib/interaction";
+import { chatReply, mergeById, pendingPrompt, type PendingPrompt } from "@/lib/interaction";
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { clearStored, currentSession, signOut } from "@/lib/cognito";
@@ -97,7 +97,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (didInitialLanding) return;
     if (!authReady || !session || !workspaceLoaded) return;
     didInitialLanding = true;
-    if (view.kind === "new" && routes.length) {
+    if (view.kind === "new" && !new URLSearchParams(window.location.search).has("new") && routes.length) {
       const latest = routes[0];
       if (latest) router.replace(`/routes/${encodeURIComponent(latest.id)}`);
     }
@@ -149,7 +149,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   const openConversation = (id: string) => { setLeftOpen(false); router.push(`/chats/${encodeURIComponent(id)}`); };
   const openRoute = (id: string) => { setLeftOpen(false); router.push(`/routes/${encodeURIComponent(id)}`); };
-  const openNewChat = () => { setLeftOpen(false); router.push("/"); };
+  const openNewChat = () => { setLeftOpen(false); router.push("/?new=1"); };
 
   const newConversation = async (): Promise<string | undefined> => {
     if (!session) return undefined;
@@ -201,11 +201,11 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     const optimistic: ChatMessage = { id: `local-${Date.now()}`, conversation_id: id, role: "user", content, created_at: new Date().toISOString() };
     setMessages((current) => [...current, optimistic]);
     try {
-      const result = await apiRequest<{ message: ChatMessage; route_ids: string[] }>(`/api/conversations/${id}/messages`, session.accessToken, { method: "POST", body: JSON.stringify({ content, request_id: pending.id }) });
+      const result = chatReply(await apiRequest<unknown>(`/api/conversations/${id}/messages`, session.accessToken, { method: "POST", body: JSON.stringify({ content, request_id: pending.id }) }));
       try { sessionStorage.removeItem(storageKey); } catch { /* opslag is optioneel */ }
       setMessages((current) => mergeById(current, [result.message]));
       await loadWorkspace(session.accessToken);
-      if (result.route_ids.length) openRoute(result.route_ids.at(-1)!);
+      if (result.ready_route_ids?.length) openRoute(result.ready_route_ids.at(-1)!);
       else router.replace(`/chats/${encodeURIComponent(id)}`);
     } catch (cause) {
       setPrompt(content);
@@ -243,7 +243,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       await apiRequest<void>(`/api/routes/${selectedRoute.id}`, session.accessToken, { method: "DELETE" });
       setRoutes((current) => current.filter((item) => item.id !== selectedRoute.id));
       setSelectedRoute(null);
-      router.push("/");
+      router.push("/?new=1");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Route verwijderen mislukt."); }
   };
 
@@ -338,7 +338,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }

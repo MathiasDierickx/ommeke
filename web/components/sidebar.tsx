@@ -57,7 +57,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
           <div className="nav-items route-nav-items">
             {routes.length > 0 && !visibleRoutes.length ? <p className="nav-empty">Geen overeenkomst in de geladen routes. Pas je zoekterm aan of laad meer routes.</p> : null}
             {!routes.length ? <p className="nav-empty">Je eerste route verschijnt hier</p> : null}
-            {visibleRoutes.map((route) => <button key={route.id} className={selectedRoute === route.id ? "active" : ""} onClick={() => onRoute(route)}><span className="nav-title">{route.name}</span><span className="nav-meta">{route.total_km != null ? `${route.total_km.toFixed(1)} km` : "Concept"}{route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}</span></button>)}
+            {visibleRoutes.map((route) => <button key={route.id} className={selectedRoute === route.id ? "active" : ""} onClick={() => onRoute(route)}><span className="nav-title">{route.name}</span><span className="nav-meta">{route.ready && route.total_km != null ? `${route.total_km.toFixed(1)} km` : "Concept"}{route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}</span></button>)}
           </div>
           {hasMoreRoutes ? <button className="new-chat" disabled={loadingMoreRoutes} onClick={onMoreRoutes}>{loadingMoreRoutes ? "Routes laden…" : "Meer routes laden"}</button> : null}
         </section>
