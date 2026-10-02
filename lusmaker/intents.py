@@ -4,6 +4,7 @@ from __future__ import annotations
 from . import quotas
 
 import copy
+import math
 import difflib
 import re
 import unicodedata
@@ -252,20 +253,29 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
         if target is None or actual is None
         else abs(actual - target) <= tolerance
     )
+    maximum_is_hard = request.get("max_km_explicit", True)
     within_max = (
         None if hard_max is None or actual is None else actual <= hard_max
     )
-    checks = [check for check in (within_target, within_max) if check is not None]
+    within_hard_max = within_max if maximum_is_hard else None
+    checks = [check for check in (within_target, within_hard_max) if check is not None]
     warnings = []
     if within_target is False:
         warnings.append(
             f"route wijkt {abs(actual - target):.1f} km af van de doelafstand"
         )
-    if within_max is False:
+    if within_hard_max is False:
         warnings.append(
             f"route overschrijdt het harde maximum met {actual - hard_max:.1f} km"
         )
+    water_planned = bool(d.get("water_via")) if request.get("langs_water") else None
+    if water_planned is False:
+        warnings.append("de gevraagde waterloop is niet gevonden in de regiogegevens; de route garandeert geen traject langs water")
+        checks.append(False)
     return {
+        "binnen_hard_maximum": within_hard_max,
+        "maximum_is_hard": maximum_is_hard if hard_max is not None else None,
+        "langs_water_gepland": water_planned,
         "doel": request.get("doel"),
         "doel_km": target,
         "tolerantie_km": tolerance if target is not None else None,
@@ -323,6 +333,9 @@ def compact_result(
 def _validate_request(
     *, target_km: float | None, max_km: float | None, tolerance_km: float
 ) -> None:
+    for name, value in (("target-km", target_km), ("max-km", max_km), ("tolerance-km", tolerance_km)):
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)):
+            raise IntentError(f"{name} moet een eindig getal zijn")
     if target_km is not None and target_km <= 0:
         raise IntentError("target-km moet groter dan 0 zijn")
     if max_km is not None and max_km <= 0:
@@ -423,7 +436,23 @@ def _needs_input(
     }
 
 
-def _execute_request(
+def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None):
+    _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn)
+    actual = (d.get("computed") or {}).get("total_km")
+    problem = None
+    if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual <= 0:
+        problem = "De router leverde geen bruikbare routeafstand op. Kies een andere afstand of startplek."
+    elif request.get("max_km_explicit", True) and request.get("max_km") is not None and actual > request["max_km"]:
+        problem = f"route is {actual:.1f} km en overschrijdt het harde maximum van {request['max_km']:.1f} km"
+    if problem:
+        d['computed'] = None
+        d.pop('_geometry', None)
+        if persist_fn:
+            persist_fn(d)
+        raise IntentError(problem)
+
+
+def _route_for_request(
     d: dict,
     climb_db: dict,
     request: dict,
@@ -630,8 +659,8 @@ def plan_route(
     exports_root: Path | None = None,
 ) -> dict:
     """Maak en routeer een lus, eventueel na een readiness-gesprek."""
-    if doel not in {"hoogtemeters", "kort", "toeren"}:
-        raise IntentError("doel moet 'hoogtemeters', 'kort' of 'toeren' zijn")
+    if doel not in {"hoogtemeters", "offroad", "kort", "toeren"}:
+        raise IntentError("doel moet 'hoogtemeters', 'offroad', 'kort' of 'toeren' zijn")
     if activiteit not in ACTIVITY_PROFILES:
         raise IntentError("activiteit moet 'fietsen' of 'trail' zijn")
     if request_id is not None and not _REQUEST_ID_RE.fullmatch(request_id):
@@ -655,7 +684,7 @@ def plan_route(
     )
     if doel == "toeren" and target_km is None and max_km is None:
         raise IntentError("doel 'toeren' vereist target-km of max-km")
-    if doel == "hoogtemeters" and not via_klimmen and target_km is None and max_km is None:
+    if doel in {"hoogtemeters", "offroad"} and not via_klimmen and target_km is None and max_km is None:
         raise IntentError(
             "een lege hoogtemeterlus vereist target-km, max-km of een via-klim"
         )
@@ -740,6 +769,7 @@ def plan_route(
                     request,
                     route_fn=route_fn,
                     optimize_fn=optimize_fn,
+                    persist_fn=save_fn,
                 )
                 d = load_fn(d["id"])
             files = _export_files(
@@ -811,6 +841,7 @@ def plan_route(
             request,
             route_fn=route_fn,
             optimize_fn=optimize_fn,
+            persist_fn=save_fn,
         )
         d = load_fn(draft_id)
         files = _export_files(
@@ -1006,6 +1037,7 @@ def adjust_route(
             request,
             route_fn=route_fn,
             optimize_fn=optimize_fn,
+            persist_fn=save_fn,
         )
         d = load_fn(draft_id)
         files = _export_files(

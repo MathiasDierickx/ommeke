@@ -207,7 +207,7 @@ async def inspect_contract():
     tools = {tool.name: tool for tool in await mcp_server.lite_mcp.list_tools()}
     plan = tools["plan_route"]
     assert plan.input_schema["properties"]["doel"]["enum"] == [
-        "hoogtemeters", "kort", "toeren"
+        "hoogtemeters", "offroad", "kort", "toeren"
     ]
     max_km = plan.input_schema["properties"]["max_km"]["anyOf"][0]
     assert max_km["exclusiveMinimum"] == 0

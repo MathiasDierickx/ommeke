@@ -10,7 +10,9 @@
       "activiteit": "fietsen",
       "profiel_naam": "standaard"
     },
-    "required_arguments": ["request_id"]
+    "required_arguments": [
+      "request_id"
+    ]
   },
   {
     "id": "hard-budget-via-klim",
@@ -19,10 +21,14 @@
     "expected_arguments": {
       "start": "Oudenaarde",
       "max_km": 45,
-      "via_klimmen": ["Berendries"],
+      "via_klimmen": [
+        "Berendries"
+      ],
       "kasseien": false
     },
-    "required_arguments": ["request_id"]
+    "required_arguments": [
+      "request_id"
+    ]
   },
   {
     "id": "gewone-toer-30",
@@ -33,7 +39,9 @@
       "target_km": 30,
       "doel": "toeren"
     },
-    "required_arguments": ["request_id"]
+    "required_arguments": [
+      "request_id"
+    ]
   },
   {
     "id": "trail-15",
@@ -44,7 +52,9 @@
       "target_km": 15,
       "activiteit": "trail"
     },
-    "required_arguments": ["request_id"]
+    "required_arguments": [
+      "request_id"
+    ]
   },
   {
     "id": "route-inkorten",
@@ -55,7 +65,9 @@
       "target_km": 40,
       "tolerance_km": 2
     },
-    "required_arguments": ["expected_revision"]
+    "required_arguments": [
+      "expected_revision"
+    ]
   },
   {
     "id": "kassei-antwoord",
@@ -63,7 +75,11 @@
     "expected_tool": "update_profile",
     "expected_arguments": {
       "naam": "standaard",
-      "patch": {"voorkeuren": {"kasseien": "graag"}}
+      "patch": {
+        "voorkeuren": {
+          "kasseien": "graag"
+        }
+      }
     }
   },
   {
@@ -72,9 +88,13 @@
     "expected_tool": "adjust_route",
     "expected_arguments": {
       "draft_id": "abc123",
-      "sta_plaatsen_toe": ["Doordorp"]
+      "sta_plaatsen_toe": [
+        "Doordorp"
+      ]
     },
-    "required_arguments": ["expected_revision"]
+    "required_arguments": [
+      "expected_revision"
+    ]
   },
   {
     "id": "plaats-vermijden",
@@ -82,20 +102,64 @@
     "expected_tool": "adjust_route",
     "expected_arguments": {
       "draft_id": "abc123",
-      "vermijd_plaatsen": ["Zottegem"]
+      "vermijd_plaatsen": [
+        "Zottegem"
+      ]
     },
-    "required_arguments": ["expected_revision"]
+    "required_arguments": [
+      "expected_revision"
+    ]
   },
   {
     "id": "regio-maken",
     "prompt": "De route kan niet omdat de regio rond Maastricht nog ontbreekt. Zorg dat die beschikbaar wordt.",
     "expected_tool": "ensure_region",
-    "expected_arguments": {"place": "Maastricht"}
+    "expected_arguments": {
+      "place": "Maastricht"
+    }
   },
   {
     "id": "regio-pollen",
     "prompt": "Provisioning van regio limburg-nl loopt nog; controleer de voortgang.",
     "expected_tool": "region_status",
-    "expected_arguments": {"slug": "limburg-nl"}
+    "expected_arguments": {
+      "slug": "limburg-nl"
+    }
+  },
+  {
+    "id": "langs-schelde",
+    "prompt": "Fiets 40 km vanuit Wetteren, zo lang mogelijk langs de Schelde.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 40,
+      "langs_water": "Schelde"
+    },
+    "required_arguments": [
+      "request_id"
+    ]
+  },
+  {
+    "id": "rond-landmark",
+    "prompt": "Loop 5 km rond de Blaarmeersen in Gent.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 5,
+      "activiteit": "trail",
+      "rond_plaats": "Blaarmeersen, Gent"
+    },
+    "required_arguments": [
+      "request_id"
+    ]
+  },
+  {
+    "id": "offroad-vervolg",
+    "prompt": "Maak draft abc123 zoveel mogelijk onverhard. Revisie 4.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "doel": "offroad",
+      "expected_revision": 4
+    }
   }
 ]

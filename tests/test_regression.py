@@ -55,6 +55,8 @@ def _replay(name: str):
         "engine-gedrag gewijzigd"
     )
 
+    return scenario_draft
+
 
 def test_berendries_quiet():
     _replay("berendries_quiet")

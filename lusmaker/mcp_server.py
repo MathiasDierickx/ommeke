@@ -33,6 +33,7 @@ from . import (
     preview,
     profiles,
     readiness,
+    quotas,
     regions,
     tenant,
 )
@@ -313,6 +314,7 @@ def route_draft(
     expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Routeer de draft via GraphHopper en bereken de kwaliteitsmetrieken."""
+    quotas.consume("route")
     d = draft.load(draft_id)
     draft.require_revision(d, expected_revision)
     with draft.region_scope(d):
@@ -331,6 +333,7 @@ def route_readiness(
     pas antwoorden toe via update_profile (of avoid_place bij doel=draft), en
     vraag daarna opnieuw readiness op tot klaar=true; routeer dan met optimize.
     """
+    quotas.consume("route")
     d = draft.load(draft_id)
     draft.require_revision(d, expected_revision)
     with draft.region_scope(d):
@@ -346,6 +349,7 @@ def suggest_climbs(
     limit: ResultLimit = 6,
 ) -> ClimbSuggestionResult:
     """Zoek klimmen die met weinig extra kilometers in de route passen."""
+    quotas.consume("route")
     d = draft.load(draft_id)
     with draft.region_scope(d):
         suggestions = draft.suggest(
@@ -384,6 +388,8 @@ def plan_route(
     geen_opvulling: bool = False,
     profiel_naam: NonEmptyString = "standaard",
     request_id: RequestId | None = None,
+    rond_plaats: NonEmptyString | None = None,
+    langs_water: NonEmptyString | None = None,
 ) -> RouteWorkflowResult:
     """Start een routeworkflow; kan eerst gerichte ``needs_input``-vragen geven."""
     return intents.plan_route(
@@ -405,6 +411,8 @@ def plan_route(
         profiel_naam=profiel_naam,
         check_readiness=True,
         request_id=request_id,
+        rond_plaats=rond_plaats,
+        langs_water=langs_water,
     )
 
 
@@ -423,6 +431,8 @@ def adjust_route(
     geen_opvulling: bool | None = None,
     profiel_naam: NonEmptyString | None = None,
     expected_revision: ExpectedRevision | None = None,
+    rond_plaats: NonEmptyString | None = None,
+    langs_water: NonEmptyString | None = None,
 ) -> RouteWorkflowResult:
     """Vervolg of wijzig een routeworkflow; kan opnieuw om input vragen."""
     return intents.adjust_route(
@@ -440,6 +450,8 @@ def adjust_route(
         profiel_naam=profiel_naam,
         check_readiness=True,
         expected_revision=expected_revision,
+        rond_plaats=rond_plaats,
+        langs_water=langs_water,
     )
 
 
@@ -454,6 +466,7 @@ def optimize_draft(
     expected_revision: ExpectedRevision | None = None,
 ) -> dict[str, Any]:
     """Vul de route greedy met klimmen binnen een hard afstandsbudget."""
+    quotas.consume("route")
     d = draft.load(draft_id)
     draft.require_revision(d, expected_revision)
     with draft.region_scope(d):

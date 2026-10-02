@@ -258,7 +258,7 @@ def test_plan_route_passes_no_fill_to_optimizer():
 
     def optimize_fn(d, _db, **kwargs):
         optimize_calls.append(kwargs)
-        d["computed"] = _routed_draft()["computed"]
+        d["computed"] = _routed_draft()["computed"] | {"total_km": 9.0}
 
     def export_fn(_d, _db, path):
         return {"file": path}

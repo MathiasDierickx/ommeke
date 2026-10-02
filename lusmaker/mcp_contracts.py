@@ -93,7 +93,7 @@ def tool_contract(name: str, *, apps_sdk: bool = False) -> dict[str, Any]:
 
 
 Activity = Literal["fietsen", "trail"]
-Goal = Literal["hoogtemeters", "kort", "toeren"]
+Goal = Literal["hoogtemeters", "offroad", "kort", "toeren"]
 GraphProfile = Literal["quiet", "trail"]
 Objective = Literal["hm", "hm-per-km", "offroad", "toeren"]
 Preference = Literal["vermijd", "ok", "graag"] | None
