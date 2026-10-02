@@ -250,8 +250,11 @@ class RouteWorkflowResult(TypedDict, total=False):
 
 class RouteDetailsResult(TypedDict):
     draft: str
-    km: float
-    hoogtemeters: float
+    revision: int
+    status: Literal["ready", "needs_input"]
+    advies: NotRequired[str]
+    km: float | None
+    hoogtemeters: float | None
     legs: list[dict[str, Any]]
     kwaliteit: dict[str, Any]
 

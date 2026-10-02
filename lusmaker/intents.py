@@ -1054,16 +1054,21 @@ def adjust_route(
     return compact_result(d, climb_db, files, request)
 
 
-def route_details(draft_id: str, *, load_fn=draft.load) -> dict:
+def route_details(draft_id: str, *, load_fn=draft.load, include_unrouted=False) -> dict:
     """Geef legs en volledige kwaliteitsmetrieken van een gerouteerde draft."""
     d = load_fn(draft_id)
     computed = d.get("computed")
     if not computed:
-        raise IntentError(
-            f"draft '{draft_id}' heeft nog geen berekende route; routeer eerst"
-        )
+        if not include_unrouted:
+            raise IntentError(f"draft '{draft_id}' heeft nog geen berekende route; routeer eerst")
+        return {"draft": d["id"], "revision": int(d.get("revision", 0)),
+                "status": "needs_input", "km": None, "hoogtemeters": None,
+                "legs": [], "kwaliteit": {},
+                "advies": "Routeconcept: gebruik deze revisie om de routewensen aan te vullen en te routeren."}
     return {
         "draft": d["id"],
+        "revision": int(d.get("revision", 0)),
+        "status": "ready",
         "km": computed["total_km"],
         "hoogtemeters": computed["ascend_m"],
         "legs": computed.get("legs", []),

@@ -530,7 +530,7 @@ def preview_draft(
 
 def route_details(draft_id: NonEmptyString) -> RouteDetailsResult:
     """Toon legs en volledige kwaliteit wanneer compacte route-info niet volstaat."""
-    return intents.route_details(draft_id)
+    return intents.route_details(draft_id, include_unrouted=True)
 
 
 @mcp.tool(**tool_contract("download_gpx"))

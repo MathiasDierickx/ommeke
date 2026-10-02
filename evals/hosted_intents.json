@@ -1,0 +1,256 @@
+[
+  {
+    "id": "heuvelrit-wetteren-50",
+    "prompt": "Maak een heuvelachtige fietsroute van ongeveer 50 km, startend in Wetteren.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 50,
+      "doel": "hoogtemeters",
+      "activiteit": "fietsen"
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "hard-budget-via-klim",
+    "prompt": "Vertrek in Oudenaarde, rij via de Berendries, absoluut maximaal 45 km en liever geen kasseien.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Oudenaarde",
+      "max_km": 45,
+      "via_klimmen": [
+        "Berendries"
+      ],
+      "kasseien": false
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "gewone-toer-30",
+    "prompt": "Ik wil gewoon een mooie lus van 30 km vanuit Wetteren, geen specifieke klimmen.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 30,
+      "doel": "toeren"
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "trail-15",
+    "prompt": "Maak een traillus van circa 15 km vanuit Ronse.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Ronse",
+      "target_km": 15,
+      "activiteit": "trail"
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "route-inkorten",
+    "prompt": "Maak draft abc123 korter: mik op 40 km met 2 km speling.",
+    "expected_tool": "route_details",
+    "expected_arguments": {
+      "draft_id": "abc123"
+    },
+    "required_arguments": [],
+    "scope_note": "Eerste veilige beslissing: eerst de actuele revisie opzoeken. Dit toetst nog niet de daaropvolgende routewijziging.",
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "kassei-antwoord",
+    "prompt": "Op de readiness-vraag antwoordt de gebruiker: kasseien zijn graag gezien. Profiel: standaard.",
+    "expected_tool": "update_profile",
+    "expected_arguments": {
+      "naam": "standaard",
+      "patch": {
+        "voorkeuren": {
+          "kasseien": "graag"
+        }
+      }
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "plaats-ok",
+    "prompt": "De gebruiker vindt de passage door Doordorp oké voor draft abc123.",
+    "expected_tool": "route_details",
+    "expected_arguments": {
+      "draft_id": "abc123"
+    },
+    "required_arguments": [],
+    "scope_note": "Eerste veilige beslissing: eerst de actuele revisie opzoeken. Dit toetst nog niet de daaropvolgende routewijziging.",
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "plaats-vermijden",
+    "prompt": "Vermijd Zottegem in draft abc123 en behoud de eerdere routewens.",
+    "expected_tool": "route_details",
+    "expected_arguments": {
+      "draft_id": "abc123"
+    },
+    "required_arguments": [],
+    "scope_note": "Eerste veilige beslissing: eerst de actuele revisie opzoeken. Dit toetst nog niet de daaropvolgende routewijziging.",
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "langs-schelde",
+    "prompt": "Fiets 40 km vanuit Wetteren, zo lang mogelijk langs de Schelde.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 40,
+      "langs_water": "Schelde"
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "rond-landmark",
+    "prompt": "Loop 5 km rond de Blaarmeersen in Gent.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 5,
+      "activiteit": "trail",
+      "rond_plaats": "Blaarmeersen, Gent"
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek",
+    "argument_aliases": {
+      "rond_plaats": [
+        "Blaarmeersen",
+        "Blaarmeersen, Gent"
+      ]
+    }
+  },
+  {
+    "id": "offroad-vervolg",
+    "prompt": "Maak draft abc123 zoveel mogelijk onverhard. Revisie 4.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "doel": "offroad",
+      "expected_revision": 4
+    },
+    "required_arguments": [],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "bredene-hotel-eerst",
+    "prompt": "Ik logeer morgen, 3 oktober 2026, in het ibis Styles hotel in Bredene. Zoek eerst zelf het juiste hotel en de parking ernaast op. Ik wil een wandeling van ongeveer 3 km, kindvriendelijk, liefst zo lang mogelijk langs het strand, vertrekkend vanop de parking naast het hotel en terug naar dezelfde parking. Geen fietsroute. Geef duidelijk aan als je het hotel, de parking, strandtoegang of kindvriendelijkheid niet kunt verifiëren.",
+    "expected_tool": "lookup_place",
+    "required_arguments": [
+      "query"
+    ],
+    "provenance": "letterlijke gebruikersvraag uit Bredene-praktijkproef",
+    "expected_arguments": {}
+  },
+  {
+    "id": "kust-wandeling",
+    "prompt": "Maak een wandeling vanaf 51.2514,2.9741 van ongeveer 3 km, geen fietsroute.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 3,
+      "activiteit": "trail"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  },
+  {
+    "id": "kust-hard",
+    "prompt": "Wandel vanaf 51.2514,2.9741 maximaal 3 km.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "max_km": 3,
+      "activiteit": "trail"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  },
+  {
+    "id": "kust-toeren",
+    "prompt": "Fiets een gewone toer van ongeveer 20 km vanaf Bredene.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 20,
+      "doel": "toeren",
+      "activiteit": "fietsen"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  },
+  {
+    "id": "kust-wijzig",
+    "prompt": "Maak draft abc123 ongeveer 3 km lang met 0.3 km speling.",
+    "expected_tool": "route_details",
+    "expected_arguments": {
+      "draft_id": "abc123"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": [],
+    "scope_note": "Eerste veilige beslissing: eerst de actuele revisie opzoeken. Dit toetst nog niet de daaropvolgende routewijziging."
+  },
+  {
+    "id": "kust-verkeer",
+    "prompt": "Vermijd Oostende in draft abc123.",
+    "expected_tool": "route_details",
+    "expected_arguments": {
+      "draft_id": "abc123"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": [],
+    "scope_note": "Eerste veilige beslissing: eerst de actuele revisie opzoeken. Dit toetst nog niet de daaropvolgende routewijziging."
+  },
+  {
+    "id": "strand-zoeken",
+    "prompt": "Zoek eerst het ibis Styles hotel in Bredene op.",
+    "expected_tool": "lookup_place",
+    "expected_arguments": {},
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  },
+  {
+    "id": "parking-zoeken",
+    "prompt": "Zoek parkings binnen 500 meter van 51.251,2.973.",
+    "expected_tool": "nearby_places",
+    "expected_arguments": {
+      "lat": 51.251,
+      "lon": 2.973,
+      "kind": "parking",
+      "radius_m": 500
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  },
+  {
+    "id": "strand-nabij",
+    "prompt": "Zoek stranden binnen 1000 meter van 51.251,2.973.",
+    "expected_tool": "nearby_places",
+    "expected_arguments": {
+      "lat": 51.251,
+      "lon": 2.973,
+      "kind": "beach",
+      "radius_m": 1000
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  },
+  {
+    "id": "trail-geen-fiets",
+    "prompt": "Maak vanaf Ronse een wandeling van ongeveer 8 km over onverharde paden.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 8,
+      "activiteit": "trail",
+      "doel": "offroad"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "required_arguments": []
+  }
+]

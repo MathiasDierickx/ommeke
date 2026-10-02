@@ -511,7 +511,7 @@ def main(argv=None):
     ev.add_argument("--model", required=True)
     ev.add_argument("--aws-profile")
     ev.add_argument("--aws-region", default="eu-west-1")
-    ev.add_argument("--cases", default="evals/route_intents.json")
+    ev.add_argument("--cases", default="evals/hosted_intents.json")
     ev.add_argument("--output")
     ev.add_argument("--limit", type=int)
     ev.add_argument("--input-per-million", type=float)

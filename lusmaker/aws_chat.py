@@ -342,7 +342,7 @@ Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in 
 tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
 Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte vragen.
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
-zeg dat GPX en preview rechts in de routebibliotheek staan. Hou antwoorden praktisch en kort.
+verwijs naar de routeknop onder je antwoord voor kaart en downloads. Verzin geen posities van interface-elementen. Hou antwoorden praktisch en kort.
 Controleer constraints.binnen_doelbereik. Bij false probeer de route met adjust_route binnen het
 doelbereik te brengen: behoud doelafstand en tolerantie en begrens max_km tot de bovengrens
 van het doelbereik. Verhoog nooit een bestaande harde afstandslimiet. Meld het als dit niet lukt.
@@ -352,9 +352,14 @@ Gebruik nearby_places zodra coördinaten van het hotel bekend zijn om de nabije 
 Een gebiedscentrum is geen ingang. Meld expliciet als je dit als voorlopig startpunt gebruikt; kies nooit private parkings zonder toestemming.
 Je hebt geen algemene webzoektool. Verzin geen hoteladres, parkinguitgang, veilige oversteek of strandtoegang.
 Een geocoderresultaat is een kandidaat, geen bewijs dat een parking bij het hotel hoort of toegankelijk is.
-Gebruik voor wandelingen doel=toeren; stel bij 3 km tolerance_km=0.3 in. Antwoord altijd in het Nederlands.
+Gebruik voor wandelingen standaard doel=toeren, behalve bij een expliciete wens voor onverhard (doel=offroad) of klimmen. Stel bij een streefafstand van 3 km tolerance_km=0.3 in. Antwoord altijd in het Nederlands.
 De functie langs_water geldt voor rivieren en kanalen, niet voor een garantie van maximale strandlengte.
 Meld expliciet wanneer zulke wensen niet door tools zijn geverifieerd. Een concept of needs_input is geen voltooide route.
+Beslisregels die altijd voorgaan:
+- Een harde bovengrens ("maximaal", "max", "niet meer dan") moet als max_km worden doorgegeven. Alleen target_km of tolerance_km begrenst de afstand NIET hard.
+- Een heuvelachtige rit, klimroute of zoveel mogelijk hoogtemeters betekent doel=hoogtemeters, ook zonder expliciet genoemde klimmen.
+- Bij een genoemd bestaand draft-id mag je geen nieuwe route aanmaken. Ontbreekt de revisie, roep eerst route_details aan met dat draft-id; gebruik daarna de teruggegeven revision bij adjust_route.
+- Een expliciet antwoord op een voorkeurenvraag moet met update_profile worden opgeslagen, ook als nog geen draft-id bekend is. Alleen tekstueel bevestigen is niet genoeg.
 Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een user-id."""
 
 
@@ -417,7 +422,7 @@ class RouteToolExecutor:
         if name == "list_routes":
             return {"drafts": draft.list_all()[:50]}
         if name == "route_details":
-            return intents.route_details(str(arguments.get("draft_id", "")))
+            return intents.route_details(str(arguments.get("draft_id", "")), include_unrouted=True)
         raise ChatError(f"onbekende route-tool '{name}'")
 
 

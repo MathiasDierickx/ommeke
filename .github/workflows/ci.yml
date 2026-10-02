@@ -19,6 +19,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7.0.0
         with:
@@ -30,6 +32,15 @@ jobs:
 
       - name: Controleer CLI-contract
         run: lus --help >/dev/null
+
+      - name: Vereis evalbewijs bij wijziging van het productiemodel
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE_SHA="$(git rev-parse HEAD^)"
+          fi
+          python -m lusmaker.model_gate --base "$BASE_SHA"
 
       - name: Draai offline tests
         run: python -m tests.run

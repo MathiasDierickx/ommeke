@@ -916,3 +916,13 @@ def test_route_details_without_computed_is_clear_error():
         assert "routeer eerst" in str(exc)
     else:
         raise AssertionError("ongerouteerde draft kreeg details")
+
+
+def test_route_details_exposes_revision_for_safe_updates_including_unrouted_concepts():
+    state={'id':'abc123','revision':7,'computed':None}
+    result=intents.route_details('abc123',load_fn=lambda _:state,include_unrouted=True)
+    assert result['revision']==7 and result['status']=='needs_input'
+    assert result['km'] is None and result['hoogtemeters'] is None
+    state['computed']={'total_km':20,'ascend_m':100}
+    result=intents.route_details('abc123',load_fn=lambda _:state)
+    assert result['revision']==7 and result['km']==20 and result['status']=='ready'
