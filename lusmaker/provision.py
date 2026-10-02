@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from . import __version__, config
+from . import __version__, config, pack_manifest
 from .discover import geofabrik_path_from_url
 
 
@@ -126,18 +126,22 @@ def create_pack(
     output: str | Path | None = None,
     *,
     home: Path | None = None,
+    include_personal_heat: bool = False,
 ) -> dict:
     """Create a rebuildable pack without the large source PBF."""
     region = config.get_region(slug, home=home)
     destination = Path(output or f"{escape_slug(slug)}.tar.gz")
     destination.parent.mkdir(parents=True, exist_ok=True)
     manifest = {
+        **pack_manifest.metadata(region),
         "slug": region.slug,
         "bbox": list(region.bbox),
         "geofabrik": region.geofabrik,
         "lusmaker_version": __version__,
         "gh_image": config.GRAPH_HOPPER_IMAGE,
     }
+    if manifest["contains_personal_heat"] and not include_personal_heat:
+        raise ValueError("Dit pack bevat persoonlijke heat-data. Gebruik uitsluitend voor privégebruik --include-personal-heat; hosted packs moeten alleen open data bevatten.")
     with tarfile.open(destination, "w:gz") as archive:
         _tar_add_path(archive, region.cache, "cache")
         for tile in sorted(region.data.glob("*.hgt")):
@@ -187,6 +191,7 @@ def _unpack(pack: Path, target: Path, expected_slug: str) -> dict:
             raise RuntimeError(
                 f"regiopack is voor '{manifest.get('slug')}', niet '{expected_slug}'"
             )
+        pack_manifest.validate(manifest)
         archive.extractall(target, members=_safe_members(archive))
     return manifest
 
@@ -563,7 +568,6 @@ def provision(
         raise
 
 
-@quotas.metered("provision")
 def ensure_region(
     place: str,
     *,
@@ -578,6 +582,7 @@ def ensure_region(
     if existing is not None:
         status = region_status(existing.slug, home=home)
         if status.get("status") == "fout":
+            quotas.consume("provision")
             # eerdere poging mislukt (bv. transiente 502 upstream): herstart
             pbf_url = f"https://download.geofabrik.de/{existing.geofabrik}-latest.osm.pbf"
             result = provision(
@@ -591,6 +596,7 @@ def ensure_region(
             "bestaand": True,
             "provisioning": status,
         }
+    quotas.consume("provision")
     if discover_func is None:
         from .discover import region_for_query
 

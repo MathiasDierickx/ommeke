@@ -137,10 +137,17 @@ def _load_heat() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _require_local_admin():
+    from . import aws_state
+    if aws_state.enabled() or config.current_user_id() != "local":
+        raise ValueError("Gedeelde heat-lagen kunnen alleen door de lokale beheerder worden gebouwd; persoonlijke ritten worden niet gedeeld.")
+
+
 def seed(
     source: str | Path, activity: str, *, min_passes: int = 1
 ) -> dict:
     """Voeg GPX-routes toe aan de ruwe teller voor één activiteit."""
+    _require_local_admin()
     if activity not in ACTIVITIES:
         raise ValueError(
             f"activiteit moet een van deze waarden zijn: {', '.join(ACTIVITIES)}"
@@ -167,6 +174,7 @@ def seed(
         for cell in _track_cells(points):
             counts[cell] = counts.get(cell, 0) + 1
 
+    data["personal_data"] = True
     data["activity_cells"] = activity_cells
     with open(config.HEAT_PKL, "wb") as handle:
         pickle.dump(data, handle)
@@ -721,6 +729,7 @@ def _area_feature(area_id: str, cells: set) -> dict:
 
 
 def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
+    _require_local_admin()
     config.ensure_dirs()
     files = sorted(config.HEAT_DIR.glob("*.gpx"))
     previous_heat = _load_heat()

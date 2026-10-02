@@ -52,6 +52,8 @@ def _validate_graph_compatibility(region_root: Path) -> None:
 def prepare(pack: Path, slug: str, destination: Path) -> dict:
     region_root = destination / "regions" / slug
     manifest = _unpack(pack, region_root, slug)
+    if manifest.get("contains_personal_heat"):
+        raise RuntimeError("persoonlijke heat-data mogen niet in een gedeelde hosted regio terechtkomen")
     expected_image = os.environ.get(
         "LUSMAKER_GH_IMAGE", "israelhikingmap/graphhopper:11.0"
     )
