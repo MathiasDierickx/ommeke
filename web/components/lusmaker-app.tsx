@@ -94,7 +94,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   useEffect(() => {
     if (!session) return;
-    loadWorkspace(session.accessToken).catch((cause) => setError(cause instanceof Error ? cause.message : "Werkruimte laden mislukt."));
+    loadWorkspace(session.accessToken).catch((cause) => { setWorkspaceLoaded(true); setError(cause instanceof Error ? cause.message : "Werkruimte laden mislukt."); });
   }, [session, loadWorkspace]);
 
   // Bij het openen van de app (volledige page-load) landt een ingelogde
@@ -350,7 +350,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     } catch (cause) { if (version === libraryVersion.current) setError(cause instanceof Error ? cause.message : "Routes laden mislukt."); }
     finally { moreRoutesLock.current = false; setLoadingMoreRoutes(false); }
   };
-  const sidebar = <Sidebar loadingMoreRoutes={loadingMoreRoutes} hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
+  const sidebar = <Sidebar loading={!workspaceLoaded} loadingMoreRoutes={loadingMoreRoutes} hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
   if (view.kind === "route") {
     return (
       <main className={`route-shell ${leftOpen ? "left-open" : ""}`}>
