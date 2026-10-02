@@ -210,6 +210,8 @@ def _path_result(data: dict, details: bool = False) -> dict:
         "descend_m": round(p.get("descend", 0.0), 1),
         "coords": coords,
     }
+    if "instructions" in p:
+        out["instructions"] = p["instructions"]
     if details:
         out["details"] = p.get("details", {})
     return out
@@ -221,6 +223,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           details: bool = False,
           profile: str = config.GH_PROFILE, start_heading: float | None = None,
           point_hints: list | None = None, *,
+          instructions: bool = False,
           heat_activity: str | None = None,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
@@ -241,7 +244,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         "profile": profile,
         "elevation": True,
         "points_encoded": False,
-        "instructions": False,
+        "instructions": instructions,
         "locale": "nl",
         "ch.disable": True,
         # geen U-bochten op via-punten: voorkomt heen-en-weer-uitsteeksels

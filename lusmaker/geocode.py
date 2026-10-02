@@ -1,4 +1,5 @@
 """Lokale geocoder op basis van OSM-plaatsen en straatnamen."""
+import math
 import pickle
 import re
 import unicodedata
@@ -230,9 +231,18 @@ def resolve(
     if len(parts) == 2:
         try:
             lat, lon = float(parts[0]), float(parts[1])
-            return {"lat": lat, "lon": lon, "label": query}, []
         except ValueError:
             pass
+        else:
+            if not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+                raise ValueError("Coördinaten moeten geldig zijn: breedte −90 tot 90, lengte −180 tot 180.")
+            try:
+                gaz = _load() if gazetteer is None else gazetteer
+                place = _nearest_place(gaz.get("places", []), lat, lon)
+            except (OSError, RuntimeError):
+                place = None
+            label = f"Nabij {place} ({lat:.5f}, {lon:.5f})" if place else query
+            return {"lat": lat, "lon": lon, "label": label}, []
 
     hits = geocode(query, limit=5, gazetteer=gazetteer)
     if not hits or _is_generic_place_fallback(query, hits):

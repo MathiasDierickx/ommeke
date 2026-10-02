@@ -635,7 +635,7 @@ def place_areas(d: dict) -> list[dict]:
     return [
         {"ring": _circle_ring(p["lat"], p["lon"], p["radius_km"]), "factor": p["factor"]}
         for p in d.get("avoid_places", [])
-    ]
+    ] + d.get("reroute_avoid", [])
 
 
 def routing_preferences(d: dict) -> dict:
@@ -720,6 +720,7 @@ def _route(
     post_fn=None,
     area_evs: set[str] | frozenset[str] | None = None,
     expected_revision: int | None = None,
+    save_fn=save,
 ) -> dict:
     """Routeer alle legs; elke leg vermijdt de corridor van de vorige legs."""
     d.pop("_probe", None)
@@ -738,6 +739,7 @@ def _route(
         )
     avoid = list(place_areas(d))
     leg_details = []
+    cues = []
     computed_legs = []
     total_m = ascend = descend = 0.0
     preferences = routing_preferences(d)
@@ -755,6 +757,8 @@ def _route(
             "profile": preferences["profile"],
             "heat_activity": _heat_activity(d),
         }
+        if router is gh.route:
+            route_kwargs["instructions"] = True
         if post_fn is not None:
             route_kwargs["post_fn"] = post_fn
         if area_evs is not None:
@@ -763,6 +767,13 @@ def _route(
             leg["points"],
             **route_kwargs,
         )
+        for instruction in res.get("instructions", []):
+            if instruction.get("sign") in (4, 5):
+                continue  # leg-eindes zijn geen eindpunt van de volledige route
+            interval = instruction.get("interval", [])
+            if interval and 0 <= interval[0] < len(res["coords"]):
+                pt = res["coords"][interval[0]]
+                cues.append({"lat": pt[0], "lon": pt[1], "text": instruction.get("text", "Volg de route"), "sign": instruction.get("sign", 0)})
         coords_latlon = [(c[0], c[1]) for c in res["coords"]]
         seg_len = max(1500.0, res["distance_m"] / 25.0)
         avoid.extend(
@@ -799,6 +810,7 @@ def _route(
             {k: v for k, v in leg.items() if k != "coords"} for leg in computed_legs
         ],
     }
+    d["cues"] = cues
     d["_geometry"] = [leg["coords"] for leg in computed_legs]
     from . import analysis
 
@@ -808,7 +820,7 @@ def _route(
         )
     except Exception as e:  # metriek mag routeren nooit blokkeren
         d["computed"]["kwaliteit"] = {"error": str(e)}
-    save(d, expected_revision=expected_revision)
+    save_fn(d, expected_revision=expected_revision)
     return summary(d)
 
 
@@ -1426,8 +1438,13 @@ def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
              route_fn=route, candidates_fn=_candidates, fill: bool = True,
              round_trip_fn=gh.round_trip,
              fill_target_km: float | None = None) -> dict:
+    from .route_cache import RouteCache
+    from functools import partial
     with region_scope(d):
-        return _optimize(
+        cache = RouteCache(gh.route)
+        if candidates_fn is _candidates:
+            candidates_fn = partial(_candidates, router=cache)
+        result = _optimize(
             d, climb_db, max_km, objective, min_ratio, max_rounds,
             route_fn=route_fn,
             candidates_fn=candidates_fn,
@@ -1435,6 +1452,9 @@ def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             round_trip_fn=round_trip_fn,
             fill_target_km=fill_target_km,
         )
+        result["router_cache"] = {"hits": cache.hits, "misses": cache.misses}
+        result["budget_rollbacks"] = sum(r.get("status") == "teruggedraaid (budget)" for r in result["rondes"])
+        return result
 
 
 def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,

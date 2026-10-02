@@ -119,7 +119,7 @@ def test_nominatim_result_is_cached_without_second_fetch():
         assert len(calls) == 1
         assert "format=jsonv2" in calls[0][0]
         assert "limit=3" in calls[0][0]
-        assert calls[0][1]["User-Agent"] == "lusmaker/0.1"
+        assert "contact:" in calls[0][1]["User-Agent"] and "ommeke" in calls[0][1]["User-Agent"].lower()
         cache = json.loads(
             (home / "cache" / "nominatim.json").read_text(encoding="utf-8")
         )
