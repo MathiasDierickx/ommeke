@@ -35,14 +35,20 @@ export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }
 export function Message({ message, onRoute, onOption, routes = [] }: { routes?: Route[]; message: ChatMessage; onRoute: (id: string) => void; onOption: (value: string) => void }) {
   const assistant = message.role === "assistant";
   const options = messageOptions(message);
+  const routeId = message.route_ids?.at(-1);
+  const route = routes.find(item => item.id === routeId);
+  const formatLine = (line: string) => line.split(/(\*\*[^*]+\*\*)/g).map((part, index) => part.startsWith("**") && part.endsWith("**") ? <strong key={index}>{part.slice(2,-2)}</strong> : part);
   return (
     <article className={`message ${assistant ? "message-assistant" : "message-user"}`}>
       <div className="message-author">{assistant ? <Logo /> : <CircleUserRound />}<span>{assistant ? "Lus" : "Jij"}</span></div>
       <div className="message-bubble">
-        <div className="message-copy">{message.content.split("\n").map((line, index) => <p key={`${message.id}-${index}`}>{line || "\u00a0"}</p>)}</div>
+        <div className="message-copy">{message.content.split("\n").map((line, index) => <p key={`${message.id}-${index}`}>{line ? formatLine(line) : "\u00a0"}</p>)}</div>
         {options.length ? <div className="option-chips" aria-label="Antwoordopties">{options.map((option) => <button key={option} onClick={() => onOption(option)}>{option}</button>)}</div> : null}
       </div>
-      {message.route_ids?.length ? <button className="route-made" onClick={() => onRoute(message.route_ids!.at(-1)!)}><Check /> {routes.find(r=>r.id===message.route_ids!.at(-1))?.ready ? "Route klaar · bekijk kaart en downloads" : "Routeconcept · bekijk wat nog ontbreekt"} <ArrowUp /></button> : null}
+      {routeId ? <div className="route-result">
+        <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route?.name || "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toFixed(1) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>
+        {route?.constraints?.waarschuwingen.length ? <p className="route-result-warning">Let op: {route.constraints.waarschuwingen.join(" · ")}</p> : null}
+      </div> : null}
     </article>
   );
 }

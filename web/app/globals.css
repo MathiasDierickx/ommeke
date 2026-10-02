@@ -360,3 +360,14 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .route-progress p { font-size: 14px; line-height: 1.5; margin: 10px 0 0; }
 .route-progress small { display: block; margin-top: 10px; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none !important; } }
+.route-result { max-width: 38rem; margin-top: 12px; }
+.route-result .route-made { border-radius: 12px; width: 100%; justify-content: space-between; text-align: left; padding: 14px 16px; font-size: 14px; }
+.route-result .route-made span { flex: 1; min-width: 0; }
+.route-result .route-made strong, .route-result .route-made small { display: block; }
+.route-result .route-made small { margin-top: 5px; font-size: 12px; font-weight: 500; }
+.route-result-warning { font-size: 13px; line-height: 1.5; color: #80501b; margin: 8px 4px; }
+.route-journey { display: grid; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+.route-journey section > a { display: inline-block; margin-left: 12px; font-size: 13px; color: var(--green); }
+.route-journey p, .route-journey small { font-size: 13px; line-height: 1.5; }
+.route-journey input { max-width: 100%; display: block; padding: 10px; font: inherit; }
+.route-journey summary { min-height: 44px; padding-top: 10px; cursor: pointer; }

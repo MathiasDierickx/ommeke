@@ -175,13 +175,12 @@ export function RouteDetail({
           ) : null}
           <div className="route-actions">
             <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
-            {route.ready && <OfflineRoute route={route} />}
-            {onReturn && route.ready && <ReturnRoute onReturn={onReturn} />}
             {onDownloadFit && <button className="button" onClick={onDownloadFit} disabled={!route.ready}>Download FIT</button>}
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>
             {route.shared || shareUrl ? <button className="button button-quiet" onClick={async () => { try { await onUnshare(); setShareUrl(undefined); } catch { /* caller toont de fout; link blijft zichtbaar */ } }}>Stop delen</button> : null}
             <button className="button button-danger" onClick={() => void onDelete()} aria-label="Route verwijderen"><Trash2 /><span>Verwijder</span></button>
           </div>
+          {route.ready ? <div className="route-journey"><OfflineRoute route={route} />{onReturn && <ReturnRoute onReturn={onReturn} />}</div> : null}
           {shareUrl ? (
             <div className="share-result">
               <a href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
