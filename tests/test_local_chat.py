@@ -109,3 +109,20 @@ def test_nearby_places_rejects_invalid_queries_before_fetch():
             assert False
         except ValueError:
             pass
+
+
+def test_area_probe_uses_region_coordinates_and_separates_routers():
+    from lusmaker import gh
+    calls = []
+    def post(path, body):
+        calls.append(body)
+        if len(calls) > 1:
+            raise gh.GhError("Point is out of bounds")
+        return {"paths": []}
+    gh._area_ev_works.cache_clear()
+    bbox = (51.22, 2.93, 51.28, 3.02)
+    assert gh._cached_area_ev_works("in_popular_trail", "router-one", bbox, post)
+    assert not gh._cached_area_ev_works("in_popular_trail", "router-two", bbox, post)
+    assert len(calls) == 2
+    assert calls[0]["points"][0] == [2.975, 51.25]
+    gh._area_ev_works.cache_clear()

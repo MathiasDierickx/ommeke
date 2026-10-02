@@ -102,7 +102,7 @@ def test_probe_detects_missing_area_without_in_prefix_in_error():
     gh._area_ev_works.cache_clear()
     assert gh._area_ev_works("in_kassei_tvl", missing) is False
     gh._area_ev_works.cache_clear()
-    assert gh._area_ev_works("in_kassei_tvl", present) is True
+    assert gh._area_ev_works("in_kassei_tvl", present) is False
     gh._area_ev_works.cache_clear()
 
 

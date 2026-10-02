@@ -41,16 +41,21 @@ def info() -> dict:
         raise GhError(f"GraphHopper niet bereikbaar op {config.GH_URL}: {e}") from e
 
 
-@lru_cache(maxsize=16)
 def _area_ev_works(name: str, probe_post=None) -> bool:
+    return _cached_area_ev_works(name, config.GH_URL, tuple(config.current_region().bbox), probe_post)
+
+
+@lru_cache(maxsize=128)
+def _cached_area_ev_works(name: str, router_url: str, bbox: tuple, probe_post=None) -> bool:
     """Probeer of een ingebakken ``in_<area>`` encoded value bestaat.
 
     GH's /info toont area-EV's niet, dus we proben met een minimaal
     routeverzoek: onbekende variabele -> foutmelding met de naam erin.
     """
     post = probe_post or _post
+    lat, lon = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
     body = {
-        "points": [[3.883, 51.006], [3.8835, 51.0065]],
+        "points": [[lon, lat], [lon + 0.0001, lat + 0.0001]],
         "profile": config.GH_PROFILE,
         "points_encoded": False,
         "instructions": False,
@@ -67,10 +72,14 @@ def _area_ev_works(name: str, probe_post=None) -> bool:
         area_name = name.removeprefix("in_")
         if name in message or (area_name in message and "wasn't found" in message):
             return False
-        # andere fout (bv. geen route): variabele zelf werd geaccepteerd
-        return True
+        # Een fout kan vóór modelcompilatie optreden (bv. punt buiten graaf).
+        # Alleen een geslaagd verzoek bewijst dat deze area bruikbaar is.
+        return False
     except Exception:
         return False
+
+
+_area_ev_works.cache_clear = _cached_area_ev_works.cache_clear
 
 
 def available_area_evs(probe_post=None) -> frozenset[str]:
