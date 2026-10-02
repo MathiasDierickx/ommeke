@@ -18,6 +18,7 @@ e2e = ["pycognito"]
 [project.scripts]
 lus = "lusmaker.cli:main"
 lus-mcp = "lusmaker.mcp_server:main"
+lus-check = "lusmaker.checks:main"
 
 [build-system]
 requires = ["hatchling"]

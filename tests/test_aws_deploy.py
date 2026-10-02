@@ -69,3 +69,17 @@ def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
     assert "workflow_dispatch:" in pack
     assert "LUSMAKER_PACK_UPLOAD" in pack
     assert "region-packs/" in pack
+
+
+def test_deployment_requires_all_checks_for_the_same_commit():
+    ci = yaml.safe_load(_read('.github/workflows/ci.yml'))
+    deploy = yaml.safe_load(_read('.github/workflows/deploy-aws.yml'))
+    assert 'workflow_call' in ci.get('on', ci.get(True))
+    assert {'test', 'terraform', 'web'} <= set(ci['jobs'])
+    assert deploy['jobs']['checks']['uses'] == './.github/workflows/ci.yml'
+    assert deploy['jobs']['deploy']['needs'] == 'checks'
+    steps = deploy['jobs']['deploy']['steps']
+    guard = next(i for i, step in enumerate(steps) if 'achterhaalde' in step.get('name', ''))
+    credentials = next(i for i, step in enumerate(steps) if 'configure-aws-credentials' in step.get('uses', ''))
+    assert guard < credentials
+    assert '$GITHUB_SHA' in steps[guard]['run']
