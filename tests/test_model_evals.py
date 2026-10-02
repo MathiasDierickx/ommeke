@@ -71,3 +71,24 @@ def test_model_gate_recomputes_score_and_rejects_stale_or_partial_evidence():
         try: verify(bad,'candidate',cases,'prompt',tools,now=now)
         except ValueError: pass
         else: raise AssertionError('Ongeldig evalbewijs vrijgegeven')
+
+
+def test_hosted_eval_preserves_real_followup_context_and_rejects_invalid_roles():
+    import copy
+    from lusmaker.model_evals import run
+    captured=[]
+    class Client:
+        def converse(self, **kwargs):
+            captured.append(kwargs['messages'])
+            return {'output':{'message':{'content':[{'toolUse':{'name':'update_profile','input':{}}}]}}}
+    cases=[{'id':'followup','prompt':'Kasseien zijn oké','expected_tool':'update_profile',
+            'history':[{'role':'user','content':'Maak een trailroute'},
+                       {'role':'assistant','content':'Vind je kasseien oké?'}]}]
+    assert run(cases,Client(),'test',system='',tool_config={})['score']['geslaagd']==1
+    assert [m['role'] for m in captured[0]]==['user','assistant','user']
+    assert captured[0][1]['content'][0]['text']=='Vind je kasseien oké?'
+    bad=copy.deepcopy(cases);bad[0]['history'][0]['role']='system'
+    try: run(bad,Client(),'test',system='',tool_config={})
+    except ValueError: pass
+    else: raise AssertionError('Ongeldige context naar provider gestuurd')
+    assert len(captured)==1

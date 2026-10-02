@@ -47,3 +47,28 @@ met alle cases geslaagd. De poort berekent de score opnieuw uit de toolcalls.
 Een handmatig ingevulde totaalscore is onvoldoende. Er is nog geen goedgekeurd
 rapport: de gemeten baseline haalt de poort niet. Modelkwaliteit, vervolgstappen
 en echte routekwaliteit blijven afzonderlijke acceptatiepunten.
+
+### Gemeten baseline (2 oktober 2026)
+
+De uitgebreide suite bevat 21 bestaande cases en 10 uit eigen appgesprekken.
+Straatadressen zijn vervangen door de plaatsnaam; account-id's en gesprek-id's
+zijn weggelaten. De twee Blaarmeersen-cases komen uit verschillende gesprekken,
+maar toetsen grotendeels dezelfde intentie. De vervolgcase bevat de werkelijke
+voorafgaande vraag en het antwoord, niet alleen een los zinnetje.
+
+Het huidige GPT-OSS-model scoort 23/31 op de uitgebreide suite, waarvan 6/10 op
+de gesprekcases. P50 is 1,793 s en p95 3,488 s per eerste modelbeurt. De totale
+tokenschatting is $0,014286 voor deze 31 beurten bij $0,18/M input en $0,70/M
+output (AWS Price List, eu-west-1, On-demand Inference, 2026-09-30).
+Dit zijn geen kosten per volledig gesprek en geen routeringstijden.
+Het rapport staat in `results/gpt-oss-hosted-real-2026-10-02.json`.
+Het eerdere rapport met 17/21 hoort bij de kleinere suite en heeft daarom een
+andere fingerprint. Geen van beide rapporten keurt een modelwissel goed.
+
+Claude Sonnet 4.6 gaf bij de afzonderlijke toegangsproef AccessDeniedException;
+er is geen vergelijkbare kwaliteitsscore of gesprekprijs gemeten. Het huidige
+model blijft voorlopig staan, maar de intentkwaliteit is nog onvoldoende voor
+een afgerond pilotbesluit. De eerste-toolscore beoordeelt geen vervolggesprek:
+een verduidelijkingsvraag of profielopvraag kan soms terecht zijn en vergt
+inhoudelijke beoordeling. Nieuwe runs bewaren daarom ook de zichtbare modeltekst
+naast de toolcall. Onbekende argumentnamen blijven onvoorwaardelijk fouten.

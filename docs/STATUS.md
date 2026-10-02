@@ -38,6 +38,26 @@ heeft een aparte regressietest. Een groene deployment alleen is geen E2E-bewijs.
 Pilotgebruikers (#7), platformreview (#17), echte fietscomputer (#21) en juridische
 acceptatie (#6) blijven externe acceptatie. Die worden niet als voltooid gemarkeerd.
 
+## Vervolg: afronding en modelevaluatie
+
+Commit `774ba76` is via CI 37059502388 en AWS-deploy 37059502680 geslaagd;
+Vercel rapporteerde eveneens success. In persoonlijke Chrome is route `c008b6`
+via de snelplanner gemaakt: 39,3 km / 416 m, echte tussenstappen, een blijvende
+eindstatus en een werkende knop naar de kaart. De GPX-download bevat 1007
+trackpunten, 199 routeaanwijzingen en identieke start- en eindcoördinaten.
+Een afzonderlijke chatvraag over deze route eindigde met het juiste antwoord,
+de routeknop en “Antwoord klaar — Afgerond in 2 sec”.
+
+De feedbackronde verwijdert de hernieuwde startsuggesties onder een voltooide
+snelplanroute en ververst ook de bibliotheek na het resultaat. Offline controles:
+303 Python-tests, 9 frontendtests, TypeScript en productiebuild.
+
+Issue #23 heeft nu een hosted suite met 10 afgeleide echte gesprekcases erbij,
+gesprekscontext en een offline CI-poort voor Terraform-modelwissels. De laatste
+modelproef haalt 23/31 eerste-toolcases (6/10 echte gesprekcases), dus dit issue
+blijft open. Claude-toegang en kosten per volledig gesprek zijn niet aangetoond.
+De bedragen, beperkingen en ruwe meetrapporten staan in `evals/README.md`.
+
 ## Historische inventaris vóór de uitrol
 
 Stand 2 oktober 2026, lokale main. [Bord](https://github.com/users/MathiasDierickx/projects/2).

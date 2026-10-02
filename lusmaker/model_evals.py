@@ -53,6 +53,9 @@ def validate_cases(cases, tool_config):
         raise ValueError('De evalsuite moet niet-leeg zijn en unieke case-id’s bevatten.')
     available = {t['toolSpec']['name'] for t in tool_config.get('tools', [])}
     for case in cases:
+        for message in case.get('history', []):
+            if message.get('role') not in ('user', 'assistant') or not isinstance(message.get('content'), str) or not message['content'].strip():
+                raise ValueError(f"Case {case['id']}: ongeldige gesprekscontext.")
         if available and case['expected_tool'] not in available:
             raise ValueError(f"Case {case['id']}: {case['expected_tool']} bestaat niet in deze toolset. Gebruik de hosted suite voor Bedrock.")
 
@@ -67,11 +70,12 @@ def run(cases, client, model, *, system, tool_config, input_rate=None, output_ra
         start = clock()
         try:
             response = client.converse(modelId=model, system=[{'text': system}],
-                messages=[{'role':'user','content':[{'text':case['prompt']}]}],
+                messages=[{'role':m['role'],'content':[{'text':m['content']}]} for m in case.get('history', [])] + [{'role':'user','content':[{'text':case['prompt']}]}],
                 toolConfig=tool_config, inferenceConfig={'maxTokens':1400,'temperature':0.2})
             uses = [b['toolUse'] for b in response.get('output',{}).get('message',{}).get('content',[]) if 'toolUse' in b]
             call = uses[0] if uses else {}
-            calls.append({'id':case['id'],'tool':call.get('name'),'arguments':call.get('input',{})})
+            calls.append({'id':case['id'],'tool':call.get('name'),'arguments':call.get('input',{}),
+                          'answer': '\n'.join(b['text'] for b in response.get('output',{}).get('message',{}).get('content',[]) if 'text' in b)})
             usage = response.get('usage',{})
             cost = None if input_rate is None or output_rate is None else (usage.get('inputTokens',0)*input_rate+usage.get('outputTokens',0)*output_rate)/1_000_000
             measurements.append({'id':case['id'],'seconds':round(clock()-start,3),'usage':usage,'estimated_usd':cost})

@@ -252,5 +252,146 @@
     },
     "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
     "required_arguments": []
+  },
+  {
+    "id": "gesprek-rustig-wetteren",
+    "prompt": "Maak een rustige fietsroute van 50 km vanuit Wetteren",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 50,
+      "doel": "toeren"
+    },
+    "required_arguments": [],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-vijver-blaarmeersen",
+    "prompt": "Startende vanuit Gent. Graag een looptourtje die helemaal rond de de vijver van Blaarmeersen (rond het water) gaat en dan terug",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "activiteit": "trail",
+      "start": "Gent"
+    },
+    "required_arguments": [
+      "rond_plaats"
+    ],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-blaarmeersen-spelling",
+    "prompt": "Gent. Graag een looptourtje die helemaal rond de Blaaremeersen (rond het water) gaat en dan terug",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "activiteit": "trail",
+      "start": "Gent"
+    },
+    "required_arguments": [
+      "rond_plaats"
+    ],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-wetteren-voorkeuren",
+    "prompt": "Maak een rustige fietsroute van ongeveer 20 km vanuit Wetteren. Kasseien en beton zijn oké, vermijd drukke wegen waar mogelijk. Noem deze route E2E voortgang Wetteren.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "target_km": 20,
+      "kasseien": true,
+      "beton_vermijden": false,
+      "autovrij": true
+    },
+    "required_arguments": [],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-trail-brugse-poort",
+    "prompt": "trail rondje vanuit brugse poort gent van 10 km",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "activiteit": "trail",
+      "target_km": 10
+    },
+    "required_arguments": [
+      "start"
+    ],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-melle-water",
+    "prompt": "Ik woon in Melle, ik wil 30 km fietsen. Zoveel mogelijk langs het water",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Melle",
+      "target_km": 30,
+      "doel": "toeren"
+    },
+    "required_arguments": [],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-melle-schelde",
+    "prompt": "Ik woon in Melle, ik wil 30km fietsen. Langs de Schelde liefst zoveel mogelijk, vlak. Een lus",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Melle",
+      "target_km": 30,
+      "doel": "toeren",
+      "langs_water": "Schelde"
+    },
+    "required_arguments": [],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-berendries-kort",
+    "prompt": "Graag vanaf Wetteren een korte maar mooie lus naar de Berendries.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Wetteren",
+      "doel": "kort",
+      "via_klimmen": [
+        "Berendries"
+      ]
+    },
+    "required_arguments": [],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-bredene-hotel",
+    "prompt": "Ik logeer morgen, 3 oktober 2026, in het ibis Styles hotel in Bredene. Zoek eerst zelf het juiste hotel en de parking ernaast op. Ik wil een wandeling van ongeveer 3 km, kindvriendelijk, liefst zo lang mogelijk langs het strand, vertrekkend vanop de parking naast het hotel en terug naar dezelfde parking. Geen fietsroute. Geef duidelijk aan als je het hotel, de parking, strandtoegang of kindvriendelijkheid niet kunt verifiëren.",
+    "expected_tool": "lookup_place",
+    "expected_arguments": {},
+    "required_arguments": [
+      "query"
+    ],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
+  },
+  {
+    "id": "gesprek-trail-voorkeurantwoord",
+    "prompt": "geen probleem ! maar het is lopen. Liefst veel offroad",
+    "expected_tool": "update_profile",
+    "expected_arguments": {
+      "naam": "standaard",
+      "patch": {
+        "voorkeuren": {
+          "kasseien": "ok"
+        }
+      }
+    },
+    "required_arguments": [
+      "patch"
+    ],
+    "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd.",
+    "history": [
+      {
+        "role": "user",
+        "content": "trail rondje vanuit brugse poort gent van 10 km"
+      },
+      {
+        "role": "assistant",
+        "content": "De route bevat 0,7 km kasseien. Vind je kasseien leuk (Flandrien!), oké, of vermijd je ze liever?"
+      }
+    ]
   }
 ]
