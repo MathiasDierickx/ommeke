@@ -50,6 +50,19 @@ def database_path() -> Path | None:
     return path if path.is_file() else None
 
 
+def pack_status() -> dict | None:
+    """Publieke versie-informatie zonder lokale paden of gebruikersgegevens."""
+    if config.current_region().slug != "vlaanderen":
+        return None
+    cache = pack_cache()
+    if cache is None:
+        return None
+    manifest = json.loads((cache.parents[3] / "manifest.json").read_text())
+    return {"build_id": manifest["build_id"],
+            "features": sum(layer["features"] for layer in manifest["layers"].values()),
+            "layers": len(manifest["sources"])}
+
+
 def _matches(point, direction, line, radius):
     scale = 111320.0 * math.cos(math.radians(point[0]))
     dx, dy = direction

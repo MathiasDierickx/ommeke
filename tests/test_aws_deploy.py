@@ -83,3 +83,58 @@ def test_deployment_requires_all_checks_for_the_same_commit():
     credentials = next(i for i, step in enumerate(steps) if 'configure-aws-credentials' in step.get('uses', ''))
     assert guard < credentials
     assert '$GITHUB_SHA' in steps[guard]['run']
+
+
+def test_cloud_sources_are_visible_to_tenant_engine_without_graph_changes():
+    import json
+    import tempfile
+    from deploy.aws.prepare_sources import prepare
+    from lusmaker import config, draft, route_evidence, route_sources
+    from tests.test_route_sources import fixture_fetch
+
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        with route_sources._home(root / "local"):
+            result = route_sources.sync(root / "sources", fetcher=fixture_fetch)
+        destination = root / "cloud"
+        graph = destination / "regions/vlaanderen/gh/config.yml"
+        graph.parent.mkdir(parents=True)
+        graph.write_text("bestaande graphconfig")
+        (destination / "regions.json").write_text(json.dumps({
+            "default": "vlaanderen", "regions": {"vlaanderen": {
+                "slug": "vlaanderen", "geofabrik": "europe/belgium",
+                "bbox": [50.67, 2.53, 51.51, 5.94], "gh_port": 8989,
+            }}
+        }))
+        prepared = prepare(Path(result["build"]), destination)
+        assert prepared["build_id"] == result["build_id"]
+        assert graph.read_text() == "bestaande graphconfig"
+        with route_sources._home(destination), config.user_scope("cloud-user"):
+            assert destination in route_evidence.database_path().parents
+            assert route_evidence.pack_status() == {
+                "build_id": result["build_id"], "features": 5, "layers": 18,
+            }
+            score = draft._candidate_surface_components([
+                {"coords": [(50.8, 3.7), (50.8, 3.704)]}
+            ])
+            assert score["populair"] > 0
+        # Herhaalde staging blijft op dezelfde gecontroleerde versie staan.
+        assert prepare(Path(result["build"]), destination)["build_id"] == result["build_id"]
+        pointer = destination / "regions/vlaanderen/cache/route_sources/current.json"
+        assert json.loads(pointer.read_text())["build_id"] == result["build_id"]
+
+
+def test_cloud_sources_reject_unverified_payload_before_activation():
+    import tempfile
+    from deploy.aws.prepare_sources import prepare
+    from lusmaker import route_sources
+    from tests.test_route_sources import fixture_fetch, expect_error
+
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        with route_sources._home(root / "local"):
+            result = route_sources.sync(root / "sources", fetcher=fixture_fetch)
+        build = Path(result["build"])
+        (build / "manifest.json").write_text('{}')
+        expect_error(lambda: prepare(build, root / "cloud"), "gewijzigd")
+        assert not (root / "cloud").exists()

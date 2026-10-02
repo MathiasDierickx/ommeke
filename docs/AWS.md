@@ -222,6 +222,25 @@ De workflow voert in volgorde uit:
 Een afgebroken deployment is retry-safe. ECR-tags zijn immutable; een bestaande
 code-plus-pack tag wordt hergebruikt en Terraform deployt altijd de digest.
 
+### Vlaamse brondata in dezelfde Lambda-image
+
+Voor `vlaanderen` neemt de deployworkflow automatisch het open-datapack mee.
+Ze hergebruikt gecontroleerde WFS-snapshots in de statebucket, bouwt de
+segmentdatabase en activeert die in de image via `deploy/aws/prepare_sources.py`.
+Er zijn geen WFS-downloads tijdens gebruikersrequests. De bronbuild-ID zit in
+de immutable image-tag en wordt na deployment via `/health` gecontroleerd.
+
+Bronnen bewust vernieuwen:
+
+```bash
+gh workflow run deploy-aws.yml --ref main -f refresh_route_sources=true
+```
+
+Zonder deze vlag blijven snapshots behouden. De eerste run haalt ontbrekende
+bronnen op. Dit voegt bronlijnscores, wegdek en voorzieningen aan de engine toe;
+nieuwe GraphHopper-voorkeurgebieden vereisen nog een afzonderlijke graafherimport.
+Zie [Vlaamse routedata](VLAANDEREN-ROUTEDATA.md) voor dekking en beperkingen.
+
 ## 5. Deploy de Next.js-app naar Vercel
 
 Gebruik Vercels native GitHub-integratie voor frontend-CD. Zo hoeft een lokaal

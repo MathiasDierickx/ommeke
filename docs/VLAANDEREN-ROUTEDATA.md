@@ -168,11 +168,12 @@ activeren en een graafherimport uitvoeren. De bestaande runtimeconfig bevat
 mogelijk een kleinere geocoder/regiobbox; uitbreiding daarvan is een afzonderlijke
 regiobuild. Een hosted deployment vergt bovendien uitrol van code én datapack.
 
-Volgens `AGENTS.md` worden tijdens deze taak geen bestanden in `~/.lusmaker`
-herschreven, geen containers aangeraakt en geen live smoke-tests uitgevoerd.
-De installatie is getest in tijdelijke geïsoleerde homes. Het lokale pack en
-een installatieplan zijn voorbereid; permanente runtime-activering vereist
-een expliciete uitzondering op die projectregel of uitvoering door de beheerder.
+Na expliciete toestemming van de eigenaar is het pack op 2 oktober 2026
+geactiveerd in `~/.lusmaker`. De checksums van de geïnstalleerde kopie zijn
+gecontroleerd. De gewone engine, zonder omgevingsvariabelen voor overrides,
+leest deze database en gebruikt de curatiescore bij kandidaatselectie.
+GraphHopper is niet herstart of herimporteerd en er zijn geen live routertests
+uitgevoerd. De lokale controle staat in `.route-data/activation-engine-check.json`.
 
 ## Vastgestelde resultaten — 2 oktober 2026
 
@@ -203,5 +204,42 @@ Resultaten: `.route-data/route-evidence-evaluation.json`.
 
 De oude activiteitseeds zijn alleen gelezen en geaudit in
 `.route-data/legacy-seeds-audit.json`; hun onbekende herkomst is niet als een
-open licentie geïnterpreteerd. Het concrete, nog niet toegepaste installatieplan
-staat in `.route-data/activation-plan.json`.
+open licentie geïnterpreteerd. De uitgevoerde installatie staat in
+`.route-data/activation-result.json`.
+
+
+## Hoeveel Vlaanderen dekt dit?
+
+Dit is een brede netwerkbasis, geen volledige inventaris van alle Vlaamse wegen.
+De opgehaalde bronnen bevatten ongeveer **15.390 km fietsnetwerklijnen** en
+**14.322 km bewegwijzerde wandelnetwerklijnen**, plus **2.657 km icoonroutelijnen**.
+Dit zijn sommen van brongeometrieën, zonder ontdubbeling en inclusief eventuele
+stukken over de gewestgrens. Icoonroutes kunnen met het fietsnetwerk overlappen;
+tel deze aantallen niet op als unieke kilometerdekking. Virtuele wandelnetwerken
+krijgen geen bonus voor bewegwijzerde curatie.
+
+De volledige aangeboden collecties van de 18 geselecteerde lagen zijn opgehaald.
+Dat betekent niet dat 100% van Vlaanderen attributen heeft. Een percentage van
+alle Vlaamse wegen vraagt een vergelijking met een volledige OSM-graaf en de
+gewestgrens; die meting is niet uitgevoerd. Wegdek is plaatselijk bekend,
+verkeersinformatie beschrijft vooral expliciet niet-autovrije trajecten, en
+buggygeschiktheid is nog onbekend. De vroegere kleine geocoder/DEM-bbox wordt
+niet automatisch groter doordat de bronlijnen heel Vlaanderen beslaan.
+
+## AWS
+
+De deployment bouwt een afzonderlijk bronpack naast de bestaande GraphHopper-
+regiopack. S3 bewaart de ruwe snapshots onder
+`region-packs/route-sources/vlaanderen/raw/`. Een normale deployment hergebruikt
+ze; de eerste deployment vult ontbrekende snapshots vanuit WFS aan. SHA256-
+controles weigeren beschadigde data. Alleen een handmatige deployment met
+`refresh_route_sources=true` haalt bestaande bronnen opnieuw op.
+
+`deploy/aws/prepare_sources.py` verifieert het pack, weigert persoonlijke heat,
+installeert het in de image-buildcontext en controleert de normale database-
+resolutie. De image-tag bevat zowel codeversie, regiopackhash als bronbuild-ID.
+`/health` geeft de actieve bronbuild en aantallen terug; de deploycontrole
+vereist dat de werkelijk draaiende Lambda dezelfde build gebruikt.
+Deze staging verandert de ingebouwde GraphHopper-areas niet. De nieuwe scores,
+wegdekaanvulling en voorzieningen werken via de Python-engine; directe nieuwe
+voorkeurgebieden binnen GraphHopper blijven een afzonderlijke graafbuild.

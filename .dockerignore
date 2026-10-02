@@ -10,3 +10,4 @@ docs
 infra
 web
 .aws/region/pack.json
+.route-data

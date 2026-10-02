@@ -8,7 +8,13 @@ on:
       - infra/terraform/**
       - lusmaker/**
       - pyproject.toml
+      - .github/workflows/deploy-aws.yml
   workflow_dispatch:
+    inputs:
+      refresh_route_sources:
+        description: Vernieuw de Vlaamse bronsnapshots vanuit Toerisme Vlaanderen
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -99,6 +105,32 @@ jobs:
           echo "sha=$PACK_SHA" >> "$GITHUB_OUTPUT"
           echo "tag=${GITHUB_SHA}-${PACK_SHA:0:12}" >> "$GITHUB_OUTPUT"
 
+      - name: Bouw en activeer Vlaamse brondata voor de cloudengine
+        if: env.REGION_SLUG == 'vlaanderen'
+        id: sources
+        env:
+          REFRESH_SOURCES: ${{ inputs.refresh_route_sources || 'false' }}
+        run: |
+          SOURCE_ROOT="$RUNNER_TEMP/route-data"
+          SNAPSHOTS="s3://${TF_STATE_BUCKET}/region-packs/route-sources/vlaanderen/raw/"
+          mkdir -p "$SOURCE_ROOT/raw"
+          aws s3 sync "$SNAPSHOTS" "$SOURCE_ROOT/raw/" --only-show-errors
+          REFRESH_ARGS=()
+          if [ "$REFRESH_SOURCES" = true ]; then
+            REFRESH_ARGS+=(--refresh)
+          fi
+          lus heat sync-vlaanderen --output "$SOURCE_ROOT" "${REFRESH_ARGS[@]}" > "$RUNNER_TEMP/route-sources.json"
+          BUILD=$(jq -r '.build' "$RUNNER_TEMP/route-sources.json")
+          BUILD_ID=$(jq -r '.build_id' "$RUNNER_TEMP/route-sources.json")
+          python deploy/aws/prepare_sources.py "$BUILD" .aws/region
+          aws s3 sync "$SOURCE_ROOT/raw/" "$SNAPSHOTS" --sse AES256 --only-show-errors
+          aws s3 cp "$BUILD/manifest.json" \
+            "s3://${TF_STATE_BUCKET}/region-packs/route-sources/vlaanderen/builds/$BUILD_ID/manifest.json" --sse AES256
+          echo "id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "### Vlaamse brondata" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build: $BUILD_ID" >> "$GITHUB_STEP_SUMMARY"
+          jq '{lagen, features}' "$RUNNER_TEMP/route-sources.json" >> "$GITHUB_STEP_SUMMARY"
+
       - uses: hashicorp/setup-terraform@v4.0.1
         with:
           terraform_version: "1.14.9"
@@ -123,7 +155,8 @@ jobs:
         run: |
           ECR_URL=$(terraform -chdir=infra/terraform output -raw ecr_repository_url)
           REPOSITORY_NAME=${ECR_URL#*/}
-          IMAGE_TAG="${{ steps.pack.outputs.tag }}"
+          SOURCE_ID="${{ steps.sources.outputs.id }}"
+          IMAGE_TAG="${{ steps.pack.outputs.tag }}${SOURCE_ID:+-${SOURCE_ID:0:12}}"
           if aws ecr describe-images \
             --repository-name "$REPOSITORY_NAME" \
             --image-ids "imageTag=$IMAGE_TAG" >/dev/null 2>&1; then
@@ -195,7 +228,12 @@ jobs:
           HEALTH=$(terraform -chdir=infra/terraform output -raw health_endpoint)
           MCP=$(terraform -chdir=infra/terraform output -raw mcp_endpoint)
           API=$(terraform -chdir=infra/terraform output -raw api_endpoint)
-          curl --fail --show-error --max-time 900 "$HEALTH"
+          curl --fail --show-error --max-time 900 "$HEALTH" > "$RUNNER_TEMP/health.json"
+          cat "$RUNNER_TEMP/health.json"
+          if [ "$REGION_SLUG" = vlaanderen ]; then
+            jq -e --arg build "${{ steps.sources.outputs.id }}" \
+              '.route_sources.build_id == $build and .route_sources.features > 0' "$RUNNER_TEMP/health.json"
+          fi
           STATUS=$(curl --silent --show-error --output "$RUNNER_TEMP/mcp-body.json" \
             --write-out '%{http_code}' --request POST "$MCP")
           test "$STATUS" = "401"

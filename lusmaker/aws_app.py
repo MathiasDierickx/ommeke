@@ -189,7 +189,12 @@ class CognitoAuthMiddleware:
 
 async def health(_request: Request) -> JSONResponse:
     """Lichte readiness check; GraphHopper start vóór de ASGI-server."""
-    return JSONResponse({"status": "ok", "version": __version__})
+    from . import route_evidence
+    try:
+        sources = route_evidence.pack_status()
+    except (OSError, ValueError, KeyError):
+        return JSONResponse({"status": "error", "error": "Routedatapack is niet beschikbaar."}, status_code=503)
+    return JSONResponse({"status": "ok", "version": __version__, "route_sources": sources})
 
 
 async def oauth_protected_resource(request: Request) -> JSONResponse:
