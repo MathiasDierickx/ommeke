@@ -1,11 +1,12 @@
 "use client";
 
 import { LoaderCircle, Map as MapIcon } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { RouteGeometry } from "@/lib/types";
 
 export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | null; loading: boolean }) {
+  const [poiKind, setPoiKind] = useState("alle");
   const elementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -20,7 +21,7 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
       const map = L.map(elementRef.current, { zoomControl: false, attributionControl: true });
       L.control.zoom({ position: "topright" }).addTo(map);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Routelagen: <a href="https://toerismevlaanderen.be/nl/open-data">Toerisme Vlaanderen</a> (Modellicentie voor gratis hergebruik)',
         maxZoom: 19,
         subdomains: "abc",
       }).addTo(map);
@@ -42,6 +43,11 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
           title: climb.id,
         }).addTo(map).bindTooltip(climb.id);
       });
+      (geometry.pois || []).filter(p => poiKind === "alle" || p.kind === poiKind).forEach(p => {
+        const label = document.createElement("span");
+        label.textContent = `${p.name} · ${p.at_km.toFixed(1)} km${p.opening_hours ? ` · ${p.opening_hours}` : " · openingstijden onbekend"}`;
+        L.circleMarker([p.lat,p.lon], {radius:6,color:"#8d5a26",fillOpacity:0.9}).addTo(map).bindTooltip(label);
+      });
       map.fitBounds(line.getBounds(), { padding: [42, 42], maxZoom: 15 });
       map.whenReady(() => {
         readyFrame = window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
@@ -58,9 +64,9 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
       disposed = true;
       cleanup();
     };
-  }, [geometry]);
+  }, [geometry, poiKind]);
 
   if (loading) return <div className="map-state"><LoaderCircle className="spin" /> Routekaart laden…</div>;
   if (!geometry?.points.length) return <div className="map-state"><MapIcon />Nog geen kaart voor deze route</div>;
-  return <div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />;
+  return <><div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />{geometry.pois?.length ? <label className="poi-filter">Onderweg <select value={poiKind} onChange={e=>setPoiKind(e.target.value)}><option value="alle">Alle voorzieningen</option>{[...new Set(geometry.pois.map(p=>p.kind))].map(k=><option key={k} value={k}>{k}</option>)}</select></label> : null}</>;
 }

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, SharedRoute } from "@/lib/types";
 import { Logo } from "./brand";
+import { ReturnRoute } from "./return-route";
 import { RouteMap } from "./route-map";
 
 export function StatGrid({ route }: { route: Route | SharedRoute }) {
@@ -70,6 +71,8 @@ export function RouteDetail({
   route,
   loading,
   onDownload,
+  onDownloadFit,
+  onReturn,
   onRename,
   onDelete,
   onAdjust,
@@ -85,6 +88,8 @@ export function RouteDetail({
   route: Route | null;
   loading: boolean;
   onDownload: () => void;
+  onDownloadFit?: () => void;
+  onReturn?: (lat:number,lon:number,budget:number | "kortste",requestId:string)=>Promise<void>;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onAdjust: (adjustment: RouteAdjustment) => Promise<void>;
@@ -169,6 +174,8 @@ export function RouteDetail({
           ) : null}
           <div className="route-actions">
             <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
+            {onReturn && route.ready && <ReturnRoute onReturn={onReturn} />}
+            {onDownloadFit && <button className="button" onClick={onDownloadFit} disabled={!route.ready}>Download FIT</button>}
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>
             {route.shared || shareUrl ? <button className="button button-quiet" onClick={async () => { try { await onUnshare(); setShareUrl(undefined); } catch { /* caller toont de fout; link blijft zichtbaar */ } }}>Stop delen</button> : null}
             <button className="button button-danger" onClick={() => void onDelete()} aria-label="Route verwijderen"><Trash2 /><span>Verwijder</span></button>

@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lusmaker — routes op gesprek",
+  title: "Ommeke — routes op gesprek",
   description: "Bouw, bewaar en download persoonlijke fiets- en traillussen.",
-  applicationName: "Lusmaker",
+  applicationName: "Ommeke",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

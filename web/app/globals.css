@@ -344,3 +344,13 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .route-constraints { margin: 12px 0; padding: 12px; background: #f4f1e5; border-radius: 10px; font-size: 13px; line-height: 1.5; }
 .route-constraints p { margin: 0 0 4px; }
 .route-constraints ul { padding-left: 20px; margin: 6px 0 0; }
+
+.quick-plan { max-width: 42rem; margin: 1rem auto; padding: 1.2rem; border: 1px solid #d5ddd5; border-radius: 12px; }
+.quick-plan form { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem; }
+.quick-plan label { display: grid; gap: .4rem; }
+.quick-plan input,.quick-plan select,.quick-plan button { min-width: 0; min-height: 44px; padding: .6rem; border: 1px solid #bbc9bd; border-radius: 6px; }
+.quick-plan input { width: 100%; }
+.quick-plan button { cursor: pointer; margin: .2rem; }
+@media(max-width: 480px) { .quick-plan form { grid-template-columns: 1fr; } }
+
+.poi-filter { position: absolute; top: 75px; right: 12px; z-index: 450; padding: .5rem; background: white; border-radius: 8px; max-width: calc(100% - 24px); }

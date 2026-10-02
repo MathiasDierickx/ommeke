@@ -4,6 +4,7 @@ import { LoaderCircle, Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { QuickPlan } from "@/components/quick-plan";
 import { AuthPanel } from "@/components/auth-panel";
 import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
@@ -107,6 +108,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!session || view.kind !== "conversation") return;
     let active = true;
     setConversationId(view.id);
+    const answer = sessionStorage.getItem(`ommeke-answer:${view.id}`);
+    if (answer) { setPrompt(answer); sessionStorage.removeItem(`ommeke-answer:${view.id}`); }
     setSelectedRoute(null);
     setError(undefined);
     apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${encodeURIComponent(view.id)}/messages`, session.accessToken)
@@ -215,17 +218,24 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     finally { setBusy(false); sendLock.current = false; }
   };
 
-  const downloadRoute = async () => {
+  const downloadRoute = async (format: "gpx" | "fit" = "gpx") => {
     if (!session || !selectedRoute?.download_url) return;
     try {
-      const blob = await authenticatedBlob(selectedRoute.download_url, session.accessToken);
+      const blob = await authenticatedBlob(format === "fit" ? `/api/routes/${selectedRoute.id}/fit` : selectedRoute.download_url, session.accessToken);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `${selectedRoute.name}.gpx`;
+      anchor.download = `${selectedRoute.name}.${format}`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Download mislukt."); }
+  };
+
+  const returnRoute = async (lat:number,lon:number,rest_km:number | "kortste",request_id:string) => {
+    if (!session || !selectedRoute) return;
+    await apiRequest(`/api/routes/${selectedRoute.id}/reroute`, session.accessToken, {method:"POST",body:JSON.stringify({lat,lon,rest_km,request_id,expected_revision:selectedRoute.revision})});
+    await loadRoute(selectedRoute.id,session.accessToken);
+    await loadWorkspace(session.accessToken);
   };
 
   const renameRoute = async (name: string) => {
@@ -338,7 +348,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onDownloadFit={() => void downloadRoute("fit")} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }
@@ -355,6 +365,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         </header>
         {error ? <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
         <div className="messages">
+          {!messages.length && session ? <QuickPlan token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
           {!messages.length ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} onOption={(value) => void sendPrompt(value)} />)}
           {busy ? <div className="thinking-row" role="status" aria-live="polite"><Logo /><span>Lus tekent je route</span><i /><i /><i /></div> : null}
