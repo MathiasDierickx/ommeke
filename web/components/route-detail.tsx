@@ -160,6 +160,13 @@ export function RouteDetail({
           <StatGrid route={route} />
           <ElevationSparkline values={route.geometry?.elevation} />
           <QualityChips route={route} />
+          {route.constraints && (route.constraints.doel_km != null || route.constraints.maximum_is_hard || route.constraints.waarschuwingen.length > 0) ? (
+            <section className="route-constraints" aria-label="Afstand en routewensen">
+              {route.constraints.doel_km != null ? <p>Streefafstand: {route.constraints.doel_km.toLocaleString("nl-BE")} km</p> : null}
+              {route.constraints.maximum_is_hard && route.constraints.maximum_km != null ? <p>Hard maximum: {route.constraints.maximum_km.toLocaleString("nl-BE")} km</p> : null}
+              {route.constraints.waarschuwingen.length ? <div role="status"><strong>Niet alle wensen zijn gehaald</strong><ul>{route.constraints.waarschuwingen.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
+            </section>
+          ) : null}
           <div className="route-actions">
             <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>

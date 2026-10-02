@@ -76,6 +76,10 @@ async def me(_request: Request) -> JSONResponse:
 async def routes_list(_request: Request) -> JSONResponse:
     try:
         if aws_state.enabled() and "limit" in _request.query_params:
+            if _request.query_params.get('order') == 'updated':
+                from .route_library import page as library_page
+                page = await asyncio.to_thread(library_page, limit=int(_request.query_params['limit']), cursor=_request.query_params.get('cursor'))
+                return JSONResponse({"routes": [_route_item(item) for item in page['items']], "next_cursor": page['next_cursor'], "order": page['order']})
             page = await asyncio.to_thread(aws_state.json_page, "drafts", limit=int(_request.query_params['limit']), cursor=_request.query_params.get('cursor'))
             return JSONResponse({"routes": [_route_item(item) for item in page['items']], "next_cursor": page['next_cursor'], "order": "id"})
         items = await asyncio.to_thread(draft.list_all)
@@ -153,6 +157,7 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
 def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
     result = _route_item(item)
     result["shared"] = bool(item.get("share_token"))
+    result["constraints"] = intents.constraint_report(item)
     result["avoid_places"] = item.get("avoid_places") or []
     result["route_request"] = item.get("route_request") or {}
     result["computed"] = item.get("computed")

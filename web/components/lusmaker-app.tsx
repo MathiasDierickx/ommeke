@@ -42,6 +42,10 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const messageEnd = useRef<HTMLDivElement>(null);
   const authStarted = useRef(false);
   const sendLock = useRef(false);
+  const [loadingMoreRoutes, setLoadingMoreRoutes] = useState(false);
+  const moreRoutesLock = useRef(false);
+  const libraryVersion = useRef(0);
+  const routeLoadVersion = useRef(0);
   const [routeCursor, setRouteCursor] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,10 +65,12 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   }, []);
 
   const loadWorkspace = useCallback(async (accessToken: string) => {
+    const version = ++libraryVersion.current;
     const [conversationData, routeData] = await Promise.all([
       apiRequest<{ conversations: Conversation[] }>("/api/conversations", accessToken),
-      apiRequest<{ routes: Route[]; next_cursor?: string | null }>("/api/routes?limit=25", accessToken),
+      apiRequest<{ routes: Route[]; next_cursor?: string | null }>("/api/routes?limit=25&order=updated", accessToken),
     ]);
+    if (version !== libraryVersion.current) return;
     setConversations(conversationData.conversations);
     setRoutes(routeData.routes);
     setRouteCursor(routeData.next_cursor ?? null);
@@ -72,7 +78,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   }, []);
 
   const loadRoute = useCallback(async (routeId: string, accessToken: string) => {
+    const version = ++routeLoadVersion.current;
     const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, accessToken);
+    if (version !== routeLoadVersion.current) return data.route;
     setSelectedRoute(data.route);
     setRoutes((current) => current.map((item) => item.id === data.route.id ? { ...item, ...data.route } : item));
     return data.route;
@@ -90,7 +98,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!authReady || !session || !workspaceLoaded) return;
     didInitialLanding = true;
     if (view.kind === "new" && routes.length) {
-      const latest = [...routes].sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
+      const latest = routes[0];
       if (latest) router.replace(`/routes/${encodeURIComponent(latest.id)}`);
     }
   }, [authReady, session, workspaceLoaded, view.kind, routes, router]);
@@ -122,7 +130,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       .then(() => undefined)
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Route laden mislukt."); })
       .finally(() => { if (active) setLoadingRoute(false); });
-    return () => { active = false; };
+    return () => { active = false; routeLoadVersion.current++; };
   }, [session, view, loadRoute]);
 
   useEffect(() => {
@@ -300,6 +308,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   const handleLogout = () => {
     const current = session;
+    libraryVersion.current++;
+    routeLoadVersion.current++;
+    didInitialLanding = false;
     setSession(null);
     setConversations([]);
     setRoutes([]);
@@ -308,14 +319,19 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   };
 
   const loadMoreRoutes = async () => {
-    if (!routeCursor) return;
+    if (!routeCursor || moreRoutesLock.current) return;
+    moreRoutesLock.current = true;
+    setLoadingMoreRoutes(true);
+    const version = libraryVersion.current;
     try {
-      const page = await apiRequest<{ routes: Route[]; next_cursor: string | null }>(`/api/routes?limit=25&cursor=${encodeURIComponent(routeCursor)}`, session.accessToken);
+      const page = await apiRequest<{ routes: Route[]; next_cursor: string | null }>(`/api/routes?limit=25&order=updated&cursor=${encodeURIComponent(routeCursor)}`, session.accessToken);
+      if (version !== libraryVersion.current) return;
       setRoutes(current => mergeById(current, page.routes));
       setRouteCursor(page.next_cursor);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Routes laden mislukt."); }
+    } catch (cause) { if (version === libraryVersion.current) setError(cause instanceof Error ? cause.message : "Routes laden mislukt."); }
+    finally { moreRoutesLock.current = false; setLoadingMoreRoutes(false); }
   };
-  const sidebar = <Sidebar hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
+  const sidebar = <Sidebar loadingMoreRoutes={loadingMoreRoutes} hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
   if (view.kind === "route") {
     return (
       <main className={`route-shell ${leftOpen ? "left-open" : ""}`}>

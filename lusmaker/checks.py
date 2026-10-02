@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 GROUPS = {
     "engine": ["analysis", "climbs", "gh", "intents", "optimize", "probe", "profiles", "readiness", "suggest", "regression", "quality", "acceptance"],
     "data": ["discover", "geocode", "google_geocode", "heat", "osm", "provision", "regions", "recording", "pack_manifest"],
-    "api": ["aws_app", "aws_chat", "aws_sharing", "aws_state", "draft_storage", "user_scope", "oauth", "quotas", "account", "pagination", "telemetry", "requests", "pilot"],
+    "api": ["aws_app", "aws_chat", "aws_sharing", "aws_state", "draft_storage", "user_scope", "oauth", "quotas", "account", "pagination", "telemetry", "requests", "pilot", "route_library"],
     "mcp": ["mcp", "mcp_evals", "appsdk", "artifacts", "preview", "contracts"],
     "infra": ["aws_deploy"],
     "tooling": ["checks", "e2e_prod", "metrics"],

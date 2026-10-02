@@ -71,12 +71,14 @@ def save(d: dict, expected_revision: int | None = None) -> None:
                 {"id": d["id"], "revision": current_revision}, expected_revision
             )
         d["revision"] = current_revision + 1
+        from .route_library import summary_metadata
         try:
             aws_state.put_json(
                 relative,
                 d,
                 etag=etag,
                 create_only=current is None,
+                metadata=summary_metadata(d),
             )
         except aws_state.StateConflict as exc:
             raise DraftError(

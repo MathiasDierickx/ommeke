@@ -337,3 +337,10 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .account-controls select, .account-controls textarea { width: 100%; min-height: 2.75rem; padding: .6rem; border: 1px solid #d6ded2; border-radius: .6rem; background: #fff; }
 .account-controls textarea { min-height: 5rem; resize: vertical; }
 .account-controls button { min-height: 2.75rem; text-align: left; }
+
+.library-filters { display: grid; gap: 8px; margin: 8px 0 12px; }
+.library-filters label { display: grid; gap: 4px; font-size: 12px; }
+.library-filters input, .library-filters select { width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--line, #deded5); border-radius: 8px; background: var(--surface, #fff); color: inherit; }
+.route-constraints { margin: 12px 0; padding: 12px; background: #f4f1e5; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.route-constraints p { margin: 0 0 4px; }
+.route-constraints ul { padding-left: 20px; margin: 6px 0 0; }

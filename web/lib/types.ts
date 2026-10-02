@@ -24,7 +24,15 @@ export type ChatMessage = {
   route_ids?: string[];
 };
 
+export type RouteConstraints = {
+  doel_km?: number | null;
+  maximum_km?: number | null;
+  maximum_is_hard?: boolean | null;
+  waarschuwingen: string[];
+};
+
 export type Route = {
+  constraints?: RouteConstraints;
   shared?: boolean;
   id: string;
   revision: number;
