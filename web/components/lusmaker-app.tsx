@@ -40,6 +40,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [quickBusy,setQuickBusy]=useState(false);
   const [progress, setProgress] = useState<ProgressEvent|null>(null);
   const [error, setError] = useState<string>();
   const [leftOpen, setLeftOpen] = useState(false);
@@ -178,7 +179,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   };
 
   const sendPrompt = async (starter?: string) => {
-    if (!session || busy || sendLock.current) return;
+    if (!session || busy || quickBusy || sendLock.current) return;
     const content = (starter || prompt).trim();
     if (!content) return;
     sendLock.current = true;
@@ -373,13 +374,13 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         </header>
         {error ? <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
         <div className="messages">
-          {!messages.length && session ? <QuickPlan token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
-          {!messages.length ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
+          {!messages.length && !busy && session ? <QuickPlan onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
+          {!messages.length && !busy && !quickBusy ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
           {busy ? <RouteProgress event={progress} /> : null}
           <div ref={messageEnd} />
         </div>
-        <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy} />
+        <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy || quickBusy} />
       </section>
     </main>
   );

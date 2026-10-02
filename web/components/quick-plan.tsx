@@ -5,7 +5,7 @@ import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
 
 type Result = { status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
-export function QuickPlan({ token, onRoute, onConversation }: { token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
+export function QuickPlan({ token, onRoute, onConversation, onBusyChange }: { onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
   const [start, setStart] = useState("");
   const [km, setKm] = useState(40);
   const [activity, setActivity] = useState("fietsen");
@@ -26,13 +26,13 @@ export function QuickPlan({ token, onRoute, onConversation }: { token: string; o
     const values = { start, target_km: km, activiteit: activity, doel: goal };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; setCanRestart(false); setProgress(null); setBusy(true); setError(""); setResult(undefined);
+    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setResult(undefined);
     try {
       const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
       if (next.status === "ready") onRoute(next.draft); else setResult(next);
     } catch (e) { setError(e instanceof Error ? e.message : "Route maken mislukt."); setCanRestart(e instanceof StreamFailure); }
-    finally { lock.current = false; setBusy(false); }
+    finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
   return <section className="quick-plan" aria-label="Snel een route maken">
     <h2>Een lus vanaf hier</h2>
