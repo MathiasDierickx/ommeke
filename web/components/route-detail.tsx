@@ -104,6 +104,11 @@ export function RouteDetail({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(route?.name || "");
   const [adjusting, setAdjusting] = useState(false);
+  const [targetDistance, setTargetDistance] = useState("");
+  const distanceStep = route?.activity === "trail" ? 1 : 5;
+  useEffect(() => {
+    setTargetDistance(String(route?.constraints?.doel_km ?? route?.total_km ?? ""));
+  }, [route?.id, route?.revision, route?.constraints?.doel_km, route?.total_km]);
   const [avoidPlace, setAvoidPlace] = useState("");
   const [showClimbs, setShowClimbs] = useState(false);
   const [nearbyClimbs, setNearbyClimbs] = useState<NearbyClimb[]>([]);
@@ -200,10 +205,18 @@ export function RouteDetail({
             <div className="adjust-row">
               <span>Afstand</span>
               <div className="adjust-buttons">
-                <button disabled={adjusting || route.total_km == null || route.total_km <= 5} onClick={() => void adjust({ target_km: Math.max(1, (route.total_km || 0) - 5) })}>−5 km</button>
-                <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: (route.total_km || 0) + 5 })}><Plus />5 km</button>
+                <button disabled={adjusting || route.total_km == null || route.total_km <= 1} onClick={() => void adjust({ target_km: Math.max(1, (route.total_km || 0) - distanceStep) })}>−{distanceStep} km</button>
+                <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: (route.total_km || 0) + distanceStep })}><Plus />{distanceStep} km</button>
               </div>
             </div>
+            <form className="distance-form" onSubmit={event => {
+              event.preventDefault();
+              const km = Number(targetDistance);
+              if (Number.isFinite(km) && km >= 1 && km <= 300) void adjust({target_km: km});
+            }}>
+              <label>Gewenste afstand (km)<input type="number" min="1" max="300" step="0.1" required disabled={adjusting} value={targetDistance} onChange={event => setTargetDistance(event.target.value)} /></label>
+              <button disabled={adjusting || !targetDistance}>{adjusting ? "Route aanpassen…" : "Bereken opnieuw"}</button>
+            </form>
             <div className="adjust-row adjust-goals">
               <span>Doel</span>
               <div className="adjust-buttons">
