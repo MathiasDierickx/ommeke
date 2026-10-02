@@ -600,3 +600,46 @@ def test_failed_first_candidates_retry_bounded_extra_seeds():
     assert result['filled'] and result['seed'] == 7
     assert attempts == list(range(20))
     assert routed['computed']['total_km'] == 3
+
+
+def test_short_first_batch_does_not_hide_a_matching_later_round_trip():
+    from lusmaker import gh
+    routed = _synthetic_routed_draft()
+    routed['climbs'] = []
+    routed['computed'] = {'total_km': 0, 'ascend_m': 0, 'legs': []}
+    routed['_geometry'] = []
+    routed['route_request'] = {'target_km': 3, 'tolerance_km': .3}
+    attempts = []
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        attempts.append(seed)
+        if seed not in (0, 7): raise gh.GhError('geen kandidaat')
+        return {'distance_m':1900 if seed == 0 else 3000, 'ascend_m':10,
+                'coords':[anchor,(50.01,4.0),(50.01,4.01),anchor]}
+    def router(current, _db):
+        seed = current['opvullingen'][-1]['seed']
+        current['computed'] = {'total_km':1.9 if seed == 0 else 3, 'ascend_m':10}
+    result = draft._fill_with_round_trip(routed,{},3300,router=router,
+        round_trip_fn=round_trip,target_total_m=3000,objective='toeren')
+    assert result['seed']==7 and routed['computed']['total_km']==3
+    assert attempts==list(range(20))
+    assert len(routed['opvullingen'])==1
+
+
+def test_round_trip_uses_integrated_distance_and_retains_best_effort_when_needed():
+    from lusmaker import gh
+    for integrated, expected in [({0:1.9,1:3.0},3.0), ({0:1.9,1:2.4},2.4)]:
+        routed=_synthetic_routed_draft()
+        routed['climbs']=[]
+        routed['computed']={'total_km':0,'ascend_m':0,'legs':[]}
+        routed['_geometry']=[]
+        routed['route_request']={'target_km':3,'tolerance_km':.3}
+        def round_trip(anchor, distance_m, seed, **kwargs):
+            if seed not in integrated: raise gh.GhError('geen kandidaat')
+            return {'distance_m':3000-seed*50,'ascend_m':10,
+                    'coords':[anchor,(50.01,4.0),(50.01,4.01),anchor]}
+        def router(current, _db):
+            current['computed']={'total_km':integrated[current['opvullingen'][-1]['seed']], 'ascend_m':10}
+        result=draft._fill_with_round_trip(routed,{},3300,router=router,
+            round_trip_fn=round_trip,target_total_m=3000,objective='toeren')
+        assert result['filled'] and routed['computed']['total_km']==expected
+        assert len(routed['opvullingen'])==1

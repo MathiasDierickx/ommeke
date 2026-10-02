@@ -181,3 +181,16 @@ def test_zero_length_and_invalid_drafts_are_not_downloadable_routes():
         result = aws_api._route_detail_payload(item)
         assert result['ready'] is False
         assert result['download_url'] is None and result['geometry'] is None
+
+
+def test_library_summary_keeps_unmet_distance_visible_without_geometry_reads():
+    from lusmaker import aws_api
+    item=example('short')
+    item['computed']['total_km']=1.9
+    item['route_request']={'target_km':3,'tolerance_km':.3,'max_km':3.3,'max_km_explicit':False}
+    metadata=route_library.summary_metadata(item)
+    compact=json.loads(base64.b64decode(metadata[route_library.METADATA_KEY]))
+    result=aws_api._route_item(compact)
+    assert result['constraints']['binnen_doelbereik'] is False
+    assert result['constraints']['waarschuwingen']
+    assert '_geometry' not in compact and 'route_request' not in compact

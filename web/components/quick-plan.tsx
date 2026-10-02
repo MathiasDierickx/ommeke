@@ -4,7 +4,7 @@ import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
 
-type Result = { status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
+type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
 export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResultChange }: { onResultChange?: (hasResult:boolean)=>void; onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
   const [start, setStart] = useState("");
   const [km, setKm] = useState(40);
@@ -51,8 +51,9 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     </form>
     {busy && <RouteProgress event={progress} />}
     {result?.status === "ready" && <div className="quick-result">
-      <h3 role="status" tabIndex={-1} ref={resultHeading}>Je route is klaar</h3>
-      <p>Bekijk de kaart, controleer de route en download je GPX of FIT.</p>
+      <h3 role="status" tabIndex={-1} ref={resultHeading}>{result.constraints?.voldaan === false ? "Route gevonden — controleer je wensen" : "Je route is klaar"}</h3>
+      <p>{typeof result.km === "number" ? `${result.km.toFixed(1)} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
+      {result.constraints?.waarschuwingen.map(warning => <p className="route-result-warning" key={warning}>{warning}</p>)}
       <button onClick={() => onRoute(result.draft)}>Bekijk mijn route</button>
       <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>
     </div>}

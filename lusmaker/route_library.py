@@ -8,7 +8,7 @@ import math
 
 from . import aws_state
 
-METADATA_KEY = 'route-summary-v1'
+METADATA_KEY = 'route-summary-v2'
 
 
 def summary_metadata(draft: dict) -> dict[str, str]:
@@ -22,6 +22,8 @@ def summary_metadata(draft: dict) -> dict[str, str]:
     small['start'] = {'label': (draft.get('start') or {}).get('label')}
     computed = draft.get('computed')
     small['computed'] = {key: computed.get(key) for key in ('total_km', 'ascend_m')} if computed else None
+    from .intents import constraint_report
+    small['constraints'] = constraint_report(draft)
     encoded = base64.b64encode(json.dumps(small, ensure_ascii=False, separators=(',', ':')).encode()).decode()
     return {METADATA_KEY: encoded} if len(encoded) + len(METADATA_KEY) <= 1900 else {}
 

@@ -1376,8 +1376,6 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
         if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:
             continue
-        if seed_start and candidate["distance_m"] < requested_m * 0.75:
-            continue
         if existing and max(
             geo.retrace_m(existing, coords),
             geo.retrace_m(existing, list(reversed(coords))),
@@ -1405,7 +1403,18 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         return exhausted("geen round_trip-kandidaat zonder overlap binnen budget")
 
     before = copy.deepcopy(d)
-    for _ascend, _seed_order, seed, candidate, coords in sorted(candidates, reverse=True):
+    tolerance_m = max(100.0, (target_total_m or 0) * .1)
+    request = d.get("route_request") or {}
+    if target_total_m is not None and request.get("target_km") == target_total_m / 1000:
+        tolerance_m = request.get("tolerance_km", 2.5) * 1000
+    # A requested distance comes before soft surface/popularity preferences.
+    # Without a distance target, preserve the existing objective ordering.
+    ordered = sorted(candidates, key=lambda item: (
+        -abs(current_m + item[3]["distance_m"] - target_total_m) if target_total_m is not None else 0,
+        item[0], item[1]), reverse=True)
+    best = None
+    best_error = float("inf")
+    for _ascend, _seed_order, seed, candidate, coords in ordered:
         via = geo.resample(coords, 400.0)
         via[0] = anchor
         via[-1] = anchor
@@ -1425,8 +1434,9 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             d.clear()
             d.update(copy.deepcopy(before))
             continue
-        if d["computed"]["total_km"] * 1000.0 <= budget_m:
-            return {
+        actual_m = d["computed"]["total_km"] * 1000.0
+        if actual_m <= budget_m:
+            result = {
                 "filled": True,
                 "seed": seed,
                 "extra_km": round(d["computed"]["total_km"] - current_m / 1000.0, 1),
@@ -1434,9 +1444,24 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                     d["computed"]["ascend_m"] - before["computed"]["ascend_m"]
                 ),
             }
+            error = abs(actual_m - target_total_m) if target_total_m is not None else 0
+            if error <= tolerance_m:
+                return result
+            if error < best_error:
+                best, best_error = (copy.deepcopy(d), result), error
         d.clear()
         d.update(copy.deepcopy(before))
 
+    if best is not None:
+        # A short first batch is not success: search the bounded extra seeds
+        # before retaining a clearly labelled best-effort route.
+        if seed_start == 0 and target_total_m is not None:
+            extra = exhausted("geen variant binnen de gewenste afstand")
+            if extra.get("filled") and abs(d["computed"]["total_km"] * 1000 - target_total_m) < best_error:
+                return extra
+        d.clear()
+        d.update(best[0])
+        return best[1]
     return exhausted("round_trip-kandidaten overschrijden budget na integratie")
 
 

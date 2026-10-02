@@ -67,6 +67,7 @@ def _route_item(item: dict[str, Any]) -> dict[str, Any]:
         # de engine schrijft de hoogtemeters als 'ascend_m'
         "elevation_gain_m": computed.get("ascend_m"),
         "ready": ready,
+        "constraints": item.get("constraints") or intents.constraint_report(item),
         "download_url": f"/api/routes/{item['id']}/gpx" if ready else None,
         "preview_url": f"/api/routes/{item['id']}/preview" if ready else None,
     }
