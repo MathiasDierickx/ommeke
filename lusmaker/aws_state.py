@@ -329,3 +329,44 @@ def presigned_get_url(
         raise StateError(
             f"S3-downloadlink maken mislukt: {_error_code(exc) or exc}"
         ) from exc
+
+
+def tenant_objects(*, client=None):
+    """Itereer uitsluitend objecten van de huidige gebruiker, inclusief pagina's."""
+    client = _client(client)
+    prefix = f"tenants/{tenant.current()}/"
+    token = None
+    while True:
+        kwargs = {"Bucket": bucket(), "Prefix": prefix}
+        if token:
+            kwargs['ContinuationToken'] = token
+        response = client.list_objects_v2(**kwargs)
+        for item in response.get('Contents', []):
+            name = item['Key']
+            if not name.startswith(prefix):
+                raise StateError('object buiten de gebruikerpartitie')
+            yield name[len(prefix):], item
+        if not response.get('IsTruncated'):
+            break
+        token = response['NextContinuationToken']
+
+
+def json_page(prefix: str, *, limit: int = 25, cursor: str | None = None, client=None) -> dict:
+    """Lexicografische keysetpagina; cursor is alleen binnen deze prefix bruikbaar."""
+    if not 1 <= limit <= 100:
+        raise ValueError('limit moet tussen 1 en 100 liggen')
+    prefix = key(prefix).rstrip('/') + '/'
+    if cursor and (not cursor.startswith(prefix) or '..' in cursor.split('/')):
+        raise ValueError('ongeldige paginacursor')
+    client = _client(client)
+    kwargs = {'Bucket': bucket(), 'Prefix': prefix, 'MaxKeys': limit + 1}
+    if cursor:
+        kwargs['StartAfter'] = cursor
+    response = client.list_objects_v2(**kwargs)
+    objects = response.get('Contents', [])
+    selected = objects[:limit]
+    if any(not obj['Key'].startswith(prefix) for obj in selected):
+        raise StateError('object buiten de gebruikerpartitie')
+    items = [json.loads(client.get_object(Bucket=bucket(), Key=obj['Key'])['Body'].read()) for obj in selected]
+    next_cursor = selected[-1]['Key'] if selected and (len(objects) > limit or response.get('IsTruncated')) else None
+    return {'items': items, 'next_cursor': next_cursor}

@@ -1,3 +1,5 @@
+import { errorMessage } from "./interaction";
+
 function apiBase(): string {
   const value = process.env.NEXT_PUBLIC_API_URL;
   if (!value) throw new Error("NEXT_PUBLIC_API_URL ontbreekt in de Vercel environment");
@@ -14,7 +16,7 @@ export class ApiError extends Error {
 async function responseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new ApiError(payload.error || `Request mislukt (${response.status})`, response.status);
+    throw new ApiError(errorMessage(response.status, payload.error, response.headers.get("Retry-After")), response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -26,6 +28,7 @@ export async function apiRequest<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const response = await fetch(`${apiBase()}${path}`, {
+    signal: init.signal ?? AbortSignal.timeout(240_000),
     ...init,
     headers: {
       Accept: "application/json",
@@ -42,6 +45,7 @@ export async function publicApiRequest<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const response = await fetch(`${apiBase()}${path}`, {
+    signal: init.signal ?? AbortSignal.timeout(240_000),
     ...init,
     headers: {
       Accept: "application/json",

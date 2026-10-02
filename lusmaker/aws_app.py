@@ -20,6 +20,7 @@ import contextlib
 from starlette.routing import Mount, Route
 
 from .telemetry import MetricsMiddleware
+from . import account
 from . import __version__, tenant
 from . import aws_api
 from .mcp_server import hosted_mcp
@@ -179,6 +180,9 @@ class CognitoAuthMiddleware:
             await self._unauthorized(scope, receive, send)
             return
         with tenant.use(tenant_id):
+            if path not in {"/api/account", "/api/account/export"} and await asyncio.to_thread(account.deleting):
+                await JSONResponse({"error": "Je account wordt verwijderd. Rond dit af via Mijn gegevens.", "code": "account_deleting"}, status_code=403)(scope, receive, send)
+                return
             await self.app(scope, receive, send)
 
 
@@ -242,6 +246,8 @@ def create_app(
                 methods=["GET"],
             ),
             Route("/api/conversations/{conversation_id}/requests/{request_id}", aws_api.conversation_request_status, methods=["GET"]),
+            Route("/api/account/export", aws_api.account_export, methods=["GET"]),
+            Route("/api/account", aws_api.account_delete, methods=["DELETE"]),
             Route("/api/me", aws_api.me, methods=["GET"]),
             Route("/api/routes", aws_api.routes_list, methods=["GET"]),
             Route(

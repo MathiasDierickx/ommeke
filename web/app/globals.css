@@ -327,3 +327,8 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+.account-controls { padding: 1rem; font-size: .85rem; line-height: 1.5; }
+.account-controls summary { cursor: pointer; font-weight: 600; }
+.account-controls button { display: block; margin: .6rem 0; text-decoration: underline; }
+button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

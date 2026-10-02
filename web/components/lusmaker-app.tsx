@@ -8,6 +8,7 @@ import { AuthPanel } from "@/components/auth-panel";
 import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
 import { RouteDetail } from "@/components/route-detail";
+import { mergeById, pendingPrompt, type PendingPrompt } from "@/lib/interaction";
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { clearStored, currentSession, signOut } from "@/lib/cognito";
@@ -40,6 +41,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const messageEnd = useRef<HTMLDivElement>(null);
   const authStarted = useRef(false);
+  const sendLock = useRef(false);
+  const [routeCursor, setRouteCursor] = useState<string | null>(null);
 
   useEffect(() => {
     if (authStarted.current) return;
@@ -60,10 +63,11 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const loadWorkspace = useCallback(async (accessToken: string) => {
     const [conversationData, routeData] = await Promise.all([
       apiRequest<{ conversations: Conversation[] }>("/api/conversations", accessToken),
-      apiRequest<{ routes: Route[] }>("/api/routes", accessToken),
+      apiRequest<{ routes: Route[]; next_cursor?: string | null }>("/api/routes?limit=25", accessToken),
     ]);
     setConversations(conversationData.conversations);
     setRoutes(routeData.routes);
+    setRouteCursor(routeData.next_cursor ?? null);
     setWorkspaceLoaded(true);
   }, []);
 
@@ -157,25 +161,36 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   };
 
   const sendPrompt = async (starter?: string) => {
-    if (!session || busy) return;
+    if (!session || busy || sendLock.current) return;
     const content = (starter || prompt).trim();
     if (!content) return;
+    sendLock.current = true;
     setBusy(true);
     setError(undefined);
     setPrompt("");
     let id = conversationId;
     if (!id) id = await newConversation();
-    if (!id) { setBusy(false); return; }
+    if (!id) { setBusy(false); sendLock.current = false; return; }
+    const storageKey = `ommeke-pending:${id}`;
+    let previous: PendingPrompt | null = null;
+    try { previous = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { /* corrupte of uitgeschakelde opslag */ }
+    const pending = pendingPrompt(previous, id, content, () => crypto.randomUUID());
+    try { sessionStorage.setItem(storageKey, JSON.stringify(pending)); } catch { /* opslag is optioneel */ }
     const optimistic: ChatMessage = { id: `local-${Date.now()}`, conversation_id: id, role: "user", content, created_at: new Date().toISOString() };
     setMessages((current) => [...current, optimistic]);
     try {
-      const result = await apiRequest<{ message: ChatMessage; route_ids: string[] }>(`/api/conversations/${id}/messages`, session.accessToken, { method: "POST", body: JSON.stringify({ content }) });
-      setMessages((current) => [...current, result.message]);
+      const result = await apiRequest<{ message: ChatMessage; route_ids: string[] }>(`/api/conversations/${id}/messages`, session.accessToken, { method: "POST", body: JSON.stringify({ content, request_id: pending.id }) });
+      sessionStorage.removeItem(storageKey);
+      setMessages((current) => mergeById(current, [result.message]));
       await loadWorkspace(session.accessToken);
       if (result.route_ids.length) openRoute(result.route_ids.at(-1)!);
       else router.replace(`/chats/${encodeURIComponent(id)}`);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Lus kon niet antwoorden."); }
-    finally { setBusy(false); }
+    } catch (cause) {
+      setPrompt(content);
+      setMessages(current => current.filter(message => message.id !== optimistic.id));
+      setError(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "Dit duurt langer dan verwacht. Herlaad het gesprek; dezelfde vraag opnieuw verzenden maakt geen dubbele route.");
+    }
+    finally { setBusy(false); sendLock.current = false; }
   };
 
   const downloadRoute = async () => {
@@ -243,6 +258,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   const shareRoute = async () => {
     if (!session || !selectedRoute) return undefined;
+    if (!window.confirm("Iedereen met deze link ziet je volledige route, inclusief het precieze startpunt. Wil je deze route delen?")) return undefined;
     try {
       const result = await apiRequest<{ token: string; url: string }>(`/api/routes/${selectedRoute.id}/share`, session.accessToken, { method: "POST" });
       await loadRoute(selectedRoute.id, session.accessToken);
@@ -265,7 +281,15 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     router.replace("/");
   };
 
-  const sidebar = <Sidebar conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
+  const loadMoreRoutes = async () => {
+    if (!routeCursor) return;
+    try {
+      const page = await apiRequest<{ routes: Route[]; next_cursor: string | null }>(`/api/routes?limit=25&cursor=${encodeURIComponent(routeCursor)}`, session.accessToken);
+      setRoutes(current => mergeById(current, page.routes));
+      setRouteCursor(page.next_cursor);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Routes laden mislukt."); }
+  };
+  const sidebar = <Sidebar hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
   if (view.kind === "route") {
     return (
       <main className={`route-shell ${leftOpen ? "left-open" : ""}`}>
@@ -291,7 +315,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <div className="messages">
           {!messages.length ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} onOption={(value) => void sendPrompt(value)} />)}
-          {busy ? <div className="thinking-row"><Logo /><span>Lus tekent je route</span><i /><i /><i /></div> : null}
+          {busy ? <div className="thinking-row" role="status" aria-live="polite"><Logo /><span>Lus tekent je route</span><i /><i /><i /></div> : null}
           <div ref={messageEnd} />
         </div>
         <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy} />

@@ -135,17 +135,37 @@ class ConversationStore:
             raise ChatNotFound("gesprek niet gevonden")
         return self._decode(item)
 
+    def _query_all(self, **kwargs):
+        items = []
+        while True:
+            response = self.client.query(TableName=self.table_name, **kwargs)
+            items.extend(response.get("Items", []))
+            cursor = response.get("LastEvaluatedKey")
+            if not cursor:
+                return items
+            kwargs["ExclusiveStartKey"] = cursor
+
+    def all_conversations(self):
+        return [self._decode(item) for item in self._query_all(
+            KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
+            ExpressionAttributeValues={":pk": {"S": self._user_pk()}, ":prefix": {"S": "CONVERSATION#"}},
+            ConsistentRead=True,
+        )]
+
+    def export(self):
+        result = []
+        for conversation in self.all_conversations():
+            messages = self._query_all(
+                KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
+                ExpressionAttributeValues={":pk": {"S": self._conversation_pk(conversation["id"])}, ":prefix": {"S": "MESSAGE#"}},
+                ConsistentRead=True,
+            )
+            result.append({"conversation": conversation, "messages": [self._decode(item) for item in messages]})
+        return result
+
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 100))
-        response = self.client.query(
-            TableName=self.table_name,
-            KeyConditionExpression="pk = :pk AND begins_with(sk, :prefix)",
-            ExpressionAttributeValues={
-                ":pk": {"S": self._user_pk()},
-                ":prefix": {"S": "CONVERSATION#"},
-            },
-        )
-        conversations = [self._decode(item) for item in response.get("Items", [])]
+        conversations = self.all_conversations()
         conversations.sort(key=lambda item: item["updated_at"], reverse=True)
         return conversations[:limit]
 
@@ -219,31 +239,28 @@ class ConversationStore:
 
     def delete(self, conversation_id: str) -> int:
         conversation = self.get(conversation_id)
-        response = self.client.query(
-            TableName=self.table_name,
+        keys = self._query_all(
             KeyConditionExpression="pk = :pk",
             ExpressionAttributeValues={
                 ":pk": {"S": self._conversation_pk(conversation["id"])},
             },
             ProjectionExpression="pk, sk",
         )
-        keys = [item for item in response.get("Items", [])]
-        keys.append(
-            {
-                "pk": {"S": self._user_pk()},
-                "sk": {"S": f"CONVERSATION#{conversation['id']}"},
-            }
-        )
-        for offset in range(0, len(keys), 25):
-            self.client.batch_write_item(
-                RequestItems={
-                    self.table_name: [
-                        {"DeleteRequest": {"Key": key}}
-                        for key in keys[offset : offset + 25]
-                    ]
-                }
-            )
-        return len(keys)
+        metadata = {"pk": {"S": self._user_pk()}, "sk": {"S": f"CONVERSATION#{conversation['id']}"}}
+        batches = [keys[offset:offset + 25] for offset in range(0, len(keys), 25)]
+        # Verwijder het eigendomsbewijs pas wanneer alle berichten gewist zijn.
+        batches.append([metadata])
+        for batch in batches:
+            pending = {self.table_name: [{"DeleteRequest": {"Key": key}} for key in batch]}
+            for attempt in range(6):
+                response = self.client.batch_write_item(RequestItems=pending)
+                pending = {name: writes for name, writes in response.get("UnprocessedItems", {}).items() if writes}
+                if not pending:
+                    break
+                time.sleep(min(0.05 * 2 ** attempt, 1))
+            if pending:
+                raise ChatError("Niet alle berichten konden worden verwijderd; probeer opnieuw.")
+        return len(keys) + 1
 
 
 PLAN_ROUTE_SCHEMA = {

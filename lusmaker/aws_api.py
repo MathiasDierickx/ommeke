@@ -15,7 +15,7 @@ import logging
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant, quotas, requests
+from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant, quotas, requests, account
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -75,6 +75,9 @@ async def me(_request: Request) -> JSONResponse:
 
 async def routes_list(_request: Request) -> JSONResponse:
     try:
+        if aws_state.enabled() and "limit" in _request.query_params:
+            page = await asyncio.to_thread(aws_state.json_page, "drafts", limit=int(_request.query_params['limit']), cursor=_request.query_params.get('cursor'))
+            return JSONResponse({"routes": [_route_item(item) for item in page['items']], "next_cursor": page['next_cursor'], "order": "id"})
         items = await asyncio.to_thread(draft.list_all)
         full = await asyncio.gather(
             *(asyncio.to_thread(draft.load, item["id"]) for item in items)
@@ -527,3 +530,24 @@ async def conversation_request_status(request: Request) -> JSONResponse:
         return JSONResponse(result)
     except (ValueError, ChatError) as exc:
         return _error(str(exc), 404)
+
+
+async def account_export(_request: Request) -> Response:
+    try:
+        payload = await asyncio.to_thread(account.export_data, ConversationStore())
+        return Response(payload, media_type="application/zip", headers={"Content-Disposition": 'attachment; filename="ommeke-gegevens.zip"', "Cache-Control": "no-store"})
+    except ValueError as exc:
+        return _error(str(exc), 413)
+
+
+async def account_delete(request: Request) -> JSONResponse:
+    body = await _json_body(request)
+    if body.get("confirmation") != "VERWIJDER":
+        return _error("Bevestig met VERWIJDER om je account en alle gegevens te wissen.")
+    result = await asyncio.to_thread(account.erase_data, ConversationStore())
+    if result['status'] == 'pending':
+        return JSONResponse(result, status_code=202, headers={"Retry-After": str(result['retry_after'])})
+    from .aws_app import _cognito_client
+    token = request.headers.get('authorization', '').partition(' ')[2]
+    await asyncio.to_thread(_cognito_client().delete_user, AccessToken=token)
+    return JSONResponse({"status": "deleted"})

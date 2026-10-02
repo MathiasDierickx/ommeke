@@ -84,5 +84,8 @@ jobs:
       - name: Controleer TypeScript
         run: npm run typecheck
 
+      - name: Test frontendgedrag offline
+        run: npm run test:unit
+
       - name: Bouw Next.js-app
         run: npm run build

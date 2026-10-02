@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "shots": "node e2e/mobile-shots.mjs",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
