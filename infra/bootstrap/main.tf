@@ -210,6 +210,22 @@ data "aws_iam_policy_document" "github_deploy" {
     ]
   }
 
+  # Beheer uitsluitend de monitoringresources van deze applicatie.
+  statement {
+    sid = "ApplicationMonitoring"
+    actions = [
+      "cloudwatch:PutMetricAlarm", "cloudwatch:DeleteAlarms",
+      "cloudwatch:DescribeAlarms", "cloudwatch:ListTagsForResource",
+      "cloudwatch:TagResource", "cloudwatch:UntagResource",
+      "cloudwatch:PutDashboard", "cloudwatch:GetDashboard",
+      "cloudwatch:DeleteDashboards"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:${var.project_name}-*",
+      "arn:${data.aws_partition.current.partition}:cloudwatch::${data.aws_caller_identity.current.account_id}:dashboard/${var.project_name}-*"
+    ]
+  }
+
   statement {
     sid       = "AccountDiscovery"
     actions   = ["sts:GetCallerIdentity", "tag:GetResources"]
