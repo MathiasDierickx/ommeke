@@ -1,6 +1,6 @@
 # Lusmaker — instructies voor code-agents (Codex)
 
-Je werkt aan Lusmaker: een CLI (straks MCP-server) die fiets-GPX-lussen bouwt
+Je werkt aan Lusmaker: een CLI, MCP-server en hosted routeapp die fiets-GPX-lussen bouwt
 bovenop een lokale GraphHopper. Lees `PRODUCT.md` voor de richting en
 `README.md` voor de architectuur. Taakbriefs staan in `docs/tasks/`.
 

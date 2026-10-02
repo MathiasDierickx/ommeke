@@ -1,6 +1,15 @@
-# Lusmaker — productstrategie
+# Ommeke — productstrategie (Lusmaker-engine)
 
 *Status: richtinggevend document. Eigenaar: Mathias. Denklaag: Claude; uitvoering: Codex.*
+
+## Huidige uitvoering
+
+De eerste verbeteriteratie bevat componentcontroles, strengere routeacceptatie,
+CI vóór deployment, quota, requestherstel, accountacties, pilotfeedback en
+observability. Zie [ACCEPTANCE](docs/ACCEPTANCE.md) voor gemeten offline resultaten,
+[OPERATIONS](docs/OPERATIONS.md) voor grenzen en [PILOT](docs/PILOT.md) voor de
+nog uit te voeren gebruikerstest. Er zijn geen pilotgebruikers gemeten en geen
+nieuwe productie-uitrol of directorysubmission uitgevoerd.
 
 ## Wat dit is (generiek geformuleerd)
 

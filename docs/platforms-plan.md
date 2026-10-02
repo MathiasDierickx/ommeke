@@ -1,5 +1,7 @@
 # Lusmaker als Claude-app en ChatGPT-app — plan
 
+> Uitvoeringsstand: zie [STATUS.md](STATUS.md). Platformacceptatie en directorysubmission zijn nog niet uitgevoerd.
+
 *Onderzocht 2026-08-08. Beide platformen zijn geconvergeerd op remote MCP;
 ~80% van het werk is gedeeld fundament.*
 

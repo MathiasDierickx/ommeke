@@ -1,5 +1,7 @@
 # Submission-checklist: Claude-connector + ChatGPT-app
 
+> Uitvoeringsstand: zie [STATUS.md](STATUS.md). Platformacceptatie en directorysubmission zijn nog niet uitgevoerd.
+
 *Stappen met [MENS] vereisen Mathias; de rest is code/config die er al is of
 uit het AWS-spoor komt. Volgorde is geoptimaliseerd op doorlooptijd.*
 

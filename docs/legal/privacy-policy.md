@@ -5,7 +5,7 @@
 > publiek bereikbaar privacybeleid; publiceer dit (na review) op
 > `https://<domein>/privacy`.
 
-*Laatst bijgewerkt: [DATUM]*
+*Technische inventaris: 2 oktober 2026; juridische review nog vereist.*
 
 ## Wie we zijn
 
@@ -26,13 +26,29 @@ ChatGPT) die met onze dienst verbinden.
 Startpunten kunnen je woonadres onthullen; we behandelen route- en
 profielgegevens daarom als persoonsgegevens onder de AVG/GDPR.
 
+## Eigen webapp en modelverwerking
+
+De eigen chat bewaart berichten, assistentantwoorden en gekoppelde routes in
+DynamoDB en verstuurt context naar AWS Bedrock. De MCP-connector ontvangt
+ tool-aanroepen; deze beperking geldt niet voor onze eigen chat. Tenantopslag
+bevat ook feedback, quota en requestreceipts. Vercel host de frontend en AWS
+Cognito verzorgt authenticatie. Optionele Google-geocoding verstuurt zoektermen;
+externe kaarttiles kunnen IP-adres en gevraagde kaartregio aan de provider tonen.
+Concrete regio's, verwerkers en doorgiftegrondslagen moeten worden bevestigd.
+
+Delen is opt-in: iedereen met de link ziet routegeometrie inclusief startpunt.
+De link kan worden ingetrokken. Account-export downloadt actieve gegevens.
+Wissing blokkeert nieuw werk en vraagt na 16 minuten opnieuw bevestiging; dan
+verdwijnen actieve chats, routes, deelverwijzingen en het Cognito-account.
+Een blokkeermarker blijft staan. Historische S3-versies, backups en logs vallen
+onder afzonderlijke, vóór lancering vast te leggen retentie. Zie OPERATIONS.md.
+
 ## Wat we NIET doen
 
 - Geen verkoop of verhuur van je gegevens.
 - Geen advertentieprofilering.
 - Geen training van AI-modellen op jouw routes of profielen.
-- De inhoud van je gesprekken met Claude/ChatGPT bereikt ons niet; wij
-  ontvangen alleen de tool-aanroepen die de assistent naar ons stuurt.
+- De nieuwe applicatiemetrieken bevatten geen prompts of routegeometrie.
 
 ## Rechtsgrond
 
@@ -43,13 +59,12 @@ gerechtvaardigd belang (art. 6.1.f) voor beveiligingslogs.
 
 Hosting bij Amazon Web Services ([regio, bv. eu-west-1 — EU]); routing- en
 kaartdata op onze eigen infrastructuur. Volledige verwerkerslijst op
-aanvraag. Geen doorgifte buiten de EER behoudens passende waarborgen.
+aanvraag. De concrete modelregio en eventuele doorgiften moeten vóór publicatie worden bevestigd.
 
 ## Open data
 
 Route-berekening gebruikt open databronnen (OpenStreetMap, Toerisme
-Vlaanderen open data, open hoogtedata). Daarbij worden geen persoonsgegevens
-van jou gedeeld met die bronnen.
+Vlaanderen open data, open hoogtedata). De server gebruikt vooraf ingelezen data; interactieve kaarttiles en optionele geocoding zijn hierboven afzonderlijk beschreven.
 
 ## Jouw rechten
 

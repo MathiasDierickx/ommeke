@@ -1,4 +1,4 @@
-# Lusmaker
+# Ommeke (Lusmaker)
 
 Bouw fiets- en trail-GPX-**lussen** stap voor stap, aangestuurd door een LLM
 (Claude/ChatGPT) via MCP of door scripts via de `lus`-CLI. Denk:
@@ -13,6 +13,18 @@ routebibliotheek, GPX-downloads en chatgeschiedenis via Claude op Bedrock.
 
 Voor de serverless AWS-backend, Vercel-frontend, Cognito-authenticatie en
 GitHub Actions-pipeline: zie [docs/AWS.md](docs/AWS.md).
+
+## Ontwikkelstatus en controle
+
+[GitHub-ontwikkelbord](https://github.com/users/MathiasDierickx/projects/2) ·
+[voortgang per issue](docs/STATUS.md) · [praktijkproeven](docs/ACCEPTANCE.md) · [pilot](docs/PILOT.md) ·
+[beheer en resterende acceptatie](docs/OPERATIONS.md).
+
+`lus check scenarios` herhaalt echte routeregressiecassettes en gerichte
+acceptatieproeven. `lus check all` draait alle Python-tests; `lus check web`
+controleert de frontend. Deze controles wijzigen de GraphHopper-runtime niet.
+Ommeke is de productnaam; package, CLI (`lus`) en bestaande protocollen behouden
+hun Lusmaker-identifiers. Nieuwe code is geen bewijs van live productierijpheid.
 
 ## Architectuur
 
