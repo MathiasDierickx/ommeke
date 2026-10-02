@@ -30,6 +30,8 @@ def plan(body, *, planner=intents.plan_route, once=requests.once, store_factory=
     rid = body.get('request_id')
     requests.request_path('quick-plan', rid)  # ook lokaal verplicht en gevalideerd
     def execute():
+        from .progress import emit
+        emit("routing", "Ik zoek het vertrekpunt en bereken je lus.")
         result = planner(**values, request_id=rid)
         if store_factory is not None and result.get('status') == 'needs_input':
             store = store_factory()

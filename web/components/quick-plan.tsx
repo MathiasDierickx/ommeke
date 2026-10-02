@@ -1,6 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
-import { apiRequest } from "@/lib/api";
+import { RouteProgress } from "./route-progress";
+import type { ProgressEvent } from "@/lib/event-stream";
+import { apiStream } from "@/lib/api";
 
 type Result = { status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
 export function QuickPlan({ token, onRoute, onConversation }: { token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
@@ -8,6 +10,7 @@ export function QuickPlan({ token, onRoute, onConversation }: { token: string; o
   const [km, setKm] = useState(40);
   const [activity, setActivity] = useState("fietsen");
   const [goal, setGoal] = useState("toeren");
+  const [progress,setProgress]=useState<ProgressEvent|null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result>();
@@ -22,9 +25,9 @@ export function QuickPlan({ token, onRoute, onConversation }: { token: string; o
     const values = { start, target_km: km, activiteit: activity, doel: goal };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; setBusy(true); setError(""); setResult(undefined);
+    lock.current = true; setProgress(null); setBusy(true); setError(""); setResult(undefined);
     try {
-      const next = await apiRequest<Result>("/api/routes", token, { method: "POST", body: JSON.stringify({ ...values, request_id: pending.current.id }) });
+      const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
       if (next.status === "ready") onRoute(next.draft); else setResult(next);
     } catch (e) { setError(e instanceof Error ? e.message : "Route maken mislukt."); }
@@ -40,6 +43,7 @@ export function QuickPlan({ token, onRoute, onConversation }: { token: string; o
       <label>Doel<select value={goal} onChange={e => setGoal(e.target.value)}><option value="toeren">Toeren</option><option value="hoogtemeters">Klimmen</option><option value="offroad">Onverhard</option><option value="kort">Kort</option></select></label>
       <button type="submit" disabled={busy}>{busy ? "Route wordt berekend…" : "Maak mijn route"}</button>
     </form>
+    {busy && <RouteProgress event={progress} />}
     {error && <p role="alert">{error}</p>}
     {result?.vragen?.map(q => <div key={q.vraag}><p>{q.vraag}</p>{Object.keys(q.opties).map(option => <button key={option} onClick={() => { if (result.conversation_id) { sessionStorage.setItem(`ommeke-answer:${result.conversation_id}`, `${q.vraag} Mijn keuze: ${option}. Ga verder met routeconcept ${result.draft}.`); onConversation(result.conversation_id); } }}>{option.replaceAll("_", " ")}</button>)}</div>)}
     {result?.conversation_id && <button onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}

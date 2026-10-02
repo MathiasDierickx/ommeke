@@ -63,3 +63,15 @@ export async function authenticatedBlob(path: string, token: string): Promise<Bl
   if (!response.ok) throw new Error("Routebestand kon niet worden geladen.");
   return response.blob();
 }
+
+export async function apiStream<T>(path: string, token: string, body: unknown, onProgress: (value: import('./event-stream').ProgressEvent) => void): Promise<T> {
+  const { readEventStream } = await import('./event-stream');
+  const response = await fetch(`${apiBase()}${path}`, {
+    method: 'POST', signal: AbortSignal.timeout(850_000),
+    headers: {Accept:'text/event-stream', 'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+    body: JSON.stringify(body),
+  });
+  if(!response.ok) return responseJson<T>(response);
+  if(!response.body || !response.headers.get('Content-Type')?.includes('text/event-stream')) throw new Error('Voortgang is tijdelijk niet beschikbaar. Herlaad het gesprek voordat je opnieuw probeert.');
+  return readEventStream<T>(response.body,onProgress);
+}

@@ -1534,6 +1534,8 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             else "offroad-doel: alleen rondrit-opvulling"
         )
     for round_number in range(1, max_rounds + 1):
+        from .progress import emit
+        emit("optimizing", f"Ik vergelijk routevarianten (ronde {round_number}).")
         budget_km = max_km - d["computed"]["total_km"]
         if budget_km < 1.0:
             stopped_because = "minder dan 1 km budget over"

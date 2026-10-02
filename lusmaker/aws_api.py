@@ -639,3 +639,13 @@ async def route_feedback(request: Request) -> JSONResponse:
         return _error(str(exc))
     except draft.DraftError as exc:
         return _error(str(exc), 404)
+
+
+async def conversation_message_stream(request: Request) -> Response:
+    from .streaming import response
+    return response(request, conversation_send)
+
+
+async def route_plan_stream(request: Request) -> Response:
+    from .streaming import response
+    return response(request, route_plan)

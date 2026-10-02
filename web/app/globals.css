@@ -354,3 +354,9 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 @media(max-width: 480px) { .quick-plan form { grid-template-columns: 1fr; } }
 
 .poi-filter { position: absolute; top: 75px; right: 12px; z-index: 450; padding: .5rem; background: white; border-radius: 8px; max-width: calc(100% - 24px); }
+.route-progress { margin: 20px 0; padding: 18px 20px; border-left: 3px solid #39765c; background: #edf3ee; border-radius: 4px 12px 12px 4px; max-width: 640px; }
+.route-progress > div { display: flex; align-items: center; gap: 12px; }
+.route-progress svg { width: 20px; height: 20px; flex-shrink: 0; }
+.route-progress p { font-size: 14px; line-height: 1.5; margin: 10px 0 0; }
+.route-progress small { display: block; margin-top: 10px; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none !important; } }

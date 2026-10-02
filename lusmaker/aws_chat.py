@@ -12,7 +12,7 @@ from typing import Any
 
 from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA
 
-from . import draft, intents, tenant, quotas, requests, telemetry
+from . import draft, intents, tenant, quotas, requests, telemetry, progress
 
 
 MAX_PROMPT_CHARS = 4000
@@ -513,6 +513,7 @@ class BedrockRouteAgent:
         usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
 
         for iteration in range(1, MAX_AGENT_ITERATIONS + 1):
+            progress.emit("thinking", "Ik bekijk je routewensen." if iteration == 1 else "Ik beoordeel het resultaat en werk je antwoord af.")
             response = self._converse(messages, request_id)
             for key in usage:
                 usage[key] += int((response.get("usage") or {}).get(key, 0))
@@ -539,6 +540,8 @@ class BedrockRouteAgent:
             for tool_use in tool_uses:
                 started = time.monotonic()
                 name = tool_use.get("name", "")
+                labels = {"lookup_place":"Ik zoek de juiste plaats en controleer de locatie.", "nearby_places":"Ik zoek plaatsen in de buurt.", "plan_route":"Ik bereken je route.", "adjust_route":"Ik pas je route aan.", "reroute_from":"Ik bereken de terugweg.", "route_details":"Ik controleer de routedetails.", "get_profile":"Ik bekijk je voorkeuren.", "update_profile":"Ik sla je voorkeuren op."}
+                progress.emit("tool", labels.get(name, "Ik controleer de routegegevens."))
                 error_detail: str | None = None
                 try:
                     output = self.tools.execute(
@@ -569,6 +572,7 @@ class BedrockRouteAgent:
                 }
                 if error_detail:
                     event["error"] = error_detail[:300]
+                progress.emit("tool_done" if status == "success" else "tool_error", "Stap afgerond; ik controleer het vervolg." if status == "success" else "Deze stap lukte niet. Ik bekijk wat er wel mogelijk is.")
                 tool_events.append(event)
                 results.append(
                     {
@@ -628,6 +632,7 @@ def send_message(
             history,
             request_id=f"{conversation_id}:{user_message['id']}",
         )
+        progress.emit("saving", "Ik sla het antwoord en je routegegevens op.")
         assistant_message = store.add_message(
             conversation_id,
             "assistant",

@@ -188,3 +188,13 @@ def test_resolve_does_not_bill_google_for_strong_local_hit():
 
     assert primary == {"label": "Blaarmeersen", "lat": 51.039, "lon": 3.7}
     assert alternatives == []
+
+
+def test_coordinate_input_is_finite_and_has_nearby_place_label():
+    gaz = {'places': [('Bredene', 'town', 51.24, 2.97)]}
+    point, _ = geocode.resolve('51.25,2.973', gazetteer=gaz)
+    assert point['lat'] == 51.25 and point['label'].startswith('Nabij Bredene')
+    for text in ('nan,3', '91,3', '51,inf', '51,181'):
+        try: geocode.resolve(text, gazetteer=gaz)
+        except ValueError: pass
+        else: raise AssertionError(f'Ongeldige coördinaten geaccepteerd: {text}')

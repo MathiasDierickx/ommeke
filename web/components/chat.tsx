@@ -3,7 +3,7 @@
 import { ArrowUp, Check, CircleUserRound, LoaderCircle, Route as RouteIcon, Send } from "lucide-react";
 import { FormEvent } from "react";
 
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, Route } from "@/lib/types";
 import { Logo } from "./brand";
 
 const STARTERS = [
@@ -32,7 +32,7 @@ export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }
   );
 }
 
-export function Message({ message, onRoute, onOption }: { message: ChatMessage; onRoute: (id: string) => void; onOption: (value: string) => void }) {
+export function Message({ message, onRoute, onOption, routes = [] }: { routes?: Route[]; message: ChatMessage; onRoute: (id: string) => void; onOption: (value: string) => void }) {
   const assistant = message.role === "assistant";
   const options = messageOptions(message);
   return (
@@ -42,7 +42,7 @@ export function Message({ message, onRoute, onOption }: { message: ChatMessage; 
         <div className="message-copy">{message.content.split("\n").map((line, index) => <p key={`${message.id}-${index}`}>{line || "\u00a0"}</p>)}</div>
         {options.length ? <div className="option-chips" aria-label="Antwoordopties">{options.map((option) => <button key={option} onClick={() => onOption(option)}>{option}</button>)}</div> : null}
       </div>
-      {message.route_ids?.length ? <button className="route-made" onClick={() => onRoute(message.route_ids!.at(-1)!)}><Check /> Route opgeslagen · open kaart <ArrowUp /></button> : null}
+      {message.route_ids?.length ? <button className="route-made" onClick={() => onRoute(message.route_ids!.at(-1)!)}><Check /> {routes.find(r=>r.id===message.route_ids!.at(-1))?.ready ? "Route klaar · bekijk kaart en downloads" : "Routeconcept · bekijk wat nog ontbreekt"} <ArrowUp /></button> : null}
     </article>
   );
 }

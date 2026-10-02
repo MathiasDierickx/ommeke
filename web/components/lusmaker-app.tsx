@@ -9,6 +9,9 @@ import { AuthPanel } from "@/components/auth-panel";
 import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
 import { RouteDetail } from "@/components/route-detail";
+import { RouteProgress } from "./route-progress";
+import type { ProgressEvent } from "@/lib/event-stream";
+import { apiStream } from "@/lib/api";
 import { chatReply, mergeById, pendingPrompt, type PendingPrompt } from "@/lib/interaction";
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
@@ -37,6 +40,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<ProgressEvent|null>(null);
   const [error, setError] = useState<string>();
   const [leftOpen, setLeftOpen] = useState(false);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
@@ -177,6 +181,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!content) return;
     sendLock.current = true;
     setBusy(true);
+    setProgress(null);
     setError(undefined);
     setPrompt("");
     let id = conversationId;
@@ -204,12 +209,12 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     const optimistic: ChatMessage = { id: `local-${Date.now()}`, conversation_id: id, role: "user", content, created_at: new Date().toISOString() };
     setMessages((current) => [...current, optimistic]);
     try {
-      const result = chatReply(await apiRequest<unknown>(`/api/conversations/${id}/messages`, session.accessToken, { method: "POST", body: JSON.stringify({ content, request_id: pending.id }) }));
+      const result = chatReply(await apiStream<unknown>(`/api/conversations/${id}/messages/stream`, session.accessToken, { content, request_id: pending.id }, setProgress));
       try { sessionStorage.removeItem(storageKey); } catch { /* opslag is optioneel */ }
       setMessages((current) => mergeById(current, [result.message]));
-      await loadWorkspace(session.accessToken);
-      if (result.ready_route_ids?.length) openRoute(result.ready_route_ids.at(-1)!);
-      else router.replace(`/chats/${encodeURIComponent(id)}`);
+      setBusy(false);
+      await loadWorkspace(session.accessToken).catch(() => setError("Je antwoord is opgeslagen. De bibliotheek kon nog niet worden vernieuwd."));
+      router.replace(`/chats/${encodeURIComponent(id)}`);
     } catch (cause) {
       setPrompt(content);
       setMessages(current => current.filter(message => message.id !== optimistic.id));
@@ -318,6 +323,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   const handleLogout = () => {
     const current = session;
+    try { localStorage.removeItem("ommeke-offline-routes-v1"); } catch { /* Geen lokale opslag beschikbaar. */ }
     libraryVersion.current++;
     routeLoadVersion.current++;
     didInitialLanding = false;
@@ -367,8 +373,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <div className="messages">
           {!messages.length && session ? <QuickPlan token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
           {!messages.length ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
-          {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} onOption={(value) => void sendPrompt(value)} />)}
-          {busy ? <div className="thinking-row" role="status" aria-live="polite"><Logo /><span>Lus tekent je route</span><i /><i /><i /></div> : null}
+          {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {busy ? <RouteProgress event={progress} /> : null}
           <div ref={messageEnd} />
         </div>
         <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy} />
