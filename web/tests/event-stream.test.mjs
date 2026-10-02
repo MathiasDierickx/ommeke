@@ -14,3 +14,7 @@ test('SSE weigert fouten en een afgebroken stream zonder eindresultaat',async()=
  await assert.rejects(readEventStream(body('event: error\ndata: {"error":"Geen route"}\n\n'),()=>{}),/Geen route/);
  await assert.rejects(readEventStream(body(': heartbeat\n\n'),()=>{}),/onderbroken/);
 });
+test('SSE verdraagt CRLF tussen afzonderlijke netwerkchunks',async()=>{
+ const result=await readEventStream(body('event: result\r\ndata: {"ok":true}\r\n\r\n'),()=>{});
+ assert.equal(result.ok,true);
+});
