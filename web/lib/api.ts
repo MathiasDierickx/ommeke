@@ -1,4 +1,6 @@
 import { errorMessage } from "./interaction";
+import { fetchAuthenticated } from "./authenticated-fetch";
+import { requestAccessToken } from "./cognito";
 
 function apiBase(): string {
   const value = process.env.NEXT_PUBLIC_API_URL;
@@ -27,7 +29,7 @@ export async function apiRequest<T>(
   token: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${apiBase()}${path}`, {
+  const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     signal: init.signal ?? AbortSignal.timeout(240_000),
     ...init,
     headers: {
@@ -36,7 +38,7 @@ export async function apiRequest<T>(
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },
-  });
+  }, token, requestAccessToken);
   return responseJson<T>(response);
 }
 
@@ -57,20 +59,20 @@ export async function publicApiRequest<T>(
 }
 
 export async function authenticatedBlob(path: string, token: string): Promise<Blob> {
-  const response = await fetch(`${apiBase()}${path}`, {
+  const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }, token, requestAccessToken);
   if (!response.ok) throw new Error("Routebestand kon niet worden geladen.");
   return response.blob();
 }
 
 export async function apiStream<T>(path: string, token: string, body: unknown, onProgress: (value: import('./event-stream').ProgressEvent) => void): Promise<T> {
   const { readEventStream } = await import('./event-stream');
-  const response = await fetch(`${apiBase()}${path}`, {
+  const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     method: 'POST', signal: AbortSignal.timeout(850_000),
     headers: {Accept:'text/event-stream', 'Content-Type':'application/json', Authorization:`Bearer ${token}`},
     body: JSON.stringify(body),
-  });
+  }, token, requestAccessToken);
   if(!response.ok) return responseJson<T>(response);
   if(!response.body || !response.headers.get('Content-Type')?.includes('text/event-stream')) throw new Error('Voortgang is tijdelijk niet beschikbaar. Herlaad het gesprek voordat je opnieuw probeert.');
   return readEventStream<T>(response.body,onProgress);

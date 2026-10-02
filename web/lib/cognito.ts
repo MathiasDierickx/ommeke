@@ -186,7 +186,17 @@ export async function confirmForgotPassword(email: string, code: string, passwor
   });
 }
 
+let refreshFlight: {token:string; promise:Promise<AuthSession|null>} | undefined;
 export async function refresh(session: AuthSession): Promise<AuthSession | null> {
+  if (session.expiresAt > Date.now() + 60_000) return session;
+  if (refreshFlight?.token === session.accessToken) return refreshFlight.promise;
+  const promise = refreshOnce(session);
+  refreshFlight = {token:session.accessToken, promise};
+  try { return await promise; }
+  finally { if (refreshFlight?.promise === promise) refreshFlight = undefined; }
+}
+
+async function refreshOnce(session: AuthSession): Promise<AuthSession | null> {
   if (session.expiresAt > Date.now() + 60_000) return session;
   if (!session.refreshToken) return null;
   try {
@@ -196,10 +206,34 @@ export async function refresh(session: AuthSession): Promise<AuthSession | null>
       AuthParameters: { REFRESH_TOKEN: session.refreshToken },
     });
     const result = payload.AuthenticationResult as Record<string, unknown> | undefined;
+    // A logout or account change while refreshing must not restore the old login.
+    if (storedSession()?.accessToken !== session.accessToken) return null;
     return result ? store(toSession(result, session)) : null;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof AuthError && error.code === "NotAuthorizedException") return null;
+    throw error;
   }
+}
+
+/** Resolve stale component tokens before every authenticated request. */
+export async function requestAccessToken(previousToken: string, force: boolean): Promise<string> {
+  const stored = storedSession();
+  if (!stored) {
+    if (!force) return previousToken; // private-mode session can still be valid
+    throw new AuthError("SessionExpired", "Je sessie is verlopen. Herlaad de app om opnieuw in te loggen; je routes blijven bewaard.");
+  }
+  const previousUser = claims(previousToken).sub;
+  const currentUser = claims(stored.accessToken).sub;
+  if (!previousUser || previousUser !== currentUser) {
+    throw new AuthError("SessionChanged", "Je account is gewijzigd. Herlaad de app voordat je verdergaat.");
+  }
+  // Another request may already have renewed this token.
+  const fresh = await refresh(force && previousToken === stored.accessToken ? {...stored, expiresAt:0} : stored);
+  if (!fresh) {
+    if (storedSession()?.accessToken === stored.accessToken) clearStored();
+    throw new AuthError("SessionExpired", "Je sessie is verlopen. Herlaad de app om opnieuw in te loggen; je routes blijven bewaard.");
+  }
+  return fresh.accessToken;
 }
 
 /** Laad de bewaarde sessie en vernieuw ze indien nodig. */
@@ -207,7 +241,7 @@ export async function currentSession(): Promise<AuthSession | null> {
   const stored = storedSession();
   if (!stored) return null;
   const fresh = await refresh(stored);
-  if (!fresh) clearStored();
+  if (!fresh && storedSession()?.accessToken === stored.accessToken) clearStored();
   return fresh;
 }
 

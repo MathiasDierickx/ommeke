@@ -8,6 +8,7 @@ export function pendingPrompt(previous: PendingPrompt | null, conversationId: st
 }
 
 export function errorMessage(status: number, message?: string, retryAfter?: string | null): string {
+  if (status === 401) return "Je sessie is verlopen. Herlaad de app om opnieuw in te loggen; je routes blijven bewaard.";
   if (status === 429) {
     const seconds = Number(retryAfter);
     const minutes = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : null;
