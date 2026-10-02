@@ -174,13 +174,27 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     const storageKey = `ommeke-pending:${id}`;
     let previous: PendingPrompt | null = null;
     try { previous = JSON.parse(sessionStorage.getItem(storageKey) || "null"); } catch { /* corrupte of uitgeschakelde opslag */ }
+    if (previous?.content === content && previous.conversationId === id) {
+      try {
+        const receipt = await apiRequest<{ status: string }>(`/api/conversations/${id}/requests/${previous.id}`, session.accessToken);
+        if (receipt.status === "interrupted") {
+          try { sessionStorage.removeItem(storageKey); } catch { /* opslag is optioneel */ }
+          setPrompt(content);
+          setError("De vorige opdracht werd onderbroken. Controleer eerst je routes: er kan al een route bestaan. Opnieuw verzenden start daarna bewust een nieuwe opdracht.");
+          setBusy(false);
+          sendLock.current = false;
+          await loadWorkspace(session.accessToken).catch(() => undefined);
+          return;
+        }
+      } catch { /* Een onbekende status mag geen tweede uitvoering veroorzaken. */ }
+    }
     const pending = pendingPrompt(previous, id, content, () => crypto.randomUUID());
     try { sessionStorage.setItem(storageKey, JSON.stringify(pending)); } catch { /* opslag is optioneel */ }
     const optimistic: ChatMessage = { id: `local-${Date.now()}`, conversation_id: id, role: "user", content, created_at: new Date().toISOString() };
     setMessages((current) => [...current, optimistic]);
     try {
       const result = await apiRequest<{ message: ChatMessage; route_ids: string[] }>(`/api/conversations/${id}/messages`, session.accessToken, { method: "POST", body: JSON.stringify({ content, request_id: pending.id }) });
-      sessionStorage.removeItem(storageKey);
+      try { sessionStorage.removeItem(storageKey); } catch { /* opslag is optioneel */ }
       setMessages((current) => mergeById(current, [result.message]));
       await loadWorkspace(session.accessToken);
       if (result.route_ids.length) openRoute(result.route_ids.at(-1)!);
@@ -269,6 +283,18 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     }
   };
 
+  const unshareRoute = async () => {
+    if (!session || !selectedRoute) return;
+    try {
+      await apiRequest(`/api/routes/${selectedRoute.id}/share`, session.accessToken, { method: "DELETE" });
+      await loadRoute(selectedRoute.id, session.accessToken);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Delen stoppen mislukt."); throw cause; }
+  };
+  const sendFeedback = async (category: string, comment: string) => {
+    if (!session || !selectedRoute) return;
+    await apiRequest(`/api/routes/${selectedRoute.id}/feedback`, session.accessToken, { method: "POST", body: JSON.stringify({ category, comment }) });
+  };
+
   if (!authReady) return <div className="app-loading"><LoaderCircle className="spin" /> Lusmaker laden…</div>;
   if (!session) return <AuthPanel onAuthenticated={setSession} />;
 
@@ -296,7 +322,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onBack={() => router.push("/")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }

@@ -42,3 +42,12 @@ def test_interrupted_request_never_repeats_partial_side_effects():
         assert calls == [1]
         assert requests.status('chat:a', 'request-123')['status'] == 'interrupted'
         assert 'geheime inhoud' not in str(client.objects)
+
+
+def test_expired_running_receipt_reports_interruption_without_retry():
+    client = _FakeS3()
+    with _aws_bucket(), aws_state.use_client(client):
+        aws_state.put_json(requests.request_path('chat:a', 'request-123'),
+                           {'status': 'running', 'created_at': 100})
+        assert requests.status('chat:a', 'request-123', clock=lambda: 1059)['status'] == 'running'
+        assert requests.status('chat:a', 'request-123', clock=lambda: 1060)['status'] == 'interrupted'

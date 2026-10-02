@@ -13,7 +13,7 @@ function formatDate(value?: string): string {
   return new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short" }).format(date);
 }
 
-export function Sidebar({ conversations, routes, selectedConversation, selectedRoute, onConversation, onRoute, onNew, onClose, session, onLogout, hasMoreRoutes, onMoreRoutes }: {
+export function Sidebar({ conversations, routes, selectedConversation, selectedRoute, onConversation, onRoute, onNew, onClose, session, onLogout, hasMoreRoutes, onMoreRoutes, accountSlot }: {
   conversations: Conversation[];
   routes: Route[];
   selectedConversation?: string;
@@ -24,6 +24,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
   onClose: () => void;
   session: AuthSession;
   onLogout: () => void;
+  accountSlot?: React.ReactNode;
   hasMoreRoutes?: boolean;
   onMoreRoutes?: () => void;
 }) {
@@ -47,7 +48,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
           </div>
           {hasMoreRoutes ? <button className="new-chat" onClick={onMoreRoutes}>Meer routes laden</button> : null}
         </section>
-        <AccountControls token={session.accessToken} onDeleted={onLogout} />
+        {accountSlot ?? <AccountControls token={session.accessToken} onDeleted={onLogout} />}
       </nav>
       <div className="profile-row"><span className="avatar">{(session.name || session.email || "L").slice(0, 1).toUpperCase()}</span><span><strong>{session.name || "Mijn account"}</strong><small>{session.email || "Cognito-gebruiker"}</small></span><button className="icon-button" onClick={onLogout} aria-label="Afmelden"><LogOut /></button></div>
     </aside>

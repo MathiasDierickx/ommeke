@@ -332,3 +332,8 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .account-controls summary { cursor: pointer; font-weight: 600; }
 .account-controls button { display: block; margin: .6rem 0; text-decoration: underline; }
 button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.account-controls form, .account-controls label { display: grid; gap: .5rem; }
+.account-controls form { margin-top: .75rem; }
+.account-controls select, .account-controls textarea { width: 100%; min-height: 2.75rem; padding: .6rem; border: 1px solid #d6ded2; border-radius: .6rem; background: #fff; }
+.account-controls textarea { min-height: 5rem; resize: vertical; }
+.account-controls button { min-height: 2.75rem; text-align: left; }

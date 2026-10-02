@@ -75,9 +75,13 @@ export function RouteDetail({
   onAdjust,
   onLoadClimbs,
   onShare,
+  onUnshare,
+  onFeedback,
+  mapSlot,
   onBack,
   onMenu,
 }: {
+  mapSlot?: React.ReactNode;
   route: Route | null;
   loading: boolean;
   onDownload: () => void;
@@ -88,6 +92,8 @@ export function RouteDetail({
   onShare: () => Promise<{ token: string; url: string } | undefined>;
   onBack: () => void;
   onMenu: () => void;
+  onUnshare: () => Promise<void>;
+  onFeedback: (category: string, comment: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(route?.name || "");
@@ -97,6 +103,9 @@ export function RouteDetail({
   const [nearbyClimbs, setNearbyClimbs] = useState<NearbyClimb[]>([]);
   const [shareUrl, setShareUrl] = useState<string>();
   const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState("bruikbaar");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState("");
   useEffect(() => {
     setName(route?.name || "");
     setEditing(false);
@@ -127,7 +136,7 @@ export function RouteDetail({
 
   return (
     <section className="route-fullscreen">
-      <div className="route-map-canvas"><RouteMap geometry={route?.geometry} loading={loading} /></div>
+      <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} />}</div>
       <header className="route-topbar">
         <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
         <div className="route-topbar-title"><Logo /><span><small>Routedetail</small><strong>{route?.name || "Route laden…"}</strong></span></div>
@@ -154,6 +163,7 @@ export function RouteDetail({
           <div className="route-actions">
             <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>
+            {route.shared || shareUrl ? <button className="button button-quiet" onClick={async () => { try { await onUnshare(); setShareUrl(undefined); } catch { /* caller toont de fout; link blijft zichtbaar */ } }}>Stop delen</button> : null}
             <button className="button button-danger" onClick={() => void onDelete()} aria-label="Route verwijderen"><Trash2 /><span>Verwijder</span></button>
           </div>
           {shareUrl ? (
@@ -163,6 +173,13 @@ export function RouteDetail({
               {typeof navigator.share === "function" ? <button className="icon-button" onClick={() => void navigator.share({ title: route.name, url: shareUrl })} aria-label="Deellink delen"><Share2 /></button> : null}
             </div>
           ) : null}
+          <details className="account-controls"><summary>Feedback over deze route</summary>
+            <form onSubmit={async event => { event.preventDefault(); setFeedbackStatus("Verzenden…"); try { await onFeedback(feedback, feedbackText); setFeedbackStatus("Bedankt, je feedback is bewaard."); setFeedbackText(""); } catch { setFeedbackStatus("Feedback bewaren mislukt. Probeer opnieuw."); } }}>
+              <label>Hoe is de route?<select value={feedback} onChange={event => setFeedback(event.target.value)}><option value="bruikbaar">Bruikbaar</option><option value="verkeerde_weg">Verkeerde weg</option><option value="afstand">Afstand klopt niet</option><option value="wens_gemist">Wens gemist</option><option value="anders">Anders</option></select></label>
+              <label>Toelichting (optioneel)<textarea value={feedbackText} onChange={event => setFeedbackText(event.target.value)} maxLength={1000} /></label>
+              <button disabled={feedbackStatus === "Verzenden…"}>Feedback bewaren</button><p role="status">{feedbackStatus}</p>
+            </form>
+          </details>
           <section className="route-adjust" aria-labelledby="adjust-title">
             <div className="adjust-heading"><div><small>Routeatelier</small><h3 id="adjust-title">Aanpassen</h3></div>{adjusting ? <LoaderCircle className="spin" aria-label="Route aanpassen" /> : null}</div>
             <div className="adjust-row">

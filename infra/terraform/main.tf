@@ -364,6 +364,12 @@ resource "aws_lambda_function" "app" {
 
   environment {
     variables = {
+      LUSMAKER_QUOTA_CHAT         = tostring(var.daily_quotas.chat)
+      LUSMAKER_QUOTA_ROUTE        = tostring(var.daily_quotas.route)
+      LUSMAKER_QUOTA_TOKENS       = tostring(var.daily_quotas.tokens)
+      LUSMAKER_QUOTA_PROVISION    = tostring(var.daily_quotas.provision)
+      LUSMAKER_QUOTA_FEEDBACK     = tostring(var.daily_quotas.feedback)
+      LUSMAKER_METRICS_SALT       = var.metrics_salt
       AWS_LWA_ASYNC_INIT          = "true"
       AWS_LWA_INVOKE_MODE         = "response_stream"
       JAVA_OPTS                   = var.java_opts
@@ -417,7 +423,7 @@ resource "aws_lambda_function_url" "app" {
       "last-event-id",
       "mcp-protocol-version"
     ]
-    expose_headers = ["mcp-session-id", "www-authenticate"]
+    expose_headers = ["mcp-session-id", "www-authenticate", "x-request-id", "retry-after"]
     max_age        = 3600
   }
 }

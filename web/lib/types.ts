@@ -25,6 +25,7 @@ export type ChatMessage = {
 };
 
 export type Route = {
+  shared?: boolean;
   id: string;
   revision: number;
   name: string;

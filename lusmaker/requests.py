@@ -50,8 +50,12 @@ def once(scope, request_id, payload, operation, *, get=None, put=None, clock=tim
     return value
 
 
-def status(scope, request_id):
+def status(scope, request_id, *, clock=time.time):
     state, _ = aws_state.get_json(request_path(scope, request_id))
     if not state:
         return {"status": "unknown"}
+    # Lambda duurt maximaal 900 s; na de drainmarge is een running receipt
+    # aantoonbaar niet meer actief. Nooit opnieuw uitvoeren onder dezelfde id.
+    if state.get("status") == "running" and clock() - state.get("created_at", clock()) >= 960:
+        state = {**state, "status": "interrupted"}
     return {k: state[k] for k in ('status', 'created_at', 'result') if k in state}

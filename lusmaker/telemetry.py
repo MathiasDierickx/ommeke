@@ -1,6 +1,11 @@
 """Gestructureerde operationele events zonder prompts, routes of credentials."""
 from contextvars import ContextVar
 import json
+import os
+import hmac
+import hashlib
+from datetime import datetime, UTC
+from . import tenant
 import logging
 import re
 import time
@@ -9,11 +14,24 @@ import uuid
 request_id = ContextVar('request_id', default=None)
 logger = logging.getLogger('lusmaker.metrics')
 logger.setLevel(logging.INFO)
-ALLOWED = {'event', 'request_id', 'operation', 'status', 'seconds', 'input_tokens', 'output_tokens', 'iterations', 'success', 'cold_start'}
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(handler)
+logger.propagate = False
+ALLOWED = {'event', 'request_id', 'operation', 'status', 'seconds', 'input_tokens', 'output_tokens', 'iterations', 'success', 'cold_start', 'actor', 'date'}
+
+
+def actor_id():
+    salt = os.environ.get('LUSMAKER_METRICS_SALT')
+    if salt and tenant.current() != 'anonymous':
+        return hmac.new(salt.encode(), tenant.current().encode(), hashlib.sha256).hexdigest()[:24]
+    return None
 
 
 def emit(event, **values):
-    payload = {"event": event, "request_id": request_id.get(), **values}
+    actor = actor_id()
+    payload = {"actor": actor, "date": datetime.now(UTC).date().isoformat(), "event": event, "request_id": request_id.get(), **values}
     logger.info(json.dumps({k: v for k, v in payload.items() if k in ALLOWED}, ensure_ascii=False, separators=(',', ':')))
 
 
@@ -46,6 +64,6 @@ class MetricsMiddleware:
         try:
             await self.app(scope, receive, tracked)
         finally:
-            emit('http', operation=operation(scope['path']), status=status,
+            emit('http', actor=scope.get('lusmaker.actor'), operation=operation(scope['path']), status=status,
                  seconds=round(time.monotonic()-started, 3), success=status < 400, cold_start=cold)
             request_id.reset(token)

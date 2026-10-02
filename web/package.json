@@ -8,7 +8,8 @@
     "shots": "node e2e/mobile-shots.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --experimental-strip-types --test tests/*.test.mjs"
+    "test:unit": "node --experimental-strip-types --test tests/*.test.mjs",
+    "qa": "LUSMAKER_UI_QA=1 next dev --webpack --hostname 127.0.0.1 --port 3017"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

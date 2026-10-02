@@ -15,7 +15,7 @@ import logging
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant, quotas, requests, account
+from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant, quotas, requests, account, pilot
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -84,8 +84,10 @@ async def routes_list(_request: Request) -> JSONResponse:
         )
         full.sort(key=lambda item: item.get("created", ""), reverse=True)
         return JSONResponse({"routes": [_route_item(item) for item in full]})
-    except Exception as exc:
-        return _error(str(exc), 500, "routes_unavailable")
+    except ValueError as exc:
+        return _error(str(exc))
+    except Exception:
+        return _error("Routes konden niet worden geladen.", 500, "routes_unavailable")
 
 
 def _elevation_profile(legs: list, *, samples: int = 120) -> list[dict[str, float]]:
@@ -150,6 +152,7 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
 
 def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
     result = _route_item(item)
+    result["shared"] = bool(item.get("share_token"))
     result["avoid_places"] = item.get("avoid_places") or []
     result["route_request"] = item.get("route_request") or {}
     result["computed"] = item.get("computed")
@@ -190,6 +193,13 @@ def _string_list(body: dict[str, Any], name: str) -> list[str]:
     ):
         raise ChatError(f"{name} moet een lijst met tekstwaarden zijn")
     return [item.strip() for item in value]
+
+
+def _optional_place(body: dict, name: str) -> str | None:
+    value = body.get(name)
+    if value is not None and (not isinstance(value, str) or not value.strip() or len(value) > 160):
+        raise ChatError(f"{name} moet 1–160 tekens tekst zijn")
+    return value.strip() if value is not None else None
 
 
 async def route_adjust(request: Request) -> JSONResponse:
@@ -234,6 +244,8 @@ async def route_adjust(request: Request) -> JSONResponse:
             vermijd_plaatsen=_string_list(body, "vermijd_plaatsen"),
             sta_plaatsen_toe=_string_list(body, "sta_plaatsen_toe"),
             doel=goal_map.get(goal),
+            rond_plaats=_optional_place(body, "rond_plaats"),
+            langs_water=_optional_place(body, "langs_water"),
             check_readiness=False,
             expected_revision=expected_revision,
         )
@@ -541,7 +553,10 @@ async def account_export(_request: Request) -> Response:
 
 
 async def account_delete(request: Request) -> JSONResponse:
-    body = await _json_body(request)
+    try:
+        body = await _json_body(request)
+    except ValueError as exc:
+        return _error(str(exc))
     if body.get("confirmation") != "VERWIJDER":
         return _error("Bevestig met VERWIJDER om je account en alle gegevens te wissen.")
     result = await asyncio.to_thread(account.erase_data, ConversationStore())
@@ -551,3 +566,16 @@ async def account_delete(request: Request) -> JSONResponse:
     token = request.headers.get('authorization', '').partition(' ')[2]
     await asyncio.to_thread(_cognito_client().delete_user, AccessToken=token)
     return JSONResponse({"status": "deleted"})
+
+
+async def route_feedback(request: Request) -> JSONResponse:
+    try:
+        body = await _json_body(request)
+        result = await asyncio.to_thread(pilot.feedback, _draft_id(request), body.get('category'), body.get('comment', ''))
+        return JSONResponse(result, status_code=201)
+    except quotas.QuotaExceeded as exc:
+        return JSONResponse({"error": str(exc)}, status_code=429, headers={"Retry-After": str(exc.retry_after)})
+    except (ValueError, ChatError) as exc:
+        return _error(str(exc))
+    except draft.DraftError as exc:
+        return _error(str(exc), 404)

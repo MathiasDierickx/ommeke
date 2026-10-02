@@ -168,7 +168,7 @@ def cmd_region_status(args):
 def cmd_region_pack(args):
     from . import provision
 
-    return provision.create_pack(args.slug, args.output)
+    return provision.create_pack(args.slug, args.output, include_personal_heat=args.include_personal_heat)
 
 
 def cmd_geocode(args):
@@ -405,6 +405,8 @@ def cmd_plan_route(args):
         target_km=args.target_km,
         tolerance_km=args.tolerance_km,
         doel=args.doel,
+        rond_plaats=args.rond_plaats,
+        langs_water=args.langs_water,
         via_klimmen=args.via_klim,
         vermijd_plaatsen=args.vermijd_plaats,
         kasseien=args.kasseien,
@@ -433,6 +435,8 @@ def cmd_adjust_route(args):
         target_km=args.target_km,
         tolerance_km=args.tolerance_km,
         doel=args.doel,
+        rond_plaats=args.rond_plaats,
+        langs_water=args.langs_water,
         geen_opvulling=args.geen_opvulling,
         profiel_naam=args.profiel_naam,
         expected_revision=args.expected_revision,
@@ -449,6 +453,13 @@ def _region_arg(parser):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="lus", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
+    check = sub.add_parser("check", help="controleer componenten offline, zonder runtimewijzigingen")
+    check.add_argument("check_args", nargs=argparse.REMAINDER)
+    def run_checks(args):
+        from .checks import main as check_main
+        check_main(args.check_args)
+        raise SystemExit(0)
+    check.set_defaults(func=run_checks)
 
     s = sub.add_parser("setup", help="download OSM-extract + DEM en schrijf GraphHopper-config")
     _region_arg(s)
@@ -506,6 +517,7 @@ def main(argv=None):
     s = rsub.add_parser("pack", help="maak een cachebaar regiopack")
     s.add_argument("slug")
     s.add_argument("-o", "--output")
+    s.add_argument("--include-personal-heat", action="store_true", help="uitsluitend voor een privépack: persoonlijke heat meenemen")
     s.set_defaults(func=cmd_region_pack)
 
     s = sub.add_parser("geocode", help="zoek een plaats of 'straat, plaats'")
@@ -536,7 +548,7 @@ def main(argv=None):
     )
     s.add_argument(
         "--doel",
-        choices=("hoogtemeters", "kort", "toeren"),
+        choices=("hoogtemeters", "offroad", "kort", "toeren"),
         default="hoogtemeters",
     )
     s.add_argument("--via-klim", action="append", default=[])
@@ -564,6 +576,8 @@ def main(argv=None):
         "--request-id",
         help="stabiele sleutel om een retry van dezelfde route te hervatten",
     )
+    s.add_argument("--rond-plaats")
+    s.add_argument("--langs-water")
     s.set_defaults(func=cmd_plan_route)
 
     s = sub.add_parser(
@@ -583,9 +597,11 @@ def main(argv=None):
     s.add_argument("--expected-revision", type=int)
     s.add_argument(
         "--doel",
-        choices=("hoogtemeters", "kort", "toeren"),
+        choices=("hoogtemeters", "offroad", "kort", "toeren"),
     )
     s.add_argument("--geen-opvulling", action="store_true", default=None)
+    s.add_argument("--rond-plaats")
+    s.add_argument("--langs-water")
     s.set_defaults(func=cmd_adjust_route)
 
     c = sub.add_parser("climbs", help="klim-database")
@@ -745,7 +761,7 @@ def main(argv=None):
 
     args = p.parse_args(argv)
     try:
-        if args.cmd in {"region", "profile"}:
+        if args.cmd in {"region", "profile", "check"}:
             result = args.func(args)
         else:
             with config.use_region(getattr(args, "region", None)):

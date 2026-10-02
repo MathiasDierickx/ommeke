@@ -9,7 +9,7 @@ import uuid
 
 from . import aws_state
 
-DEFAULTS = {"chat": 40, "route": 80, "provision": 0, "tokens": 200_000}
+DEFAULTS = {"chat": 40, "route": 80, "provision": 0, "tokens": 200_000, "feedback": 20}
 
 
 class QuotaExceeded(RuntimeError):

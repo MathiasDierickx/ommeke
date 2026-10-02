@@ -223,3 +223,32 @@ variable "force_destroy_ecr" {
   type        = bool
   default     = false
 }
+
+variable "daily_quotas" {
+  description = "Conservatieve pilotlimieten per gebruiker per UTC-dag; provisioning staat standaard uit."
+  type = object({
+    chat      = number
+    route     = number
+    tokens    = number
+    provision = number
+    feedback  = number
+  })
+  default = { chat = 40, route = 80, tokens = 200000, provision = 0, feedback = 20 }
+  validation {
+    condition     = alltrue([for value in values(var.daily_quotas) : value >= 0 && floor(value) == value])
+    error_message = "Quota moeten niet-negatieve gehele getallen zijn."
+  }
+}
+
+variable "metrics_salt" {
+  description = "Optionele geheime salt voor gepseudonimiseerde pilotmeting; leeg schakelt gebruikersmeting uit."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "monitoring_alarm_actions" {
+  description = "Bestaande SNS-topic-ARNs voor operationele alarmen; leeg bewaart alleen alarmstatus."
+  type        = list(string)
+  default     = []
+}
