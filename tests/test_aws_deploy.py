@@ -109,6 +109,13 @@ def test_cloud_sources_are_visible_to_tenant_engine_without_graph_changes():
         prepared = prepare(Path(result["build"]), destination)
         assert prepared["build_id"] == result["build_id"]
         assert graph.read_text() == "bestaande graphconfig"
+        public_root = destination / "regions/vlaanderen/cache/route_sources"
+        # Lambda leest als een andere gebruiker dan de imagebuilder. Een
+        # eigenaarstest alleen mist de 700/600-rechten van tijdelijke bestanden.
+        for path in [public_root, *public_root.rglob("*")]:
+            assert path.stat().st_mode & 0o004, path
+            if path.is_dir():
+                assert path.stat().st_mode & 0o001, path
         with route_sources._home(destination), config.user_scope("cloud-user"):
             assert destination in route_evidence.database_path().parents
             assert route_evidence.pack_status() == {
@@ -121,6 +128,7 @@ def test_cloud_sources_are_visible_to_tenant_engine_without_graph_changes():
         # Herhaalde staging blijft op dezelfde gecontroleerde versie staan.
         assert prepare(Path(result["build"]), destination)["build_id"] == result["build_id"]
         pointer = destination / "regions/vlaanderen/cache/route_sources/current.json"
+        assert pointer.stat().st_mode & 0o004
         assert json.loads(pointer.read_text())["build_id"] == result["build_id"]
 
 

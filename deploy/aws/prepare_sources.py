@@ -18,6 +18,15 @@ def prepare(build: Path, destination: Path) -> dict:
         raise ValueError("bereid eerst het Vlaamse GraphHopper-regiopack voor")
     with route_sources._home(destination.resolve()):
         installed = route_sources.install(build, apply=True)
+        # mkdtemp/NamedTemporaryFile geven lokaal bewust 700/600. Docker COPY
+        # bewaart die rechten, terwijl Lambda als een andere gebruiker draait.
+        # Alleen dit gecontroleerde publieke pack krijgt gedeelde leesrechten.
+        public_pack = Path(installed["bestemming"])
+        public_pack.parent.chmod(0o755)
+        public_pack.chmod(0o755)
+        for path in public_pack.rglob("*"):
+            path.chmod(0o755 if path.is_dir() else 0o644)
+        (public_pack.parent / "current.json").chmod(0o644)
         from lusmaker import route_evidence
         database = route_evidence.database_path()
         if database is None:
