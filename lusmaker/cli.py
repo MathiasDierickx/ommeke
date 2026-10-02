@@ -323,6 +323,37 @@ def cmd_heat_fetch_vlaanderen(args):
     return heat.fetch_vlaanderen()
 
 
+def cmd_heat_sync_vlaanderen(args):
+    from . import route_sources
+
+    return route_sources.sync(args.output, offline=args.offline,
+                              refresh=args.refresh, page_size=args.page_size)
+
+
+def cmd_heat_verify_sources(args):
+    from . import route_sources
+
+    return route_sources.verify(args.build)
+
+
+def cmd_heat_audit_seeds(args):
+    from . import route_sources
+
+    return route_sources.audit_legacy()
+
+
+def cmd_heat_install_sources(args):
+    from . import route_sources
+
+    return route_sources.install(args.build, apply=args.apply)
+
+
+def cmd_heat_evaluate_sources(args):
+    from . import route_sources
+
+    return route_sources.evaluate(args.build, args.drafts, limit=args.limit)
+
+
 def cmd_heat_status(args):
     from . import heat
 
@@ -664,6 +695,28 @@ def main(argv=None):
     )
     _region_arg(s)
     s.set_defaults(func=cmd_heat_fetch_vlaanderen)
+    s = hsub.add_parser("sync-vlaanderen", help="download alle openbare routelagen en bouw een geïsoleerd, reproduceerbaar pack")
+    s.add_argument("--output", required=True, help="uitvoermap buiten de actieve runtime")
+    s.add_argument("--offline", action="store_true", help="bouw uitsluitend uit gecontroleerde lokale snapshots")
+    s.add_argument("--refresh", action="store_true", help="haal nieuwe versies van alle bronnen op")
+    s.add_argument("--page-size", type=int, default=1000)
+    s.set_defaults(func=cmd_heat_sync_vlaanderen)
+    s = hsub.add_parser("verify-sources", help="controleer alle checksums van een routedatapack")
+    s.add_argument("build", help="buildmap met manifest.json en checksums.json")
+    s.set_defaults(func=cmd_heat_verify_sources)
+    s = hsub.add_parser("install-sources", help="toon het activatieplan; --apply activeert het gecontroleerde datapack")
+    _region_arg(s)
+    s.add_argument("build", help="buildmap met manifest.json en checksums.json")
+    s.add_argument("--apply", action="store_true", help="activeer data en segmentscores; GraphHopper wordt niet herstart")
+    s.set_defaults(func=cmd_heat_install_sources)
+    s = hsub.add_parser("evaluate-sources", help="heranalyseer opgeslagen draftgeometrieën zonder routercalls")
+    s.add_argument("build")
+    s.add_argument("--drafts", required=True, help="map met bestaande draft-JSON-bestanden")
+    s.add_argument("--limit", type=int, default=20)
+    s.set_defaults(func=cmd_heat_evaluate_sources)
+    s = hsub.add_parser("audit-seeds", help="lees herkomst en dekking van bestaande seeds zonder wijzigingen")
+    _region_arg(s)
+    s.set_defaults(func=cmd_heat_audit_seeds)
     s = hsub.add_parser("status")
     _region_arg(s)
     s.set_defaults(func=cmd_heat_status)

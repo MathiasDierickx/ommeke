@@ -87,6 +87,7 @@ def available_area_evs(probe_post=None) -> frozenset[str]:
     names = (
         "in_kassei_tvl",
         "in_druk_tvl",
+        "in_niet_autovrij_tvl",
         *(f"in_popular_{activity}" for activity in ACTIVITIES),
         "in_onverhard",
     )
@@ -154,8 +155,13 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
             custom["priority"].append(dict(AVOID_COBBLES_AREA_PRIORITY))
     if avoid_concrete:
         custom["priority"] = custom["priority"] + list(AVOID_CONCRETE_PRIORITY)
-    if avoid_busy and "in_druk_tvl" in area_evs:
-        custom["priority"].append(dict(AVOID_BUSY_PRIORITY))
+    if avoid_busy:
+        if "in_niet_autovrij_tvl" in area_evs:
+            # Een toegangskenmerk, geen intensiteitsmeting. Houd het gewicht
+            # mild en stapel nooit met de historische alias druk_tvl.
+            custom["priority"].append({"if": "in_niet_autovrij_tvl", "multiply_by": "0.85"})
+        elif "in_druk_tvl" in area_evs:
+            custom["priority"].append(dict(AVOID_BUSY_PRIORITY))
     activity_ev = f"in_popular_{heat_activity}" if heat_activity else None
     if activity_ev in area_evs:
         custom["priority"].append(

@@ -131,31 +131,51 @@ def count_crossings(route_coords) -> int:
 def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     """Kwaliteitsrapport over een volledige (gerouteerde) draft."""
     all_coords = [pt for leg in legs_geometry for pt in leg]
-    from . import heat
+    from . import heat, route_evidence
 
     vlaanderen = heat.vlaanderen_data()
-    cobble_cells = vlaanderen["wegdek"].get("kassei", set())
-    unpaved_cells = vlaanderen["wegdek"].get("onverhard", set())
+    database = route_evidence.database_path()
+    mode = "wandel" if profile in {"trail", "wandelen"} else "fiets"
+    surfaces = vlaanderen.get("wegdek_per_activiteit", {}).get(mode, vlaanderen["wegdek"])
+    cobble_cells = surfaces.get("kassei", set())
+    unpaved_cells = surfaces.get("onverhard", set())
+    missing_surface, missing_unpaved = [], []
     kassei = beton = steenweg = offroad = onverhard = 0.0
     for leg, det in zip(legs_geometry, legs_details):
-        if not det:
+        if not det and database is None:
             continue
+        det = det or {}
         surface_details = det.get("surface", [])
         road_details = det.get("road_class", [])
         kassei += detail_meters(leg, surface_details, COBBLE_SURFACES)
-        kassei += _fallback_meters(leg, surface_details, cobble_cells)
+        if database is None:
+            kassei += _fallback_meters(leg, surface_details, cobble_cells)
+        else:
+            surface_values = _detail_values(leg, surface_details)
+            road_values = _detail_values(leg, road_details)
+            for index, value in enumerate(surface_values):
+                if value in {None, "missing", "unknown"}:
+                    missing_surface.append(leg[index:index + 2])
+                    if road_values[index] not in OFFROAD_CLASSES:
+                        missing_unpaved.append(leg[index:index + 2])
         beton += detail_meters(leg, surface_details, CONCRETE_SURFACES)
         steenweg += detail_meters(leg, road_details, BIG_ROADS)
         leg_offroad = detail_meters(leg, road_details, OFFROAD_CLASSES)
         offroad += leg_offroad
         onverhard += leg_offroad
-        onverhard += _fallback_meters(
-            leg,
-            surface_details,
-            unpaved_cells,
-            already_counted_intervals=road_details,
-            already_counted_values=OFFROAD_CLASSES,
-        )
+        if database is None:
+            onverhard += _fallback_meters(
+                leg,
+                surface_details,
+                unpaved_cells,
+                already_counted_intervals=road_details,
+                already_counted_values=OFFROAD_CLASSES,
+            )
+    if database is not None:
+        if missing_surface:
+            kassei += route_evidence.route_stats(missing_surface, profile, database=database)["kassei_m"]
+        if missing_unpaved:
+            onverhard += route_evidence.route_stats(missing_unpaved, profile, database=database)["onverhard_m"]
     try:
         crossings = count_crossings(all_coords)
     except FileNotFoundError:
@@ -176,7 +196,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         hits = sum(1 for p in pts if geo.cell(*p) in cells)
         out["populair_pct"] = round(hits / max(len(pts), 1) * 100, 1)
     network_cells = vlaanderen["fiets"] | vlaanderen["wandel"]
-    if vlaanderen["version"] >= 2 and network_cells:
+    if vlaanderen["version"] == 2 and network_cells:
         pts = [(coordinate[0], coordinate[1]) for coordinate in all_coords]
         network_points = [point for point in pts if geo.cell(*point) in network_cells]
         if network_points:
@@ -185,4 +205,18 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
                 if geo.cell(*point) not in vlaanderen["druk"]
             )
             out["autovrij_pct"] = round(free / len(network_points) * 100, 1)
+    if vlaanderen["version"] >= 3:
+        # Afwezigheid uit een vlaglaag bewijst geen autovrije toegang.
+        out["autovrij_pct"] = None
+        out["autovrij_status"] = "onbekend; bron bevat alleen expliciete verkeersvlaggen"
+    evidence = route_evidence.route_stats(legs_geometry, profile)
+    if evidence is not None:
+        out["routedata"] = evidence
+        out["gecureerd_pct"] = evidence["gecureerd_pct"]
+        out["niet_autovrij_pct"] = evidence["niet_autovrij_pct"]
+        out["verkeer_onbekend_pct"] = evidence["verkeer_onbekend_pct"]
+        # Ook bij een legacy-rastercache krijgt een expliciete bronlijn
+        # voorrang op de oude aanname 'niet gemarkeerd = autovrij'.
+        out["autovrij_pct"] = (evidence["bevestigd_autovrij_pct"]
+                               if evidence["verkeer_onbekend_pct"] == 0 else None)
     return out

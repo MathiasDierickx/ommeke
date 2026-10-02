@@ -120,6 +120,7 @@ def test_available_area_evs_probes_all_activity_and_unpaved_areas():
     expected = {
         "in_kassei_tvl",
         "in_druk_tvl",
+        "in_niet_autovrij_tvl",
         *(f"in_popular_{activity}" for activity in gh.ACTIVITIES),
         "in_onverhard",
     }

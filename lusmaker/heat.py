@@ -25,7 +25,7 @@ from . import config, gh_config, geo
 # Endpoints gevalideerd 2026-08-08 via metadata.vlaanderen.be
 # (record c91e9b9d-6465-4dec-beeb-16fdc6d759a0) en GetCapabilities.
 TOERISME_VLAANDEREN_WFS = "https://geodata.toerismevlaanderen.be/geoserver/wfs"
-VLAANDEREN_CACHE_VERSION = 2
+VLAANDEREN_CACHE_VERSION = 3
 
 ACTIVITIES = (
     "koersfiets",
@@ -129,10 +129,13 @@ def _track_cells(pts) -> set:
     return cells
 
 
-def _load_heat() -> dict:
-    if not config.HEAT_PKL.exists():
+def _load_heat(path=None) -> dict:
+    # Schrijvers (seed/build) behouden hun lokale tellers. Een beheerd
+    # open-datapack is onveranderlijk en wordt alleen door lezers gekozen.
+    path = config.HEAT_PKL if path is None else path
+    if not path.exists():
         return {}
-    with open(config.HEAT_PKL, "rb") as handle:
+    with open(path, "rb") as handle:
         data = pickle.load(handle)
     return data if isinstance(data, dict) else {}
 
@@ -394,12 +397,21 @@ def fetch_vlaanderen(fetcher=_fetch_url) -> dict:
         "wandel": set(),
         "wegdek": {},
         "druk": set(),
+        "wegdek_per_activiteit": {"fiets": {}, "wandel": {}},
+        "verkeer_per_activiteit": {"fiets": {}, "wandel": {}},
+        "verkeer_betekenis": "expliciete_vlaggen_geen_tellingen",
         "pois": {},
         "knopen": [],
     }
     layer_counts = {}
     for label, (kind, layer, base_url) in VLAANDEREN_ROUTE_LAYERS.items():
         document = _fetch_vlaanderen_document(label, base_url, fetcher)
+        # De algemene wandellaag bevat ook virtuele trajecten. Die krijgen
+        # geen automatische bonus voor een bewegwijzerd recreatief netwerk.
+        document = {**document, "features": [
+            feature for feature in document["features"]
+            if "virtual" not in str((feature.get("properties") or {}).get("virtual", "")).casefold()
+        ]}
         cells = _geojson_cells(document)
         data[kind].update(cells)
         layer_counts[layer] = len(cells)
@@ -411,6 +423,8 @@ def fetch_vlaanderen(fetcher=_fetch_url) -> dict:
     for label, (layer, base_url) in VLAANDEREN_SURFACE_LAYERS.items():
         document = _fetch_vlaanderen_document(label, base_url, fetcher)
         grouped = _geojson_cells_by_property(document, "ground")
+        mode = "fiets" if layer.endswith("fiets") else "wandel"
+        data["wegdek_per_activiteit"][mode] = grouped
         for ground, cells in grouped.items():
             data["wegdek"].setdefault(ground, set()).update(cells)
         layer_cells = set().union(*grouped.values()) if grouped else set()
@@ -423,7 +437,11 @@ def fetch_vlaanderen(fetcher=_fetch_url) -> dict:
     for label, (layer, base_url) in VLAANDEREN_TRAFFIC_LAYERS.items():
         document = _fetch_vlaanderen_document(label, base_url, fetcher)
         grouped = _geojson_cells_by_property(document, "traffic")
-        cells = set().union(*grouped.values()) if grouped else set()
+        mode = "fiets" if layer.endswith("fiets") else "wandel"
+        data["verkeer_per_activiteit"][mode] = grouped
+        # Historische sleutel behouden. Alleen de expliciete vlag telt;
+        # onbekende waarden worden nooit als druk verkeer geïnterpreteerd.
+        cells = grouped.get("niet-autovrij", set())
         data["druk"].update(cells)
         layer_counts[layer] = len(cells)
         print(
@@ -573,7 +591,9 @@ def _osm_cells(min_points: int) -> set:
 
 
 def vlaanderen_data() -> dict:
-    """Lees cacheversie 2, met lege aanvullingen voor een bestaande T14-cache."""
+    """Lees de actieve broncache; oude T14/T15-caches blijven bruikbaar."""
+    from .route_evidence import cache_file
+    path = cache_file("vlaanderen_routes.pkl")
     empty = {
         "version": 1,
         "fiets": set(),
@@ -583,14 +603,17 @@ def vlaanderen_data() -> dict:
         "pois": {},
         "knopen": [],
     }
-    if not config.VLAANDEREN_ROUTES_PKL.exists():
+    if not path.exists():
         return empty
-    with open(config.VLAANDEREN_ROUTES_PKL, "rb") as handle:
+    with open(path, "rb") as handle:
         cached = pickle.load(handle)
     if not isinstance(cached, dict):
         return empty
     return {
         "version": cached.get("version", 1),
+        "verkeer_betekenis": cached.get("verkeer_betekenis"),
+        "wegdek_per_activiteit": cached.get("wegdek_per_activiteit", {}),
+        "verkeer_per_activiteit": cached.get("verkeer_per_activiteit", {}),
         "fiets": set(cached.get("fiets", set())),
         "wandel": set(cached.get("wandel", set())),
         "wegdek": {
@@ -802,6 +825,8 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
         geojson["features"].append(_area_feature("kassei_tvl", cobble_tvl))
     if busy_tvl:
         geojson["features"].append(_area_feature("druk_tvl", busy_tvl))
+        if vlaanderen_data_cached.get("version", 1) >= 3:
+            geojson["features"].append(_area_feature("niet_autovrij_tvl", busy_tvl))
     for activity in ACTIVITIES:
         cells = activity_areas.get(activity)
         if cells:
@@ -855,10 +880,11 @@ def build(min_passes: int = 1, osm_min_points: int = 30) -> dict:
 
 
 def status() -> dict:
+    from .route_evidence import cache_file
     files = sorted(config.HEAT_DIR.glob("*.gpx"))
     out = {"heat_dir": str(config.HEAT_DIR), "gpx_bestanden": [f.name for f in files]}
-    if config.HEAT_PKL.exists():
-        h = _load_heat()
+    if cache_file("heat.pkl").exists():
+        h = _load_heat(cache_file("heat.pkl"))
         activity_cells = h.get("activity_cells")
         if not isinstance(activity_cells, dict):
             activity_cells = {}
@@ -879,9 +905,10 @@ def status() -> dict:
 
 
 def popular_cells(profile: str = "quiet", *, fallback: bool = True) -> set | None:
-    if not config.HEAT_PKL.exists():
+    from .route_evidence import cache_file
+    if not cache_file("heat.pkl").exists():
         return None
-    heat = _load_heat()
+    heat = _load_heat(cache_file("heat.pkl"))
     if profile == "trail":
         trail_cells = heat.get("trail_cells")
         if trail_cells:

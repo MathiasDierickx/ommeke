@@ -18,3 +18,4 @@ web/out/
 web/*.tsbuildinfo
 web/.env*
 !web/.env.example
+.route-data/

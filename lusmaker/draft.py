@@ -852,11 +852,11 @@ def _route_share(routes: list[dict], detail_name: str, wanted: set) -> float:
     return min(1.0, matched / max(total, 1.0))
 
 
-def _popular_share(routes: list[dict], cells=_LOAD_HEAT) -> float:
+def _popular_share(routes: list[dict], cells=_LOAD_HEAT, *, profile="quiet") -> float:
     if cells is _LOAD_HEAT:
         from . import heat
 
-        cells = heat.popular_cells()
+        cells = heat.popular_cells(profile)
     if not cells:
         return 0.0
     points = []
@@ -873,7 +873,11 @@ def _quiet_share(routes: list[dict], busy_cells=_LOAD_HEAT) -> float:
     if busy_cells is _LOAD_HEAT:
         from . import heat
 
-        busy_cells = heat.vlaanderen_data()["druk"]
+        source = heat.vlaanderen_data()
+        if source["version"] >= 3:
+            # Niet gemarkeerd is onbekend, geen bewezen autovrije weg.
+            return 0.0
+        busy_cells = source["druk"]
     if not busy_cells:
         return 0.0
     points = []
@@ -891,15 +895,24 @@ def _candidate_surface_components(
     routes: list[dict],
     popular_cells=_LOAD_HEAT,
     busy_cells=_LOAD_HEAT,
+    *, profile="quiet",
 ) -> dict:
-    from . import analysis
+    from . import analysis, route_evidence
 
-    return {
+    result = {
         "offroad": _route_share(routes, "road_class", analysis.OFFROAD_CLASSES),
-        "populair": _popular_share(routes, popular_cells),
+        "populair": _popular_share(routes, popular_cells, profile=profile),
         "autovrij": _quiet_share(routes, busy_cells),
         "kassei": _route_share(routes, "surface", analysis.COBBLE_SURFACES),
     }
+    if popular_cells is _LOAD_HEAT or busy_cells is _LOAD_HEAT:
+        evidence = route_evidence.route_stats([r.get("coords", []) for r in routes], profile)
+        if evidence is not None:
+            if popular_cells is _LOAD_HEAT:
+                result["populair"] = evidence["curatie_score"]
+            if busy_cells is _LOAD_HEAT:
+                result["autovrij"] = evidence["bevestigd_autovrij_pct"] / 100
+    return result
 
 
 def _candidate_prefilter(d: dict, climb_db: dict, max_detour_km: float,
@@ -1009,7 +1022,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
         }
         if weighted:
             suggestion["score_componenten"] = _candidate_surface_components(
-                [r1, r2, r3], popular_cells
+                [r1, r2, r3], popular_cells, profile=routing["profile"]
             )
         per_climb[cid] = suggestion
     out = sorted(per_climb.values(), key=lambda s: s["extra_km"])[:limit]
@@ -1342,7 +1355,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             # Ook hm-per-km koos vóór T11 de rondritlob op absolute stijging.
             score = candidate.get("ascend_m", 0)
         else:
-            surface = _candidate_surface_components([candidate], popular_cells)
+            surface = _candidate_surface_components([candidate], popular_cells, profile=preferences["profile"])
             pseudo_candidate = {
                 "extra_km": candidate["distance_m"] / 1000.0,
                 "extra_hoogtemeters": candidate.get("ascend_m", 0),
