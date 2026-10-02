@@ -44,6 +44,10 @@ Codex-loginbestanden horen niet in de Lambda-image of GitHub-secrets.
 2 km rond een bekend punt naar OSM-parkings, hotels, stranden of oversteekplaatsen.
 Die tool vermeldt bronnen en toegangstags, en maakt onderscheid tussen een
 kaartpunt en het centrum van een gebied. Dat centrum is geen bevestigde ingang.
+Nieuwe gazetteers bewaren ook hotels, stranden en parkings zonder naam. Wanneer
+die lokale snapshot geschikte kandidaten bevat, is er geen externe plaatszoekaanroep
+nodig. Bestaande caches blijven leesbaar; opnieuw bouwen is nodig om die extra
+plaatsgegevens te krijgen. Een lokale snapshot is geen actuele terreincontrole.
 De publieke Overpass-dienst is configureerbaar met `LUSMAKER_OVERPASS_URL`;
 gelijke queries worden per proces maximaal een uur hergebruikt.
 

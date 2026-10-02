@@ -17,6 +17,8 @@ def test_gazetteer_keeps_all_normalised_waterway_segments_intact():
             ("De Schélde", "river", first),
             ("De Schelde", "river", second),
         ],
+        "nearby_places": [{"type": "way", "id": 123, "tags": {"amenity": "parking"},
+                           "center": {"lat": 51.0, "lon": 3.7}}],
     }
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -32,6 +34,7 @@ def test_gazetteer_keeps_all_normalised_waterway_segments_intact():
                 config.GAZETTEER_PKL = previous
 
     assert gazetteer["waterways"] == {"de schelde": [first, second]}
+    assert gazetteer["nearby_places"] == extract["nearby_places"]
 
 
 def test_waterway_extract_contract_is_limited_to_rivers_and_canals():

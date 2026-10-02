@@ -403,7 +403,14 @@ def lookup_place(query, *, resolver=None):
     from . import geocode
     if not query.strip() or len(query) > 300:
         raise ValueError("geef een zoekterm van 1 tot 300 tekens")
-    point, alternatives = (resolver or geocode.resolve)(query)
+    resolve = resolver or geocode.resolve
+    try:
+        point, alternatives = resolve(query)
+    except RuntimeError:
+        cleaned = _re.sub(r"\bhotel\b", "", query, flags=_re.IGNORECASE).strip()
+        if not cleaned or cleaned == query:
+            raise
+        point, alternatives = resolve(" ".join(cleaned.split()))
     return {"query": query, "candidate": point, "alternatives": alternatives,
             "verification": {"parking_access": "unknown", "beach_access": "unknown",
                              "child_friendly": "unknown"},

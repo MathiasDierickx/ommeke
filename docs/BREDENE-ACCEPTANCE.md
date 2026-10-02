@@ -38,6 +38,35 @@ CI en publieke smoke-tests. De correcties aan de korte-lusoptimalisatie volgen
 in de vervolguitrol. Persoonlijke Codex-authenticatie is niet naar AWS gekopieerd;
 de online chatprovider is niet gewijzigd door deze lokale providerkeuze.
 
+## Eindproef met de oorspronkelijke prompt, zonder technische vervolgvragen
+
+Nieuw gesprek `fca7a426-d734-4558-8744-2355cd6d0cb4`, Codex-provider,
+werkmap `.route-data/bredene-offline-places`: de oorspronkelijke prompt levert
+zelfstandig route `d1fc6a` op. Hotelzoekopdracht en lokale OSM-kandidaten werken;
+voor parking en strand zijn geen Overpass-aanroepen nodig. Een mislukte
+strandnaam wordt door de agent hersteld met de gevonden strandcoördinaten.
+
+Uitkomst: **3,0 km / +36 m**; onafhankelijk uit GPX **3,043 km, 125 punten,
+0 m sluitingsverschil**. Start en einde: 51.251401, 2.974091. Dezelfde
+beperkingen over parkingingang, toegang, kruisingen en kindvriendelijkheid gelden.
+GPX en preview zijn op verzoek ook naar Downloads gekopieerd.
+Alle 275 offline tests zijn groen, inclusief ongewijzigde routeregressiecassettes.
+
+Deze eenmalig voorbereide lokale kustomgeving is te hergebruiken zolang de
+aparte GraphHopper op poort 18989 draait:
+
+```sh
+LUSMAKER_HOME="$PWD/.route-data/coast-home" .venv/bin/lus chat \
+  'Een wandeling van ongeveer 3 km vanaf de parking bij ibis Styles Bredene, langs het strand en terug' \
+  --provider codex --workspace .route-data/bredene-offline-places \
+  --gh-url http://127.0.0.1:18989
+```
+
+Een code-deployment ververst geen bestaande regiopacks. De nieuwe lokale
+plaatsindex komt pas in een online regiopack na opnieuw bouwen. Een geslaagde
+lokale Codex-proef is daarom geen bewijs van dezelfde uitkomst via de bestaande
+online Bedrock-provider en het bestaande online pack.
+
 ## Eerste webproef (vóór de fixes)
 
 De webapp maakte een concept “Strandwandeling Bredene · 3 km” van 0,0 km aan.

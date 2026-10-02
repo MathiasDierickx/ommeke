@@ -62,6 +62,30 @@ def test_lookup_does_not_infer_access_from_a_geocoded_point():
     assert all(v == "unknown" for v in result["verification"].values())
 
 
+def test_hotel_lookup_handles_extra_hotel_word():
+    calls = []
+    def resolve(query):
+        calls.append(query)
+        if query != "ibis Styles Bredene":
+            raise RuntimeError("niet gevonden")
+        return {"lat": 51.25, "lon": 2.97}, []
+    result = lookup_place("ibis Styles hotel Bredene", resolver=resolve)
+    assert calls == ["ibis Styles hotel Bredene", "ibis Styles Bredene"]
+    assert result["verification"]["parking_access"] == "unknown"
+
+
+def test_nearby_unnamed_parking_works_without_network_from_local_snapshot():
+    from lusmaker.place_search import nearby_places
+    def no_network(query):
+        raise AssertionError("lokale kaartdata moet volstaan")
+    result = nearby_places(51.25, 2.97, "parking", fetch=no_network, local_places=[
+        {"type": "way", "id": 456, "center": {"lat": 51.2501, "lon": 2.97},
+         "tags": {"amenity": "parking", "access": "yes"}}])
+    assert result["data_mode"] == "local_osm_snapshot"
+    assert result["candidates"][0]["source"].endswith("/way/456")
+    assert result["data_timestamp"] is None
+
+
 def test_codex_provider_uses_mcp_evidence_and_never_bedrock():
     def runner(command, **kwargs):
         assert "--ignore-user-config" in command

@@ -139,6 +139,7 @@ def build_extract(force: bool = False) -> dict:
     print("[build] pass 1/2: plaatsnamen en landmark-nodes ...", file=sys.stderr)
     places = []
     landmarks = []
+    nearby_places = {}
     fp = osmium.FileProcessor(pbf, osmium.osm.NODE).with_filter(
         osmium.filter.KeyFilter("place", *LANDMARK_KEYS)
     )
@@ -153,6 +154,9 @@ def build_extract(force: bool = False) -> dict:
         if ptype in PLACE_TYPES and name:
             places.append((name, ptype, lat, lon))
         kind = _landmark_kind(n.tags)
+        if kind in {"tourism:hotel", "amenity:parking", "natural:beach"}:
+            nearby_places[("node", n.id)] = {"type": "node", "id": n.id,
+                "lat": lat, "lon": lon, "tags": dict(n.tags)}
         if name and kind and len(landmarks) < MAX_LANDMARKS:
             landmarks.append((name, kind, lat, lon))
     print(
@@ -208,7 +212,7 @@ def build_extract(force: bool = False) -> dict:
                     (obj.tags["name"], waterway, coords[:MAX_LANDMARK_POINTS])
                 )
             kind = _landmark_kind(obj.tags)
-            centre = _centroid(coords) if kind and obj.tags.get("name") else None
+            centre = _centroid(coords) if kind and (obj.tags.get("name") or kind in {"tourism:hotel", "amenity:parking", "natural:beach"}) else None
         else:
             kind = _landmark_kind(obj.tags)
             area_coords = (
@@ -217,9 +221,15 @@ def build_extract(force: bool = False) -> dict:
                 for node in ring
                 if node.location.valid()
             )
-            centre = _centroid(area_coords) if kind and obj.tags.get("name") else None
+            centre = _centroid(area_coords) if kind and (obj.tags.get("name") or kind in {"tourism:hotel", "amenity:parking", "natural:beach"}) else None
+        if centre is not None and _in_bbox(*centre) and kind in {"tourism:hotel", "amenity:parking", "natural:beach"}:
+            object_type = "way" if obj.is_way() or obj.from_way() else "relation"
+            object_id = obj.id if obj.is_way() else obj.orig_id()
+            nearby_places[(object_type, object_id)] = {"type": object_type, "id": object_id,
+                "center": {"lat": centre[0], "lon": centre[1]}, "tags": dict(obj.tags)}
         if (
             centre is not None
+            and obj.tags.get("name")
             and _in_bbox(*centre)
             and len(landmarks) < MAX_LANDMARKS
         ):
@@ -235,6 +245,7 @@ def build_extract(force: bool = False) -> dict:
         "ways": ways,
         "places": places,
         "landmarks": landmarks,
+        "nearby_places": list(nearby_places.values()),
         "waterways": waterways,
         "junction_refs": junction_refs,
     }
@@ -266,6 +277,7 @@ def build_gazetteer(extract: dict, force: bool = False) -> dict:
     for name, _kind, coords in extract.get("waterways", []):
         waterways.setdefault(_normalise_name(name), []).append(coords)
     gaz = {
+        "nearby_places": extract.get("nearby_places", []),
         "places": extract["places"],
         "streets": streets,
         "landmarks": landmarks,
