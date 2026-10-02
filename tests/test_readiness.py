@@ -67,6 +67,15 @@ def _question_ids(result):
     return [question["id"] for question in result["vragen"]]
 
 
+def test_explicit_touring_goal_does_not_require_climbing_weights():
+    profile = profiles.default_document()
+    profile["activiteit"] = "trail"
+    d = _draft(offroad=94)
+    assert "gewichten" in _question_ids(readiness.assess(d, profile, {}))
+    d["route_request"] = {"doel": "toeren"}
+    assert "gewichten" not in _question_ids(readiness.assess(d, profile, {}))
+
+
 def test_cobble_rule_is_material_only_above_300_meter_and_when_unknown():
     profile = profiles.default_document()
 

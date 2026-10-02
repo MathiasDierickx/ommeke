@@ -230,7 +230,8 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             }
         )
 
-    if _default_weights(profiel["gewichten"]):
+    if (_default_weights(profiel["gewichten"])
+            and (d.get("route_request") or {}).get("doel") not in {"toeren", "kort"}):
         heat_pct = _metric(
             probe, "heat_dekking_pct", "populair_pct", default=None
         )
