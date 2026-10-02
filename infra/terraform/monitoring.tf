@@ -11,6 +11,7 @@ resource "aws_cloudwatch_log_metric_filter" "http_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "http_errors" {
+  count               = var.enable_application_monitoring ? 1 : 0
   alarm_name          = "${local.name}-http-errors"
   alarm_description   = "Minstens vijf HTTP-serverfouten in vijf minuten. Zie docs/OPERATIONS.md."
   comparison_operator = "GreaterThanOrEqualToThreshold"
@@ -25,7 +26,7 @@ resource "aws_cloudwatch_metric_alarm" "http_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "duration" {
-  count               = var.image_uri == null ? 0 : 1
+  count               = var.enable_application_monitoring && var.image_uri != null ? 1 : 0
   alarm_name          = "${local.name}-slow-requests"
   alarm_description   = "p95 Lambda-duur boven vier minuten; voorlopige pilotgrens, na baseline bijstellen."
   comparison_operator = "GreaterThanThreshold"
@@ -41,6 +42,7 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
 }
 
 resource "aws_cloudwatch_dashboard" "pilot" {
+  count          = var.enable_application_monitoring ? 1 : 0
   dashboard_name = "${local.name}-pilot"
   dashboard_body = jsonencode({ widgets = [
     {
@@ -65,4 +67,14 @@ resource "aws_cloudwatch_dashboard" "pilot" {
       }
     }
   ] })
+}
+
+# Preserve addresses for installations that already created these resources.
+moved {
+  from = aws_cloudwatch_metric_alarm.http_errors
+  to   = aws_cloudwatch_metric_alarm.http_errors[0]
+}
+moved {
+  from = aws_cloudwatch_dashboard.pilot
+  to   = aws_cloudwatch_dashboard.pilot[0]
 }

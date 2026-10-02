@@ -252,3 +252,9 @@ variable "monitoring_alarm_actions" {
   type        = list(string)
   default     = []
 }
+
+variable "enable_application_monitoring" {
+  type        = bool
+  default     = true
+  description = "Maak extra alarmen en dashboard; vereist eerst de monitoringrechten uit infra/bootstrap."
+}

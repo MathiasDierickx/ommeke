@@ -71,3 +71,15 @@ Productie-CI, echte quota/concurrentie, Cognito-export/wissing, CloudWatch-
 alarmering en modelkosten vereisen revieweracceptatie. Geometrie-invarianten
 zijn geen bewijs van verkeersveiligheid. Gebruik `docs/ACCEPTANCE.md` en
 `docs/PILOT.md` voor de volgende controles.
+# Monitoringrechten en app-deployment
+
+De GitHub-workflow gebruikt `ENABLE_APPLICATION_MONITORING=false` zolang die
+repositoryvariabele niet is ingesteld. Dit laat de app en bestaande logging
+uitrollen zonder de extra CloudWatch-alarmen en het pilotdashboard, waarvoor
+de huidige productie-deployrol nog geen rechten heeft. Pas eerst de gerichte
+IAM-policy uit `infra/bootstrap` toe met een beheeridentiteit voor het juiste
+account en zet daarna de repositoryvariabele op `true`. Terraform zelf houdt
+de standaard `enable_application_monitoring=true` voor andere installaties.
+Schakel dit niet uit op een installatie met bestaande alarmen: Terraform zal
+die dan verwijderen. In deze productieomgeving waren de nieuwe alarmen en
+het dashboard nog niet aangemaakt door de eerdere AccessDenied-fout.
