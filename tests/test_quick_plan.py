@@ -42,3 +42,21 @@ def test_quick_plan_questions_keep_draft_context():
                   once=lambda scope,rid,payload,operation: operation(), store_factory=Store)
     assert result['conversation_id'] == 'conversation'
     assert 'abc123' in messages[1] and '3 km' in messages[0]
+
+
+def test_quick_plan_runs_real_readiness_contract_before_requesting_preferences():
+    from functools import partial
+    from lusmaker import intents, profiles
+    state = {'id':'ask123','name':'Wetteren','start':{'label':'Wetteren','lat':51,'lon':3.8},
+             'end':None,'loop':True,'climbs':[],'avoid_places':[],'computed':None}
+    def assessment(item, profile, db):
+        assert profile['naam'] == 'standaard'
+        return {'profiel':'standaard','onbekend':['kasseien'],'vragen':[{'vraag':'Kasseien?','opties':{'ok':{},'vermijd':{}}}], 'klaar':False,'advies':'Kies je voorkeur'}
+    def unexpected(*a, **kw): raise AssertionError('Nog niet routeren voordat de gebruiker antwoordt')
+    planner=partial(intents.plan_route,create_fn=lambda **kw:{'id':'ask123'},load_fn=lambda _:state,
+                    climbs_fn=lambda:{},save_fn=lambda _:None,probe_fn=lambda *a:None,assess_fn=assessment,
+                    profile_load_fn=profiles.default_document,find_request_fn=lambda _:None,
+                    route_fn=unexpected,optimize_fn=unexpected,export_gpx_fn=unexpected,export_preview_fn=unexpected)
+    result=plan({'start':'Wetteren','target_km':40,'request_id':'real-contract'},planner=planner,
+                once=lambda scope,rid,payload,operation:operation())
+    assert result['status']=='needs_input' and result['constraints']['doel_km']==40

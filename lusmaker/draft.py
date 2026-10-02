@@ -1356,6 +1356,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         return {"filled": False, "reason": reason}
 
     for seed in range(seed_start, 5 if seed_start == 0 else 20):
+        from .progress import emit
+        emit("variants", f"Ik toets lusvariant {seed + 1} aan je gewenste afstand.")
         try:
             candidate = round_trip_fn(
                 anchor,

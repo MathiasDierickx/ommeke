@@ -411,6 +411,8 @@ def _needs_input(
     assess_fn,
     profile_load_fn,
 ) -> dict | None:
+    from .progress import emit
+    emit("checking", "Ik controleer de ondergrond, drukke wegen en je voorkeuren.")
     probe_fn(d, climb_db)
     assessment = assess_fn(
         d, _profile_for_request(request, profile_load_fn), climb_db
@@ -560,6 +562,8 @@ def _export_files(
     export_preview_fn=preview.export,
     exports_root: Path | None = None,
 ) -> dict:
+    from .progress import emit
+    emit("exporting", "Ik maak de kaart en je routebestand klaar.")
     output_dir = (exports_root or artifacts.root()) / d["id"]
     output_dir.mkdir(parents=True, exist_ok=True)
     gpx_path = output_dir / "route.gpx"

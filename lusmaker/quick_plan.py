@@ -21,7 +21,7 @@ def parameters(body: dict) -> dict:
     if activity not in ('fietsen', 'trail') or goal not in ('hoogtemeters', 'toeren', 'offroad', 'kort'):
         raise ValueError('Kies een geldige activiteit en een geldig doel.')
     return dict(start=start.strip(), target_km=km, tolerance_km=min(2.5, km * .1),
-                activiteit=activity, doel=goal, check_readiness=True,
+                activiteit=activity, doel=goal, check_readiness=True, profiel_naam="standaard",
                 kasseien=None, beton_vermijden=None, autovrij=None, strict=None)
 
 

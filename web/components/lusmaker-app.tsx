@@ -112,8 +112,10 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!session || view.kind !== "conversation") return;
     let active = true;
     setConversationId(view.id);
-    const answer = sessionStorage.getItem(`ommeke-answer:${view.id}`);
-    if (answer) { setPrompt(answer); sessionStorage.removeItem(`ommeke-answer:${view.id}`); }
+    try {
+      const answer = sessionStorage.getItem(`ommeke-answer:${view.id}`);
+      if (answer) { setPrompt(answer); sessionStorage.removeItem(`ommeke-answer:${view.id}`); }
+    } catch { /* Browseropslag is optioneel. */ }
     setSelectedRoute(null);
     setError(undefined);
     apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${encodeURIComponent(view.id)}/messages`, session.accessToken)
