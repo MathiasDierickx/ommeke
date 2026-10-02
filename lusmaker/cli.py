@@ -506,6 +506,40 @@ def main(argv=None):
     chat.add_argument("--timeout", type=int, default=600, help="maximale Codex-looptijd in seconden")
     chat.set_defaults(func=chat_command)
 
+    from .model_evals import command as eval_command
+    ev = sub.add_parser("eval-model", help="opt-in Bedrock-intentproef met tokengebruik; voert geen routes uit")
+    ev.add_argument("--model", required=True)
+    ev.add_argument("--aws-profile")
+    ev.add_argument("--aws-region", default="eu-west-1")
+    ev.add_argument("--cases", default="evals/route_intents.json")
+    ev.add_argument("--output")
+    ev.add_argument("--limit", type=int)
+    ev.add_argument("--input-per-million", type=float)
+    ev.add_argument("--output-per-million", type=float)
+    ev.set_defaults(func=eval_command)
+
+    back = sub.add_parser("reroute-from", help="keer vanaf je huidige positie terug naar de start")
+    back.add_argument("draft_id")
+    back.add_argument("lat", type=float)
+    back.add_argument("lon", type=float)
+    back.add_argument("--rest-km", default="kortste")
+    back.add_argument("--expected-revision", type=int)
+    def route_back(args):
+        from .reroute import reroute_from
+        budget = "kortste" if args.rest_km == "kortste" else float(args.rest_km)
+        return reroute_from(args.draft_id, args.lat, args.lon, budget, expected_revision=args.expected_revision)
+    back.set_defaults(func=route_back)
+
+    fit = sub.add_parser("export-fit", help="exporteer een gerouteerde draft naar een FIT-course")
+    fit.add_argument("draft_id")
+    fit.add_argument("output")
+    def export_fit(args):
+        from . import draft, climbs, fit_course
+        item = draft.load(args.draft_id)
+        with draft.region_scope(item):
+            return fit_course.export(item, climbs.all_climbs(), args.output)
+    fit.set_defaults(func=export_fit)
+
     s = sub.add_parser("setup", help="download OSM-extract + DEM en schrijf GraphHopper-config")
     _region_arg(s)
     s.set_defaults(func=cmd_setup)

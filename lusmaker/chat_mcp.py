@@ -19,7 +19,7 @@ def create_server(executor=None, trace_path=None):
     server = FastMCP("lusmaker-chat", instructions="Gebruik de route-tool met deze contracten: " + json.dumps(TOOL_CONFIG, ensure_ascii=False))
 
     @server.tool()
-    def route_tool(name: Literal["lookup_place", "nearby_places", "plan_route", "adjust_route", "list_routes", "route_details"], arguments: dict) -> dict:
+    def route_tool(name: Literal["reroute_from", "get_profile", "update_profile", "lookup_place", "nearby_places", "plan_route", "adjust_route", "list_routes", "route_details"], arguments: dict) -> dict:
         """Voer een routetool uit volgens het JSON-contract in de serverinstructies."""
         event = {"name": name, "input": arguments}
         try:

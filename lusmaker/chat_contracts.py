@@ -53,3 +53,41 @@ ADJUST_ROUTE_SCHEMA = {
     },
 }
 
+
+
+def validate_arguments(value, schema, path='arguments'):
+    """Valideer het gedeelde beperkte toolschema vóór enige side effect."""
+    import math
+    kind = schema.get('type')
+    kinds = kind if isinstance(kind, list) else [kind]
+    types = {'object': isinstance(value, dict), 'array': isinstance(value, list),
+             'string': isinstance(value, str), 'boolean': isinstance(value, bool),
+             'null': value is None, 'number': isinstance(value, (int,float)) and not isinstance(value,bool) and math.isfinite(value),
+             'integer': isinstance(value,int) and not isinstance(value,bool)}
+    if kind and not any(types.get(k,False) for k in kinds):
+        raise ValueError(f'{path}: ongeldig type')
+    if 'enum' in schema and value not in schema['enum']:
+        raise ValueError(f'{path}: kies een toegestane waarde')
+    if isinstance(value, dict):
+        properties = schema.get('properties',{})
+        if schema.get('additionalProperties') is False and set(value)-set(properties):
+            raise ValueError(f'{path}: onbekende velden {", ".join(sorted(set(value)-set(properties)))}')
+        if set(schema.get('required',[]))-set(value):
+            raise ValueError(f'{path}: verplichte velden ontbreken')
+        for key, child in value.items():
+            if key in properties: validate_arguments(child,properties[key],f'{path}.{key}')
+    elif isinstance(value, list):
+        if len(value)>schema.get('maxItems',1000): raise ValueError(f'{path}: te veel waarden')
+        for item in value: validate_arguments(item,schema.get('items',{}),path)
+    elif isinstance(value,str):
+        if not schema.get('minLength',0)<=len(value)<=schema.get('maxLength',10000): raise ValueError(f'{path}: ongeldige tekstlengte')
+    elif isinstance(value,(float,int)) and not isinstance(value,bool):
+        if value<schema.get('minimum',-float('inf')) or value>schema.get('maximum',float('inf')) or value<=schema.get('exclusiveMinimum',-float('inf')):
+            raise ValueError(f'{path}: getal buiten bereik')
+
+REROUTE_SCHEMA = {"type":"object", "required":["draft_id","lat","lon"], "additionalProperties":False,
+    "properties":{"draft_id":{"type":"string","minLength":1,"maxLength":64},
+        "lat":{"type":"number","minimum":-90,"maximum":90},"lon":{"type":"number","minimum":-180,"maximum":180},
+        "rest_km":{"type":["string","number"]},"expected_revision":{"type":"integer","minimum":0},
+        "closure":{"type":"object","required":["lat","lon"],"additionalProperties":False,
+                   "properties":{"lat":{"type":"number"},"lon":{"type":"number"}}}}}

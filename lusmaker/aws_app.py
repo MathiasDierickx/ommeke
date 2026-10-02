@@ -257,6 +257,9 @@ def create_app(
             Route("/api/account", aws_api.account_delete, methods=["DELETE"]),
             Route("/api/me", aws_api.me, methods=["GET"]),
             Route("/api/routes", aws_api.routes_list, methods=["GET"]),
+            Route("/api/routes", aws_api.route_plan, methods=["POST"]),
+            Route("/api/routes/{draft_id}/reroute", aws_api.route_reroute, methods=["POST"]),
+            Route("/api/routes/{draft_id}/fit", aws_api.route_fit, methods=["GET"]),
             Route(
                 "/api/routes/{draft_id}",
                 aws_api.route_detail,

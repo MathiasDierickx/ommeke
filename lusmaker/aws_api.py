@@ -76,6 +76,41 @@ async def me(_request: Request) -> JSONResponse:
     return JSONResponse({"id": tenant.current()})
 
 
+async def route_reroute(request: Request) -> JSONResponse:
+    from .reroute import reroute_from
+    from .chat_contracts import REROUTE_SCHEMA, validate_arguments
+    try:
+        body = await _json_body(request)
+        rid = body.pop("request_id", None)
+        requests.request_path("reroute", rid)
+        values = {**body, "draft_id": _draft_id(request)}
+        validate_arguments(values, REROUTE_SCHEMA)
+        def execute():
+            return requests.once("reroute", rid, values, lambda: reroute_from(**values))
+        return JSONResponse(await asyncio.to_thread(execute))
+    except quotas.QuotaExceeded as exc:
+        return JSONResponse({"error": str(exc)}, status_code=429, headers={"Retry-After": str(exc.retry_after)})
+    except (requests.RequestConflict, draft.DraftError) as exc:
+        return _error(str(exc), 409)
+    except (ValueError, ChatError) as exc:
+        return _error(str(exc))
+
+
+async def route_plan(request: Request) -> JSONResponse:
+    from .quick_plan import plan
+    try:
+        body = await _json_body(request)
+        result = await asyncio.to_thread(plan, body, store_factory=ConversationStore)
+        return JSONResponse(result, status_code=201)
+    except quotas.QuotaExceeded as exc:
+        return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
+                            headers={"Retry-After": str(exc.retry_after)})
+    except requests.RequestConflict as exc:
+        return _error(str(exc), 409, "request_conflict")
+    except (ValueError, ChatError, intents.IntentError, draft.DraftError) as exc:
+        return _error(str(exc))
+
+
 async def routes_list(_request: Request) -> JSONResponse:
     try:
         if aws_state.enabled() and "limit" in _request.query_params:
@@ -145,7 +180,9 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
                 )
                 break
     start = item.get("start") or {}
+    from .route_pois import for_draft
     return {
+        "pois": for_draft(item),
         "points": points,
         "climbs": markers,
         "elevation": _elevation_profile(legs),
@@ -438,6 +475,21 @@ async def route_gpx(request: Request) -> Response:
             },
         )
     except (draft.DraftError, artifacts.ArtifactError) as exc:
+        return _error(str(exc), 404, "artifact_not_found")
+
+
+async def route_fit(request: Request) -> Response:
+    from .fit_course import encode
+    try:
+        item = await asyncio.to_thread(draft.load, _draft_id(request))
+        def build():
+            with draft.region_scope(item):
+                return encode(item, climbs.all_climbs())
+        payload = await asyncio.to_thread(build)
+        filename = quote(f"{item.get('name') or 'ommeke-route'}.fit")
+        return Response(payload, media_type="application/vnd.ant.fit", headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{filename}", "Cache-Control": "private, no-store"})
+    except (ValueError, draft.DraftError) as exc:
         return _error(str(exc), 404, "artifact_not_found")
 
 

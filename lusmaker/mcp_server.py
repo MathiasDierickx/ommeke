@@ -119,6 +119,13 @@ def _server(
 mcp = _server("lusmaker")
 
 
+@mcp.tool(**tool_contract("reroute_from"))
+def reroute_from(draft_id: str, lat: float, lon: float, rest_km: float | str = "kortste", expected_revision: int | None = None, closure: dict | None = None) -> dict:
+    """Breng me terug vanaf mijn huidige positie, binnen een resterend kilometerbudget."""
+    from .reroute import reroute_from as execute
+    return execute(draft_id, lat, lon, rest_km, expected_revision=expected_revision, closure=closure)
+
+
 @mcp.tool(**tool_contract("status"))
 def status() -> dict[str, Any]:
     """Controleer of de lokale data en GraphHopper beschikbaar zijn."""
@@ -554,6 +561,7 @@ def download_gpx(draft_id: NonEmptyString) -> GpxDownloadResult:
 LITE_TOOLS = (
     plan_route,
     adjust_route,
+    reroute_from,
     suggest_climbs,
     route_details,
     download_gpx,
@@ -587,6 +595,7 @@ FULL_TOOLS = (
     suggest_climbs,
     plan_route,
     adjust_route,
+    reroute_from,
     optimize_draft,
     export_gpx,
     download_gpx,
@@ -655,6 +664,7 @@ hosted_mcp = _server(
 for _hosted_tool in (
     plan_route,
     adjust_route,
+    reroute_from,
     suggest_climbs,
     route_details,
     download_gpx,

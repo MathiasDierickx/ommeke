@@ -32,6 +32,7 @@ EXPECTED_TOOLS = {
     "suggest_climbs",
     "plan_route",
     "adjust_route",
+    "reroute_from",
     "optimize_draft",
     "export_gpx",
     "download_gpx",
@@ -41,6 +42,7 @@ EXPECTED_TOOLS = {
 EXPECTED_LITE_TOOLS = {
     "plan_route",
     "adjust_route",
+    "reroute_from",
     "suggest_climbs",
     "route_details",
     "download_gpx",
@@ -135,7 +137,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 25
+assert len(actual) == 26
 """,
             Path(temp_dir),
         )
@@ -163,7 +165,7 @@ else:
 
     actual = asyncio.run(tool_names())
 assert actual == expected, (actual, expected)
-assert len(actual) == 11
+assert len(actual) == 12
 """,
             Path(temp_dir),
         )

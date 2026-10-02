@@ -266,8 +266,13 @@ class ConversationStore:
 
 
 
+from .chat_contracts import REROUTE_SCHEMA
+
 TOOL_CONFIG = {
     "tools": [
+        {"toolSpec":{"name":"reroute_from","description":"Breng de gebruiker vanaf geverifieerde huidige coördinaten terug naar de oorspronkelijke start; rest_km is een hard budget.","inputSchema":{"json":REROUTE_SCHEMA}}},
+        {"toolSpec": {"name": "get_profile", "description": "Lees je voorkeurenprofiel voor readiness-vragen.", "inputSchema": {"json": {"type":"object","properties":{"naam":{"type":"string"}},"additionalProperties":False}}}},
+        {"toolSpec": {"name": "update_profile", "description": "Bewaar expliciete antwoorden op profielvragen; pas daarna het routeconcept aan.", "inputSchema": {"json": {"type":"object","required":["naam","patch"],"properties":{"naam":{"type":"string"},"patch":{"type":"object"}},"additionalProperties":False}}}},
         {"toolSpec": {
             "name": "nearby_places", "description": "Zoek OSM-parkings, hotels, stranden of oversteekplaatsen rond geverifieerde coördinaten. Geeft bronnen en toegangstags, geen veiligheidsgarantie.",
             "inputSchema": {"json": {"type": "object", "required": ["lat", "lon", "kind"],
@@ -323,6 +328,10 @@ TOOL_CONFIG = {
 
 
 SYSTEM_PROMPT = """Je bent Lus, een Nederlandstalige routebouwer voor fiets- en traillussen.
+Gebruik exact de aangeboden veldnamen: activiteit (nooit activity), doel en target_km.
+Bij een gewone toer zonder klimwens zet je doel=toeren; bij expliciet onverhard doel=offroad.
+Bij een wijziging haal je met route_details eerst de actuele revision op als die ontbreekt.
+Gebruik update_profile voor expliciete antwoorden op voorkeurenvragen, daarna adjust_route.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
 Als de gebruiker vraagt om rond/langs een specifieke plek (park, plas, domein) te lopen/rijden,
@@ -355,6 +364,19 @@ class RouteToolExecutor:
     def execute(
         self, name: str, arguments: dict[str, Any], *, request_id: str
     ) -> dict[str, Any]:
+        from .chat_contracts import validate_arguments
+        schemas = {t["toolSpec"]["name"]: t["toolSpec"]["inputSchema"]["json"] for t in TOOL_CONFIG["tools"]}
+        if name not in schemas:
+            raise ChatError(f"onbekende route-tool '{name}'")
+        validate_arguments(arguments, schemas[name])
+        if name == "reroute_from":
+            from .reroute import reroute_from
+            return reroute_from(**arguments)
+        if name in {"get_profile", "update_profile"}:
+            from . import profiles
+            if name == "get_profile":
+                return profiles.load(arguments.get("naam", "standaard"))
+            return profiles.apply_patch(arguments["naam"], arguments["patch"], bron="chat")
         if name == "nearby_places":
             from .place_search import nearby_places
             return nearby_places(**arguments)

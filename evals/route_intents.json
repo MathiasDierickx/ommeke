@@ -161,5 +161,110 @@
       "doel": "offroad",
       "expected_revision": 4
     }
+  },
+  {
+    "id": "bredene-hotel-eerst",
+    "prompt": "Ik logeer morgen, 3 oktober 2026, in het ibis Styles hotel in Bredene. Zoek eerst zelf het juiste hotel en de parking ernaast op. Ik wil een wandeling van ongeveer 3 km, kindvriendelijk, liefst zo lang mogelijk langs het strand, vertrekkend vanop de parking naast het hotel en terug naar dezelfde parking. Geen fietsroute. Geef duidelijk aan als je het hotel, de parking, strandtoegang of kindvriendelijkheid niet kunt verifiëren.",
+    "expected_tool": "lookup_place",
+    "required_arguments": [
+      "query"
+    ],
+    "provenance": "letterlijke gebruikersvraag uit Bredene-praktijkproef"
+  },
+  {
+    "id": "kust-wandeling",
+    "prompt": "Maak een wandeling vanaf 51.2514,2.9741 van ongeveer 3 km, geen fietsroute.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 3,
+      "activiteit": "trail"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "kust-hard",
+    "prompt": "Wandel vanaf 51.2514,2.9741 maximaal 3 km.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "max_km": 3,
+      "activiteit": "trail"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "kust-toeren",
+    "prompt": "Fiets een gewone toer van ongeveer 20 km vanaf Bredene.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 20,
+      "doel": "toeren",
+      "activiteit": "fietsen"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "kust-wijzig",
+    "prompt": "Maak draft abc123 ongeveer 3 km lang met 0.3 km speling.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "target_km": 3,
+      "tolerance_km": 0.3
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "kust-verkeer",
+    "prompt": "Vermijd Oostende in draft abc123.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "vermijd_plaatsen": [
+        "Oostende"
+      ]
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "strand-zoeken",
+    "prompt": "Zoek eerst het ibis Styles hotel in Bredene op.",
+    "expected_tool": "lookup_place",
+    "expected_arguments": {},
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "parking-zoeken",
+    "prompt": "Zoek parkings binnen 500 meter van 51.251,2.973.",
+    "expected_tool": "nearby_places",
+    "expected_arguments": {
+      "lat": 51.251,
+      "lon": 2.973,
+      "kind": "parking",
+      "radius_m": 500
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "strand-nabij",
+    "prompt": "Zoek stranden binnen 1000 meter van 51.251,2.973.",
+    "expected_tool": "nearby_places",
+    "expected_arguments": {
+      "lat": 51.251,
+      "lon": 2.973,
+      "kind": "beach",
+      "radius_m": 1000
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "trail-geen-fiets",
+    "prompt": "Maak vanaf Ronse een wandeling van ongeveer 8 km over onverharde paden.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "target_km": 8,
+      "activiteit": "trail",
+      "doel": "offroad"
+    },
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek"
   }
 ]

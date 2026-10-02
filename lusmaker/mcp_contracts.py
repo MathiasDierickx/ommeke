@@ -73,6 +73,7 @@ TOOL_CONTRACTS = {
     "route_readiness": ToolContract("Routevoorkeuren beoordelen", _READ_ONLY_ROUTER),
     "suggest_climbs": ToolContract("Klimmen voorstellen", _READ_ONLY_ROUTER),
     "plan_route": ToolContract("Route plannen", _MUTATING_ROUTER),
+    "reroute_from": ToolContract("Terugweg berekenen", _MUTATING_ROUTER),
     "adjust_route": ToolContract("Route aanpassen", _MUTATING_ROUTER),
     "optimize_draft": ToolContract("Draft optimaliseren", _MUTATING_ROUTER),
     "export_gpx": ToolContract("GPX exporteren", _MUTATING_CLOSED),
