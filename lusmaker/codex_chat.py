@@ -57,6 +57,7 @@ class CodexRouteAgent:
             command.extend(["--model", self.model])
         command.append("-")
         instructions = SYSTEM_PROMPT.replace("Je hebt geen algemene webzoektool.", "Gebruik webzoeken voor officiële plaatsinformatie en citeer de bronnen.")
+        instructions = instructions.replace("zeg dat GPX en preview rechts in de routebibliotheek staan", "geef de lokale GPX- en previewpaden uit de toolresultaten")
         prompt = instructions + "\nJe bent routeplanner, geen programmeur. Gebruik uitsluitend webzoeken en lusmaker MCP; geen shell, codewijzigingen of runtimebeheer. Alle routetools lopen via route_tool(name, arguments).\nGesprek:\n" + json.dumps(history, ensure_ascii=False)
         try:
             with (run_dir / "events.jsonl").open("w") as stdout, (run_dir / "stderr.log").open("w") as stderr:

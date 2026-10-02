@@ -1299,7 +1299,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                           router=route, round_trip_fn=gh.round_trip,
                           objective="hm", prefer_cobbles: bool = False,
                           popular_cells=_LOAD_HEAT,
-                          target_total_m: float | None = None) -> dict:
+                          target_total_m: float | None = None,
+                          seed_start: int = 0) -> dict:
     """Vul restbudget met de beste van vijf niet-overlappende GH-rondritten."""
     if not d.get("loop"):
         return {"filled": False, "reason": "draft is geen lus"}
@@ -1330,7 +1331,19 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         "heat_activity": _heat_activity(d),
     }
     candidates = []
-    for seed in range(5):
+    def exhausted(reason):
+        # Korte lussen hebben weinig topologische opties. Probeer pas bij
+        # mislukking extra seeds; succesvolle bestaande routes veranderen niet.
+        if seed_start == 0 and target_total_m is not None:
+            return _fill_with_round_trip(
+                d, climb_db, budget_m, router=router, round_trip_fn=round_trip_fn,
+                objective=objective, prefer_cobbles=prefer_cobbles,
+                popular_cells=popular_cells, target_total_m=target_total_m,
+                seed_start=5,
+            )
+        return {"filled": False, "reason": reason}
+
+    for seed in range(seed_start, 5 if seed_start == 0 else 20):
         try:
             candidate = round_trip_fn(
                 anchor,
@@ -1343,6 +1356,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
         if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:
+            continue
+        if seed_start and candidate["distance_m"] < requested_m * 0.75:
             continue
         if existing and max(
             geo.retrace_m(existing, coords),
@@ -1368,10 +1383,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         candidates.append((score, -seed, seed, candidate, coords))
 
     if not candidates:
-        return {
-            "filled": False,
-            "reason": "geen round_trip-kandidaat zonder overlap binnen budget",
-        }
+        return exhausted("geen round_trip-kandidaat zonder overlap binnen budget")
 
     before = copy.deepcopy(d)
     for _ascend, _seed_order, seed, candidate, coords in sorted(candidates, reverse=True):
@@ -1406,10 +1418,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         d.clear()
         d.update(copy.deepcopy(before))
 
-    return {
-        "filled": False,
-        "reason": "round_trip-kandidaten overschrijden budget na integratie",
-    }
+    return exhausted("round_trip-kandidaten overschrijden budget na integratie")
 
 
 def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
@@ -1466,6 +1475,10 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         if anchor is None:
             if not fill:
                 raise DraftError("geen klim bereikbaar binnen het budget")
+            # Een nieuwe afstandsoptimalisatie vervangt eerdere rondritlobben.
+            # De heen- en terugweg naar een expliciete rond-plek telt mee
+            # voordat we het resterende opvulbudget aan GraphHopper geven.
+            d["opvullingen"] = []
             d["computed"] = {
                 "routed_at": time.strftime("%Y-%m-%d %H:%M"),
                 "total_km": 0.0,
@@ -1475,6 +1488,8 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
                 "kwaliteit": {"heen_en_weer_m": 0},
             }
             d["_geometry"] = []
+            if d.get("round_trip_anchor"):
+                d["computed"] = None
         else:
             d["climbs"].append(anchor["id"])
             d["computed"] = None

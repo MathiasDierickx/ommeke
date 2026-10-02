@@ -543,3 +543,60 @@ def test_fill_target_must_fit_inside_hard_budget():
         assert "afstandsbudget" in str(exc)
     else:
         raise AssertionError("fill-target boven hard budget werd aanvaard")
+
+
+def test_landmark_access_distance_is_reserved_before_filling_and_replacing_old_loop():
+    from unittest.mock import patch
+    routed = _synthetic_routed_draft()
+    routed['climbs'] = []
+    routed['round_trip_anchor'] = {'lat': 50.01, 'lon': 4.0, 'label': 'strand'}
+    routed['opvullingen'] = [{'obsolete': True}]
+    requested = []
+
+    def router(current, _db):
+        fills = current['opvullingen']
+        assert len(fills) <= 1
+        current['computed'] = {'total_km': 3.0 if fills else 1.2,
+                               'ascend_m': 0, 'descend_m': 0, 'legs': [],
+                               'kwaliteit': {'heen_en_weer_m': 0}}
+        current['_geometry'] = []
+
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        requested.append(distance_m)
+        return {'distance_m': 1800, 'ascend_m': 0,
+                'coords': [anchor, (50.02, 4.0), (50.02, 4.01), anchor]}
+
+    with tempfile.TemporaryDirectory() as root, patch.dict(os.environ, {'LUSMAKER_HOME': root}):
+        for _ in range(2):
+            draft._optimize(routed, {}, max_km=3.3, objective='toeren', fill_target_km=3,
+                            route_fn=router, round_trip_fn=round_trip)
+    assert requested == [1800] * 10
+    assert routed['computed']['total_km'] == 3
+    assert len(routed['opvullingen']) == 1
+
+
+def test_failed_first_candidates_retry_bounded_extra_seeds():
+    from lusmaker import gh
+    routed = _synthetic_routed_draft()
+    routed['climbs'] = []
+    routed['computed']['total_km'] = 1.2
+    routed['computed']['legs'] = []
+    routed['_geometry'] = []
+    attempts = []
+
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        attempts.append(seed)
+        if seed != 7:
+            raise gh.GhError('geen kandidaat')
+        return {'distance_m': 1800, 'ascend_m': 0,
+                'coords': [anchor, (50.01, 4.0), (50.01, 4.01), anchor]}
+
+    def router(current, _db):
+        current['computed'] = {'total_km': 3.0, 'ascend_m': 40}
+
+    result = draft._fill_with_round_trip(routed, {}, 3300, router=router,
+                                       round_trip_fn=round_trip, target_total_m=3000,
+                                       objective='toeren')
+    assert result['filled'] and result['seed'] == 7
+    assert attempts == list(range(20))
+    assert routed['computed']['total_km'] == 3

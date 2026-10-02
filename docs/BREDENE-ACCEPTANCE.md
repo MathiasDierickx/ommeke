@@ -4,7 +4,41 @@ Uitgevoerd op 2 oktober 2026. Doel: ongeveer 3 km te voet vanaf de parking naast
 ibis Styles Bredene, terug naar de parking, kindvriendelijk en zoveel mogelijk
 langs het strand. Eerst de app zelf laten zoeken, daarna helpen met een bron.
 
-## Werkelijke uitkomst
+## Lokale Codex/MCP-proef na herstel
+
+Op 2 oktober is de volledige keten `lus chat --provider codex` → stdio-MCP →
+GraphHopper → GPX/preview uitgevoerd. De lokale proef gebruikt een apart
+kustextract uit het aanwezige Belgische OSM-bestand en GraphHopper 11.0 op
+poort 18989. De bestaande runtime en `~/.lusmaker` zijn niet gewijzigd.
+Na de overstap naar Codex zijn geen Bedrock-aanroepen voor deze proeven gedaan.
+
+Het verbeterde concept `73a3db` geeft 3,0 km en 36 hoogtemeters. Onafhankelijk
+uit de GPX-geometrie gemeten: **3,044 km, 126 punten, 0 m sluitingsverschil**.
+Start/einde na routersnapping: 51.251404, 2.974101. Er zijn twee geregistreerde
+steenwegkruisingen. Dit is een berekende route, geen veiligheidskeuring.
+
+- Hotel: ibis Styles Bredene, Koningin Astridlaan 62; officiële Accor-bron.
+- Voorlopige parking: OSM-way 98000850, `access=yes`, `fee=yes`, vlak bij het hotel.
+  Het kaartcentrum is geen bevestigde ingang; de bedoelde parking is niet met
+  de gebruiker bevestigd.
+- Strandanker: OSM-way 72890837. Actuele strandtoegang, veilige oversteek,
+  kindvriendelijkheid en maximale strandlengte blijven onbevestigd.
+- Bestanden: `.route-data/bredene-codex/exports/73a3db/route.gpx` en `preview.html`.
+- Gesprekslog: `.route-data/bredene-codex/conversations/b9204b20-12a3-4692-9bbb-01bdc09f6a1b.json`.
+
+De proef vond en corrigeerde vier problemen: regio-onafhankelijke area-probes,
+onterechte vragen naar klimgewichten bij een gewone wandeling, niet meegerekende
+aanloopafstand naar het strand en onvoldoende rondritkandidaten bij korte lussen.
+De normale vijf kandidaten blijven het eerste pad; alleen bij mislukking met een
+afstandsdoel worden maximaal vijftien extra kandidaten geprobeerd. De drie
+bestaande routeregressiecassettes blijven ongewijzigd groen.
+
+De eerste release `08a39da` is succesvol naar AWS en Vercel uitgerold, inclusief
+CI en publieke smoke-tests. De correcties aan de korte-lusoptimalisatie volgen
+in de vervolguitrol. Persoonlijke Codex-authenticatie is niet naar AWS gekopieerd;
+de online chatprovider is niet gewijzigd door deze lokale providerkeuze.
+
+## Eerste webproef (vóór de fixes)
 
 De webapp maakte een concept “Strandwandeling Bredene · 3 km” van 0,0 km aan.
 Er verscheen geen assistentantwoord, ook niet na herladen van het gesprek.
