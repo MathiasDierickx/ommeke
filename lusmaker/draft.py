@@ -1145,6 +1145,11 @@ def probe(
             "druk_data_beschikbaar": busy_data_available,
             "plaatskernen": place_cores,
             "pois_langs_route": dict(sorted(poi_counts.items())),
+            "voorzieningen_details": [
+                {key: p.get(key) for key in ("type", "naam", "lat", "lon", "afstand_m",
+                                           "wheelchair", "opening_hours", "changing_table", "fee", "access")}
+                for p in route_features["pois"][:20]
+            ],
             "knooppunten_langs_route": len(route_features["knopen"]),
         },
     }

@@ -119,7 +119,7 @@ def test_cloud_sources_are_visible_to_tenant_engine_without_graph_changes():
         with route_sources._home(destination), config.user_scope("cloud-user"):
             assert destination in route_evidence.database_path().parents
             assert route_evidence.pack_status() == {
-                "build_id": result["build_id"], "features": 5, "layers": 18,
+                "build_id": result["build_id"], "features": 5, "layers": 21,
             }
             score = draft._candidate_surface_components([
                 {"coords": [(50.8, 3.7), (50.8, 3.704)]}

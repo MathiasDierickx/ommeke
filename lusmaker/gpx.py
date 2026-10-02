@@ -1,5 +1,5 @@
 """GPX-export van een gerouteerde draft."""
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, quoteattr
 
 
 def export(d: dict, climb_db: dict, path: str) -> dict:
@@ -21,7 +21,8 @@ def export(d: dict, climb_db: dict, path: str) -> dict:
             )
     from .route_pois import for_draft
     for poi in for_draft(d):
-        lines.append(f'<wpt lat="{poi["lat"]}" lon="{poi["lon"]}"><name>{escape(poi["name"])}</name><type>{poi["kind"]}</type><desc>{poi["at_km"]} km; openingstijden niet geverifieerd</desc></wpt>')
+        description = f'{poi["at_km"]} km; openingstijden niet geverifieerd; Bron: {poi.get("attribution", "© OpenStreetMap contributors")}'
+        lines.append(f'<wpt lat="{poi["lat"]}" lon="{poi["lon"]}"><name>{escape(poi["name"])}</name><type>{escape(poi["kind"])}</type><desc>{escape(description)}</desc><link href={quoteattr(poi["source"])}/></wpt>')
     if d.get("cues"):
         lines.append(f'<rte><name>{escape(d["name"])}</name>')
         for cue in d["cues"]:

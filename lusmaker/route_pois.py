@@ -44,10 +44,36 @@ def along_route(track, places, *, radius_m=150, limit=100):
     return sorted(result,key=lambda p:(p['at_km'],p['id']))[:limit]
 
 
-def for_draft(d, *, gazetteer=None):
-    if gazetteer is None:
-        from . import geocode, draft
-        try:
-            with draft.region_scope(d): gazetteer=geocode._load()
-        except (RuntimeError, OSError): return []
-    return along_route([p for leg in d.get('_geometry',[]) for p in leg],gazetteer.get('nearby_places',[]))
+def for_draft(d, *, gazetteer=None, source_pois=None):
+    from . import geocode, draft, tvl_places
+    injected = gazetteer is not None
+    try:
+        from . import config
+        config.get_region(draft.region_slug(d))
+    except RuntimeError:
+        return []  # oude/gedeelde routes kunnen een niet-geïnstalleerde regio hebben
+    with draft.region_scope(d):
+        if gazetteer is None:
+            try:
+                gazetteer = geocode._load()
+            except (RuntimeError, OSError):
+                gazetteer = {}
+        if source_pois is None:
+            source_pois = [] if injected else tvl_places.along_route(d.get('_geometry', []))
+        # Onderbroken legs niet verbinden met een fictief pad.
+        osm, distance = [], 0
+        for leg in d.get('_geometry', []):
+            for item in along_route(leg, gazetteer.get('nearby_places', [])):
+                osm.append({**item, 'at_km': round(item['at_km']+distance/1000, 3)})
+            distance += geo.path_length(leg)
+        result = list(source_pois)
+        seen = {p['id'] for p in result}
+        for item in osm:
+            if item['id'] in seen:
+                continue
+            if any(item['kind'] == p['kind'] and geo.haversine(item['lat'], item['lon'], p['lat'], p['lon']) < 10
+                   for p in result):
+                continue
+            result.append(item)
+            seen.add(item['id'])
+        return sorted(result, key=lambda p: (p['at_km'], p['id']))[:100]

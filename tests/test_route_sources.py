@@ -46,6 +46,82 @@ def expect_error(fn, message):
         raise AssertionError("verwachtte een duidelijke fout")
 
 
+def _places_database(root):
+    snapshots = []
+    examples = {
+        "poi:toilet": [
+            ("1", 3.702, {"wheelchair": "yes", "changing_table": "yes", "fee": "no", "opening_hours": "08:00-18:00"}),
+            ("2", 3.703, {"access": "private"}),
+            ("3", 3.75, {}),
+        ],
+        "lodging:base_registry_all_lodging": [("42", 3.704, {"business_product_id": 42, "name": "Testhotel", "discriminator": "HOTEL"})],
+        "lodging:lodging_to_iconic_cycle_routes": [("42", 3.704, {"business_product_id": 42, "name": "Testhotel", "discriminator": "HOTEL", "near_to": "Schelderoute"})],
+        "routes:icoonroute_knooppunten": [("1", 3.704, {"knoopnr": 4, "icoonroute": "Schelderoute"})],
+    }
+    for spec in route_sources.layers():
+        if spec["layer"] not in examples:
+            continue
+        features = [{"type": "Feature", "id": identifier, "properties": properties,
+                     "geometry": {"type": "Point", "coordinates": [lon, 50.8]}}
+                    for identifier, lon, properties in examples[spec["layer"]]]
+        path = root / (spec["layer"].replace(":", "_") + ".json")
+        path.write_text(json.dumps(collection(features)))
+        snapshots.append((path, spec))
+    database = root / "places.sqlite"
+    route_sources.build_database(database, snapshots)
+    return database
+
+
+def test_tvl_places_preserve_accessibility_deduplicate_lodging_and_exclude_private():
+    from lusmaker import tvl_places
+    with tempfile.TemporaryDirectory() as folder:
+        database = _places_database(Path(folder))
+        found = tvl_places.nearby(50.8, 3.703, database=database)
+        assert len(found) == 2
+        toilet = next(p for p in found if p["kind"] == "toilet")
+        hotel = next(p for p in found if p["kind"] == "hotel")
+        assert toilet["wheelchair"] == toilet["changing_table"] == "yes"
+        assert toilet["opening_hours"] == "08:00-18:00"
+        assert hotel["cycle_route_lodging"] and hotel["near_to"] == "Schelderoute"
+        assert hotel["wheelchair"] is None  # geen toegankelijkheidsclaim uit nabijheid
+        assert "phone1" not in hotel and "email" not in hotel
+        assert tvl_places.icon_nodes(database=database)[0]["nummer"] == 4
+        legs = [[(50.8, 3.7, 10), (50.8, 3.71, 12)], [(50.8, 3.79, 11), (50.8, 3.8, 13)]]
+        along = tvl_places.along_route(legs, database=database)
+        assert len(along) == 2  # geen denkbeeldig verbindingspad door het derde toilet
+        assert all(p["at_km"] < 1 for p in along)
+
+
+def test_tvl_places_reach_route_export_and_nearby_hotel_without_network():
+    from lusmaker import route_pois, tvl_places, place_search
+    with tempfile.TemporaryDirectory() as folder:
+        database = _places_database(Path(folder))
+        legs = [[(50.8, 3.7), (50.8, 3.71)]]
+        sources = tvl_places.along_route(legs, database=database)
+        osm_duplicate = {"type": "node", "id": 1, "lat": 50.8, "lon": 3.702,
+                         "tags": {"amenity": "toilets"}}
+        result = route_pois.for_draft({"_geometry": legs}, gazetteer={"nearby_places": [osm_duplicate]}, source_pois=sources)
+        assert len(result) == 2
+        assert next(p for p in result if p["kind"] == "toilet")["wheelchair"] == "yes"
+        hotel = tvl_places.nearby(50.8, 3.704, kinds={"hotel"}, database=database)
+        result = place_search.nearby_places(50.8, 3.704, "hotel", source_places=hotel, local_places=[],
+            fetch=lambda _: (_ for _ in ()).throw(AssertionError("geen netwerk")))
+        assert result["total"] == 1 and result["data_mode"] == "local_tvl_and_osm"
+        assert result["candidates"][0]["cycle_route_lodging"] is True
+
+
+def test_lodging_download_requests_only_required_public_fields_and_stable_sort():
+    spec = next(s for s in route_sources.layers() if s["layer"] == "lodging:base_registry_all_lodging")
+    def fetch(url):
+        query = parse_qs(urlparse(url).query)
+        assert query["sortBy"] == ["business_product_id A"]
+        fields = query["propertyName"][0].split(",")
+        assert "geom" in fields and "name" in fields
+        assert "email" not in fields and "phone1" not in fields
+        return collection([])
+    route_sources.download_layer(spec, fetcher=fetch)
+
+
 def test_wfs_paginates_server_cap_and_preserves_properties():
     calls = []
     items = [feature(f"route.{i}", properties={"eigenaar": "Provincie", "objectid": i}) for i in range(3)]
@@ -88,7 +164,7 @@ def test_sync_reuses_snapshots_offline_and_failed_refresh_keeps_current_build():
             rebuilt = route_sources.sync(base / "rebuilt", offline=True, fetcher=never_fetch)
             assert rebuilt["build_id"] == first["build_id"]
             assert (Path(first["build"]) / "checksums.json").read_bytes() == (Path(rebuilt["build"]) / "checksums.json").read_bytes()
-            assert first["features"] == 5 and first["lagen"] == 18
+            assert first["features"] == 5 and first["lagen"] == 21
             assert not first["runtime_geactiveerd"]
             assert not (base / "runtime").exists()
             expect_error(lambda: route_sources.sync(base / "pack", refresh=True, fetcher=lambda _: b"<html>fout"), "HTML/XML")
@@ -98,7 +174,7 @@ def test_sync_reuses_snapshots_offline_and_failed_refresh_keeps_current_build():
             assert manifest["contains_personal_heat"] is False
             assert "niet_autovrij_tvl" in manifest["heat"]["areas"]
             with sqlite3.connect(first["database"]) as db:
-                assert db.execute("select count(*) from source").fetchone()[0] == 18
+                assert db.execute("select count(*) from source").fetchone()[0] == 21
                 assert db.execute("select count(*) from feature").fetchone()[0] == 5
 
 

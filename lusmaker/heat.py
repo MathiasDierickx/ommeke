@@ -689,6 +689,11 @@ def features_near_route(
                         "afstand_m": round(distance),
                     }
                 )
+    from . import route_evidence, tvl_places
+    if config.current_region().slug == "vlaanderen" and route_evidence.database_path() is not None:
+        pois = [{**item, "type": item["kind"], "naam": item["name"], "afstand_m": item["offset_m"]}
+                for item in tvl_places.along_route([coords], radius_m=poi_radius_m,
+                                                 limit=max_pois if max_pois is not None else 10000)]
     pois.sort(
         key=lambda item: (
             item["afstand_m"], item["type"], item["lat"], item["lon"],
@@ -716,6 +721,21 @@ def features_near_route(
                     "afstand_m": round(distance),
                 }
             )
+    if config.current_region().slug == "vlaanderen" and route_evidence.database_path() is not None:
+        for knot in tvl_places.icon_nodes():
+            if geo.cell(knot["lat"], knot["lon"]) not in candidate_cells:
+                continue
+            distance = _point_to_route_m((knot["lat"], knot["lon"]), coords)
+            if distance > knot_radius_m:
+                continue
+            existing = next((p for p in knots if p['type'] == 'fiets' and p['nummer'] == knot['nummer']
+                             and geo.haversine(p['lat'], p['lon'], knot['lat'], knot['lon']) < 20), None)
+            if existing is None:
+                existing = {**knot, "afstand_m": round(distance)}
+                knots.append(existing)
+            names = existing.setdefault("icoonroutes", [])
+            if knot.get("icoonroute") and knot["icoonroute"] not in names:
+                names.append(knot["icoonroute"])
     knots.sort(
         key=lambda item: (
             item["afstand_m"], item["nummer"], item["type"],

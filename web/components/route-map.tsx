@@ -45,7 +45,15 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
       });
       (geometry.pois || []).filter(p => poiKind === "alle" || p.kind === poiKind).forEach(p => {
         const label = document.createElement("span");
-        label.textContent = `${p.name} · ${p.at_km.toFixed(1)} km${p.opening_hours ? ` · ${p.opening_hours}` : " · openingstijden onbekend"}`;
+        const details = [p.name, `${p.at_km.toFixed(1)} km`, p.opening_hours || "openingstijden onbekend"];
+        const wheelchair = ({ yes: "ja", no: "nee", limited: "beperkt" } as Record<string, string>)[p.wheelchair || ""];
+        if (wheelchair) details.push(`Rolstoeltoegang bij stop: ${wheelchair}; toegangspad niet gecontroleerd`);
+        if (p.changing_table === "yes") details.push("Verschoontafel aanwezig volgens bron");
+        if (p.fee === "yes") details.push("Betalend volgens bron");
+        if (p.access === "customers") details.push("Alleen voor klanten");
+        if (p.cycle_route_lodging) details.push("Logies in de selectie bij icoonfietsroutes");
+        details.push(`Bron: ${p.attribution || "© OpenStreetMap contributors"}`);
+        label.textContent = details.join(" · ");
         L.circleMarker([p.lat,p.lon], {radius:6,color:"#8d5a26",fillOpacity:0.9}).addTo(map).bindTooltip(label);
       });
       map.fitBounds(line.getBounds(), { padding: [42, 42], maxZoom: 15 });

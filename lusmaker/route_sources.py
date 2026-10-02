@@ -24,7 +24,7 @@ from urllib.parse import urlencode
 
 from . import config, heat
 
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 FLANDERS_BBOX = (50.67, 2.53, 51.51, 5.94)
 SOURCE_URL = "https://toerismevlaanderen.be/nl/cijfers/open-data"
 ROUTE_LICENSE = "https://data.vlaanderen.be/id/licentie/modellicentie-gratis-hergebruik/v1.0"
@@ -32,7 +32,7 @@ OSM_LICENSE = "https://www.openstreetmap.org/copyright"
 
 
 def layers() -> list[dict]:
-    """Expliciete allowlist; geen logies, persoonsgegevens of gesloten platforms."""
+    """Expliciete allowlist van openbare Vlaamse route- en plaatsgegevens."""
     result = []
     for _, (mode, layer, _) in heat.VLAANDEREN_ROUTE_LAYERS.items():
         result.append(dict(layer=layer, mode=mode, role="network"))
@@ -52,6 +52,18 @@ def layers() -> list[dict]:
         spec["attribution"] = ("© OpenStreetMap contributors; ontsloten door Toerisme Vlaanderen"
                                if spec["role"] == "poi" else "Toerisme Vlaanderen en de provinciale toeristische organisaties")
         spec["source_url"] = SOURCE_URL
+    result.append(dict(layer="routes:icoonroute_knooppunten", mode="fiets", role="node",
+                       license=ROUTE_LICENSE, attribution="Toerisme Vlaanderen en de provinciale toeristische organisaties",
+                       source_url=SOURCE_URL))
+    for layer in ("lodging:base_registry_all_lodging", "lodging:lodging_to_iconic_cycle_routes"):
+        properties = ["geom", "business_product_id", "name", "discriminator", "city_name",
+                      "postal_code", "website", "status", "comfort_class", "changed_time"]
+        if layer.endswith("iconic_cycle_routes"):
+            properties.append("near_to")
+        result.append(dict(layer=layer, mode="all", role="lodging", sort_by="business_product_id",
+                           property_names=properties, license=SOURCE_URL,
+                           attribution="Toerisme Vlaanderen — Basisregister Vlaams Logiesaanbod",
+                           source_url=SOURCE_URL))
     return result
 
 
@@ -129,12 +141,15 @@ def download_layer(spec, *, fetcher=fetch_url, page_size=1000) -> tuple[dict, di
     features, seen, requests = [], set(), []
     expected = None
     while True:
-        url = heat.TOERISME_VLAANDEREN_WFS + "?" + urlencode({
+        parameters = {
             "service": "WFS", "version": "2.0.0", "request": "GetFeature",
             "typeNames": spec["layer"], "outputFormat": "application/json",
             "srsName": "EPSG:4326", "count": page_size,
-            "startIndex": len(features), "sortBy": "objectid A",
-        })
+            "startIndex": len(features), "sortBy": spec.get("sort_by", "objectid") + " A",
+        }
+        if spec.get("property_names"):
+            parameters["propertyName"] = ",".join(spec["property_names"])
+        url = heat.TOERISME_VLAANDEREN_WFS + "?" + urlencode(parameters)
         document = heat._geojson_document(fetcher(url), spec["layer"])
         page = document["features"]
         matched = document.get("numberMatched", document.get("totalFeatures"))
@@ -350,7 +365,7 @@ def verify(build) -> dict:
         if root not in path.parents or _sha(path) != expected:
             raise ValueError(f"buildbestand gewijzigd of ongeldig: {name}")
     manifest = json.loads((root / "manifest.json").read_text())
-    if manifest["format_version"] != FORMAT_VERSION:
+    if manifest["format_version"] not in {3, FORMAT_VERSION}:
         raise ValueError("incompatibel routedatapack; bouw opnieuw uit snapshots")
     return {"ok": True, "build_id": manifest["build_id"], "lagen": len(manifest["sources"]),
             "features": sum(item["features"] for item in manifest["layers"].values()),

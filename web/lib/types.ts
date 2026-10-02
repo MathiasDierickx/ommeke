@@ -87,7 +87,7 @@ export type SharedRoute = {
 };
 
 export type RouteGeometry = {
-  pois?: { id: string; kind: string; name: string; lat: number; lon: number; at_km: number; opening_hours?: string | null; source: string }[];
+  pois?: { id: string; kind: string; name: string; lat: number; lon: number; at_km: number; opening_hours?: string | null; source: string; wheelchair?: string | null; changing_table?: string | null; fee?: string | null; access?: string | null; attribution?: string; cycle_route_lodging?: boolean }[];
   points: [number, number][];
   climbs: { lat: number; lon: number; id: string }[];
   start: { lat: number; lon: number; label?: string } | null;

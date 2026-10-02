@@ -269,3 +269,66 @@ en gefilterde opstartfouten raadplegen, ook zonder lokale AWS-credentials:
 ```sh
 gh workflow run diagnose-aws.yml --ref main
 ```
+
+## Toerisme Vlaanderen verder geïntegreerd — uitbreiding op 2 oktober 2026
+
+Toerisme Vlaanderen heeft nu voorrang op EuroVelo. De bestaande 18 fiets-,
+wandel- en voorzieningenlagen worden uitgebreid tot **21 lagen / 213.331
+bronfeatures**, met deze drie datasets:
+
+| Extra laag | Records | Gebruik |
+|---|---:|---|
+| Basisregister Vlaams Logiesaanbod | 32.461 | Hotels vinden rond een bekend punt zonder externe zoekaanroep |
+| Logies bij icoonfietsroutes | 389 | Verrijking van dezelfde logies via business_product_id; geselecteerde verblijven langs routes |
+| Icoonrouteknooppunten | 1.582 | Knooppunten langs een route aanvullen met icoonroutenamen |
+
+Gecontroleerde lokale build:
+`4ee57fa4c59d8d8234122ed4a345267cec532cc3b069395f086ea8a6d1b56220`.
+De 389 selectierecords overlappen met het basisregister. Dit zijn geen 389
+extra unieke logies en geen nieuwe kilometers gecureerd netwerk.
+
+De [officiële open-datapagina](https://toerismevlaanderen.be/nl/cijfers/open-data)
+stelt het logiesregister voor hergebruik beschikbaar. Voor deze lagen verwijst
+het manifest naar die verklaring; we schrijven er geen onbevestigde CC- of
+modellicentie aan toe. De WFS-opvraag beperkt zich tot naam, positie, categorie,
+gemeente/postcode, website, registratiestatus, comfortclassificatie, wijzigdatum
+en de icoonrouteverwijzing. Telefoon, e-mail en uitbatergegevens worden niet
+opgevraagd. Bronclassificaties zijn geen aanbeveling of actuele beschikbaarheid.
+
+### Bestaande informatie daadwerkelijk benutten
+
+De SQLite-bronnen bevatten al toegankelijkheids- en voorzieningenattributen die
+in de oude compacte POI-cache verloren gingen. `tvl_places.py` leest die nu
+rechtstreeks via de ruimtelijke index. Bij 745 van de 1.544 toiletfeatures is
+`wheelchair` ingevuld; ingevuld betekent niet noodzakelijk `yes`.
+
+- Routevoorzieningen in de AWS-API, kaart en GPX/FIT-export gebruiken de actieve
+  brondata, ook wanneer de lokale OSM-gazetteer ontbreekt.
+- De routeprobe geeft maximaal twintig compacte voorzieningendetails, waaronder
+  rolstoeltoegang, openingstijden, verschoontafel, toegangsbeperking en betaling.
+- De kaart toont beschikbare bronwaarden en bronvermelding. GPX-waypoints bevatten
+  bronvermelding en een bronlink.
+- Privé/verboden voorzieningen worden niet aanbevolen. Klantgebonden toegang
+  blijft expliciet. Nabijheid, een toegankelijk toilet of een logieslabel zegt
+  niets over de toegankelijkheid van het toegangspad of de volledige route.
+- Logies uit beide lagen worden ontdubbeld op business_product_id. Voor standaard
+  route-stops gebruiken we alleen de icoonrouteselectie, niet alle vakantiewoningen.
+- Onderbroken routelegs worden afzonderlijk onderzocht: geen fictieve verbinding
+  waarop ten onrechte voorzieningen zouden liggen.
+
+Tien bestaande routes zijn offline opnieuw onderzocht: 2–100 voorzieningen per
+route (weergavelimiet 100), in circa 0,018–0,466 seconde op deze machine.
+Dit meet vindbaarheid en uitvoertijd, geen terreincontrole of routeverbetering.
+Resultaten staan lokaal in `.route-data/tvl-places-evaluation.json`.
+
+### Reproduceerbaar en compatibel
+
+De bestaande `scripts/sync_vlaanderen.py` en AWS-deployworkflow nemen de extra
+lagen automatisch mee. Bestaande snapshots blijven bewaard; alleen ontbrekende
+lagen worden opgehaald. Het buildformaat is versie 4; installatie en verificatie
+blijven versie 3 aanvaarden voor rollback. De bestandsrechten voor Lambda blijven
+onderdeel van cloudstaging en tests. Geen nieuwe dependencies of graafherimport.
+
+EuroVelo is op verzoek uitgesteld. Routen, Natuurpunt, NodeMapp, het
+Tragewegenregister en RouteYou worden met deze wijziging niet opgehaald: de eerder
+beschreven toestemmingen/API-afspraken zijn nog niet beschikbaar.
