@@ -337,6 +337,19 @@ Claude en ChatGPT. Score opgenomen toolcalls met:
 
 ### Open routelagen en populariteit
 
+Voor een volledige, herhaalbare import met bronfeatures, checksums,
+geometrische kwaliteitsmeting en een geïsoleerd datapack:
+
+```bash
+.venv/bin/python scripts/sync_vlaanderen.py
+.venv/bin/python scripts/sync_vlaanderen.py --offline
+```
+
+Zie [Vlaamse routedata: import, verificatie en activatie](docs/VLAANDEREN-ROUTEDATA.md).
+De import wijzigt de bestaande GraphHopper-runtime niet. De mogelijke meerwaarde
+van een gelicentieerde RouteYou-koppeling staat in de
+[RouteYou-zijtrack](docs/ROUTEYOU-INTEGRATIE.md).
+
 `lus heat build` combineert eigen GPX-tracks, optioneel gecachete publieke
 OSM-GPS-traces en drie gecureerde datasets van
 [Toerisme Vlaanderen Open Data](https://data.toerismevlaanderen.be):
@@ -346,14 +359,17 @@ OSM-GPS-traces en drie gecureerde datasets van
 - `lf_routes` — LF- en icoonroutes.
 
 Dezelfde Vlaanderen-fetch cachet daarnaast fiets- en wandelwegdek,
-verkeersintensiteit, recreatieve POI's en fiets-/wandelknooppunten. Kasseicellen
-en drukke cellen worden als `kassei_tvl` en `druk_tvl` ingebakken, zodat
-`vermijd-kasseien` ook ontbrekende OSM-tags opvangt en `autovrij` verkeersarme
-wegen kan prioriteren. De overige data vullen kwaliteitsmetrieken aan en
+verkeersvlaggen, recreatieve POI's en fiets-/wandelknooppunten. Kasseicellen
+en niet-autovrije cellen worden als areas ingebakken. `druk_tvl` is een
+historische naam: de bron meet geen verkeersintensiteit. Nieuwe packs gebruiken
+`niet_autovrij_tvl`; afwezigheid uit die laag blijft onbekend. Zo kan
+`vermijd-kasseien` ontbrekende OSM-tags aanvullen en `autovrij` een milde
+voorkeur toepassen. De overige data vullen kwaliteitsmetrieken aan en
 verrijken preview en terreinprobe met voorzieningen en knooppuntlabels.
 
-De Toerisme Vlaanderen-data vallen onder de Modellicentie Gratis Hergebruik;
-de bron en datasetnamen blijven hierboven vermeld voor naamsvermelding en
+De Toerisme Vlaanderen-routelagen vallen onder de Modellicentie Gratis Hergebruik;
+de via OSM ontsloten voorzieningen behouden hun ODbL-herkomst.
+De bron en datasetnamen blijven hierboven vermeld voor naamsvermelding en
 herleidbaarheid. De WFS-download vraagt GeoJSON met een server-side bbox-filter
 voor de actieve regio en bewaart alleen het gerasterde resultaat lokaal.
 
