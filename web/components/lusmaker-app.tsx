@@ -293,9 +293,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Download mislukt."); }
   };
 
-  const returnRoute = async (lat:number,lon:number,rest_km:number | "kortste",request_id:string) => {
+  const returnRoute = async (lat:number,lon:number,rest_km:number | "kortste",request_id:string,closure?:{lat:number;lon:number}) => {
     if (!session || !selectedRoute) return;
-    await apiRequest(`/api/routes/${selectedRoute.id}/reroute`, session.accessToken, {method:"POST",body:JSON.stringify({lat,lon,rest_km,request_id,expected_revision:selectedRoute.revision})});
+    await apiRequest(`/api/routes/${selectedRoute.id}/reroute`, session.accessToken, {method:"POST",body:JSON.stringify({lat,lon,rest_km,request_id,expected_revision:selectedRoute.revision,...(closure?{closure}:{})})});
     await loadRoute(selectedRoute.id,session.accessToken);
     await loadWorkspace(session.accessToken);
   };

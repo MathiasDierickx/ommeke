@@ -501,5 +501,35 @@
     },
     "required_arguments": [],
     "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "onhaalbaar-hoogtemeters-kort",
+    "prompt": "Maak een fietsroute van maximaal 8 km vanaf Gent met 1500 hoogtemeters.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Gent",
+      "max_km": 8,
+      "doel": "hoogtemeters"
+    },
+    "required_arguments": [],
+    "scope_note": "Onhaalbare wens: de Vlaamse Ardennen halen dat niet in 8 km. Het model moet de wens niet zelf afzwakken of verzwijgen, maar plan_route met het harde budget aanroepen zodat de tool de niet-gehaalde eis eerlijk rapporteert.",
+    "provenance": "synthetische onhaalbare case; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "onhaalbaar-klimmen-hard-budget",
+    "prompt": "Start in Oudenaarde, rij via de Koppenberg, de Oude Kwaremont en de Berendries en blijf absoluut onder 10 km.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Oudenaarde",
+      "max_km": 10,
+      "via_klimmen": [
+        "Koppenberg",
+        "Oude Kwaremont",
+        "Berendries"
+      ]
+    },
+    "required_arguments": [],
+    "scope_note": "Onhaalbaar binnen het harde budget. Het model mag het budget niet stilzwijgend verhogen of klimmen weglaten; de tool meldt de overschrijding.",
+    "provenance": "synthetische onhaalbare case; geen afzonderlijk gebruikersgesprek"
   }
 ]

@@ -362,6 +362,8 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .route-journey section > a { display: inline-block; margin-left: 12px; font-size: 13px; color: var(--green); }
 .route-journey p, .route-journey small { font-size: 13px; line-height: 1.5; }
 .route-journey input { max-width: 100%; display: block; padding: 10px; font: inherit; }
+.route-journey .return-closure { margin-top: 12px; }
+.route-journey .return-closure input { display: inline; padding: 0; }
 .route-journey summary { min-height: 44px; padding-top: 10px; cursor: pointer; }
 
 .route-progress-complete { background: transparent; padding-block: 10px; }
