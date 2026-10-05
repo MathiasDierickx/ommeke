@@ -327,9 +327,11 @@ TOOL_CONFIG = {
 }
 
 
-SYSTEM_PROMPT = """Je bent Lus, een Nederlandstalige routebouwer voor fiets- en traillussen.
+SYSTEM_PROMPT = """Je bent Lus, een Nederlandstalige routebouwer voor wandel-, loop- en fietslussen.
 Gebruik exact de aangeboden veldnamen: activiteit (nooit activity), doel en target_km.
 Bij een gewone toer zonder klimwens zet je doel=toeren; bij expliciet onverhard doel=offroad.
+Kies de activiteit die bij de vraag past (wandelen, trail, wegloop, stadsfiets, toerfiets, koersfiets, gravel, mtb).
+Stel kasseien, beton_vermijden, strict of doel=hoogtemeters nooit op eigen initiatief in: alleen als de gebruiker ze noemt. Onbekend laat je weg; de tool stelt zo nodig gerichte vragen.
 Bij een wijziging haal je met route_details eerst de actuele revision op als die ontbreekt.
 Gebruik update_profile voor expliciete antwoorden op voorkeurenvragen, daarna adjust_route.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
@@ -391,17 +393,19 @@ class RouteToolExecutor:
             allowed = set(PLAN_ROUTE_SCHEMA["properties"])
             values = {key: value for key, value in arguments.items() if key in allowed}
             values.setdefault("tolerance_km", 2.5)
-            values.setdefault("doel", "hoogtemeters")
+            values.setdefault("doel", "toeren")
             values.setdefault("via_klimmen", [])
             values.setdefault("vermijd_plaatsen", [])
             values.setdefault("kasseien", None)
             values.setdefault("beton_vermijden", None)
             values.setdefault("autovrij", None)
             values.setdefault("strict", None)
-            values.setdefault("activiteit", "fietsen")
+            values.setdefault("activiteit", "toerfiets")
             values.setdefault("geen_opvulling", False)
             values.setdefault("rond_plaats", None)
             values.setdefault("langs_water", None)
+            values.setdefault("heuvels", None)
+            values.setdefault("ondergrond", None)
             return intents.plan_route(
                 **values,
                 profiel_naam="standaard",

@@ -8,7 +8,7 @@ import urllib.request
 from functools import lru_cache
 from pathlib import Path
 
-from . import config, telemetry
+from . import activities, config, telemetry
 from .heat import ACTIVITIES, PAVED_PREFERENCE_ACTIVITIES
 
 
@@ -193,23 +193,25 @@ AVOID_CONCRETE_PRIORITY = [
 
 # trail-profiel: straten hard afstraffen zodat paden/tracks winnen
 # (request-side, geen graafherimport nodig)
-TRAIL_OFFROAD_PRIORITY = [
-    {"if": "road_class == SECONDARY", "multiply_by": "0.25"},
-    {"else_if": "road_class == TERTIARY", "multiply_by": "0.35"},
-    {"else_if": "road_class == RESIDENTIAL", "multiply_by": "0.55"},
-    {"else_if": "road_class == UNCLASSIFIED", "multiply_by": "0.70"},
-]
+TRAIL_OFFROAD_PRIORITY = [dict(rule) for rule in activities.TRAIL_PRIORITY]
 
 
 def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   strict: bool = False, avoid_cobbles: bool = False,
                   avoid_concrete: bool = False, avoid_busy: bool = False,
                   profile: str = "", area_evs: set[str] | frozenset[str] | None = None,
-                  heat_activity: str | None = None) -> dict:
-    """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes."""
+                  heat_activity: str | None = None,
+                  activity: str | None = None) -> dict:
+    """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes.
+
+    ``activity`` kiest het request-time fragment uit ``activities``. Zonder
+    activiteit (oudere drafts) houdt het trailprofiel zijn vaste gedrag.
+    """
     area_evs = available_area_evs() if area_evs is None else frozenset(area_evs)
     custom = {"priority": list(STRICT_PRIORITY) if strict else []}
-    if profile == "trail":
+    if activities.get(activity) is not None:
+        custom["priority"] = custom["priority"] + activities.priority_fragment(activity)
+    elif profile == "trail":
         custom["priority"] = custom["priority"] + list(TRAIL_OFFROAD_PRIORITY)
     if avoid_cobbles:
         custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
@@ -288,6 +290,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           headings: list | None = None, *,
           instructions: bool = False,
           heat_activity: str | None = None,
+          activity: str | None = None,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
@@ -301,6 +304,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     details: per-segment surface/road_class in het resultaat ("details").
     profile: GraphHopper-profiel, standaard het bestaande fietsprofiel.
     heat_activity: activiteit voor de request-side populariteitsvoorkeur.
+    activity: activiteit (zie ``activities``) voor de request-side modelregels.
     point_hints: één straatnaam per punt ("" = geen hint); lengte moet gelijk
     zijn aan het aantal punten, anders wordt de hint genegeerd.
     headings: één kompasrichting per punt (None = geen voorkeur, als JSON
@@ -341,7 +345,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     body["custom_model"] = _custom_model(
         avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
         avoid_busy, profile=profile, area_evs=area_evs,
-        heat_activity=heat_activity,
+        heat_activity=heat_activity, activity=activity,
     )
 
     data = post_fn("/route", body)
@@ -354,6 +358,7 @@ def round_trip(point, distance_m: float, seed: int,
                avoid_cobbles: bool = False, avoid_concrete: bool = False,
                avoid_busy: bool = False, details: bool = False, *,
                heat_activity: str | None = None,
+               activity: str | None = None,
                area_evs: set[str] | frozenset[str] | None = None,
                post_fn=_post) -> dict:
     """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
@@ -372,7 +377,7 @@ def round_trip(point, distance_m: float, seed: int,
         "custom_model": _custom_model(
             avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
             avoid_busy, profile=profile, area_evs=area_evs,
-            heat_activity=heat_activity,
+            heat_activity=heat_activity, activity=activity,
         ),
     }
     if details:

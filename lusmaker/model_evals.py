@@ -25,7 +25,7 @@ def score(cases, calls, tool_config):
                     raise ValueError('geen beschikbare tool gekozen')
                 validate_arguments(arguments, schemas[call['tool']])
             if call.get('tool') == 'plan_route' and isinstance(arguments, dict):
-                arguments = {'activiteit':'fietsen', 'doel':'hoogtemeters', 'tolerance_km':2.5, **arguments}
+                arguments = {'activiteit':'toerfiets', 'doel':'toeren', 'tolerance_km':2.5, **arguments}
         except ValueError as exc:
             invalid[call['id']] = str(exc)
         normalized.append({**call, 'arguments':arguments})

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from . import activities
+from . import questions as situational
+
 
 def _metric(probe: dict, terrain_key: str, quality_key: str | None = None, default=0):
     terrain = probe.get("terrein") or {}
@@ -9,6 +12,11 @@ def _metric(probe: dict, terrain_key: str, quality_key: str | None = None, defau
     if terrain_key in terrain:
         return terrain[terrain_key]
     return quality.get(quality_key or terrain_key, default)
+
+
+def _paved_bike(activity: str | None) -> bool:
+    spec = activities.get(activity)
+    return bool(spec and spec.mode == "fiets" and spec.ground == "verhard")
 
 
 def _default_weights(weights: dict) -> bool:
@@ -86,15 +94,15 @@ def _weight_question(
             },
         }
     popularity_label = (
-        "populaire wandelroutes" if activity == "trail" else "populaire fietswegen"
+        "populaire wandelroutes" if activities.is_foot(activity) else "populaire fietswegen"
     )
     return {
         "id": "gewichten",
         "prioriteit": 4,
         "reden": reason,
         "vraag": (
-            "Wat weegt voor jou het zwaarst: vooral klimmen, de beschikbare "
-            f"onverharde stukken, of {popularity_label}?"
+            "Wat weegt voor jou het zwaarst: heuvels en hoogtemeters, de "
+            f"beschikbare onverharde stukken, of {popularity_label}?"
         ),
         "opties": options,
     }
@@ -136,31 +144,13 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
 
     preferences = profiel["voorkeuren"]
     questions = []
-    cobble_m = _metric(probe, "kassei_aanwezig_m", "kassei_m")
-    if preferences["kasseien"] is None and cobble_m > 300:
-        questions.append(
-            {
-                "id": "kasseien",
-                "prioriteit": 1,
-                "reden": (
-                    f"de verkenningsroute bevat {cobble_m / 1000:.1f} km "
-                    "kasseien; kasseivoorkeur onbekend"
-                ),
-                "vraag": (
-                    "Er liggen kasseistroken op het parcours. Vind je die leuk "
-                    "(Flandrien!), oké, of vermijd je ze liever?"
-                ),
-                "opties": {
-                    value: {"patch": {"voorkeuren": {"kasseien": value}}}
-                    for value in ("graag", "ok", "vermijd")
-                },
-            }
-        )
+    # Situationele vragen (kasseien, heuvels, ondergrond): zie questions.py.
+    questions.extend(situational.ask(d, profiel, probe))
 
     concrete_m = _metric(probe, "beton_m", "beton_m")
     if (
         preferences["beton"] is None
-        and profiel["activiteit"] == "fietsen"
+        and _paved_bike(profiel["activiteit"])
         and concrete_m > 1000
     ):
         questions.append(
@@ -236,7 +226,7 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             probe, "heat_dekking_pct", "populair_pct", default=None
         )
         if (
-            profiel["activiteit"] == "trail"
+            activities.is_foot(profiel["activiteit"])
             and not _metric(
                 probe, "wandelpopulariteit_beschikbaar", default=False
             )
@@ -295,6 +285,7 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
         advice = "profiel is klaar; routeer nu met optimize"
     else:
         labels = {
+            **situational.LABELS,
             "kasseien": "kasseivraag",
             "beton": "betonvraag",
             "steenwegen": "steenwegvraag",

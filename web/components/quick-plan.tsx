@@ -6,10 +6,20 @@ import { apiStream } from "@/lib/api";
 import { isOutOfCoverage } from "@/lib/interaction";
 
 type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
+const ACTIVITIES = [
+  { value: "wandelen", label: "Wandelen" },
+  { value: "trail", label: "Trail" },
+  { value: "wegloop", label: "Wegloop" },
+  { value: "stadsfiets", label: "Stadsfiets" },
+  { value: "toerfiets", label: "Toerfiets" },
+  { value: "koersfiets", label: "Koersfiets" },
+  { value: "gravel", label: "Gravel" },
+  { value: "mtb", label: "MTB" },
+];
 export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResultChange }: { onResultChange?: (hasResult:boolean)=>void; onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
   const [start, setStart] = useState("");
   const [km, setKm] = useState(40);
-  const [activity, setActivity] = useState("fietsen");
+  const [activity, setActivity] = useState("toerfiets");
   const [goal, setGoal] = useState("toeren");
   const [progress,setProgress]=useState<ProgressEvent|null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,8 +63,8 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
       <label>Startplaats<input required maxLength={160} value={start} onChange={e => setStart(e.target.value)} placeholder="Plaats, adres of coördinaten" /></label>
       <button type="button" onClick={locate}>Mijn locatie</button>
       <label>Afstand: {km} km<input type="range" min="1" max="150" value={km} onChange={e => setKm(Number(e.target.value))} /></label>
-      <label>Activiteit<select value={activity} onChange={e => setActivity(e.target.value)}><option value="fietsen">Fietsen</option><option value="trail">Wandelen / trail</option></select></label>
-      <label>Doel<select value={goal} onChange={e => setGoal(e.target.value)}><option value="toeren">Toeren</option><option value="hoogtemeters">Klimmen</option><option value="offroad">Onverhard</option><option value="kort">Kort</option></select></label>
+      <label>Activiteit<select value={activity} onChange={e => setActivity(e.target.value)}>{ACTIVITIES.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
+      <label>Doel<select value={goal} onChange={e => setGoal(e.target.value)}><option value="toeren">Toeren</option><option value="hoogtemeters">Heuvels</option><option value="offroad">Onverhard</option><option value="kort">Kort</option></select></label>
       <button type="submit" disabled={busy}>{busy ? "Route wordt berekend…" : "Maak mijn route"}</button>
       </fieldset>
     </form>

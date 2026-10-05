@@ -7,10 +7,16 @@
       "start": "Wetteren",
       "target_km": 50,
       "doel": "hoogtemeters",
-      "activiteit": "fietsen"
+      "activiteit": "toerfiets"
     },
     "required_arguments": [],
-    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek",
+    "argument_aliases": {
+      "activiteit": [
+        "fietsen",
+        "toerfiets"
+      ]
+    }
   },
   {
     "id": "hard-budget-via-klim",
@@ -180,10 +186,16 @@
     "expected_arguments": {
       "target_km": 20,
       "doel": "toeren",
-      "activiteit": "fietsen"
+      "activiteit": "toerfiets"
     },
     "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
-    "required_arguments": []
+    "required_arguments": [],
+    "argument_aliases": {
+      "activiteit": [
+        "fietsen",
+        "toerfiets"
+      ]
+    }
   },
   {
     "id": "kust-wijzig",
@@ -393,5 +405,101 @@
         "content": "De route bevat 0,7 km kasseien. Vind je kasseien leuk (Flandrien!), oké, of vermijd je ze liever?"
       }
     ]
+  },
+  {
+    "id": "activiteit-wandelen-stad",
+    "prompt": "Plan een wandeling van ongeveer 6 km door Gent, vertrek aan Gent-Sint-Pieters.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Gent-Sint-Pieters",
+      "target_km": 6,
+      "activiteit": "wandelen"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-trail-bos",
+    "prompt": "Ik wil een traillus van 15 km door de bossen rond Ronse.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Ronse",
+      "target_km": 15,
+      "activiteit": "trail"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-wegloop",
+    "prompt": "Ik ga loopmeters maken op asfalt: een wegloop van 10 km vanuit Aalst.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Aalst",
+      "target_km": 10,
+      "activiteit": "wegloop"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-stadsfiets",
+    "prompt": "Een rustige rit van 20 km met mijn stadsfiets vanuit Mechelen.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Mechelen",
+      "target_km": 20,
+      "activiteit": "stadsfiets"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-toerfiets",
+    "prompt": "Een gezellige toerfietsrit van 50 km vanuit Dendermonde.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Dendermonde",
+      "target_km": 50,
+      "activiteit": "toerfiets"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-koersfiets",
+    "prompt": "Ik ga met mijn racefiets: 80 km vanuit Oudenaarde.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Oudenaarde",
+      "target_km": 80,
+      "activiteit": "koersfiets"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-gravel",
+    "prompt": "Zin in een gravelrit van 60 km vanuit Geraardsbergen.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Geraardsbergen",
+      "target_km": 60,
+      "activiteit": "gravel"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "activiteit-mtb",
+    "prompt": "Ik wil 25 km mountainbiken vanuit Zonnebeke.",
+    "expected_tool": "plan_route",
+    "expected_arguments": {
+      "start": "Zonnebeke",
+      "target_km": 25,
+      "activiteit": "mtb"
+    },
+    "required_arguments": [],
+    "provenance": "synthetische activiteitscase voor #29; geen bewezen afzonderlijk gebruikersgesprek"
   }
 ]

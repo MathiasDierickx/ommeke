@@ -5,7 +5,7 @@ import functools
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 
 try:
@@ -394,7 +394,7 @@ def plan_route(
     max_km: PositiveKm | None = None,
     target_km: PositiveKm | None = None,
     tolerance_km: ToleranceKm = 2.5,
-    doel: Goal = "hoogtemeters",
+    doel: Goal = "toeren",
     via_klimmen: list[str] = [],
     vermijd_plaatsen: list[str] = [],
     kasseien: bool | None = None,
@@ -402,12 +402,14 @@ def plan_route(
     autovrij: bool | None = None,
     strict: bool | None = None,
     naam: RouteName | None = None,
-    activiteit: Activity = "fietsen",
+    activiteit: Activity = "toerfiets",
     geen_opvulling: bool = False,
     profiel_naam: NonEmptyString = "standaard",
     request_id: RequestId | None = None,
     rond_plaats: NonEmptyString | None = None,
     langs_water: NonEmptyString | None = None,
+    heuvels: Literal["zoek", "ok", "vlak"] | None = None,
+    ondergrond: Literal["verhard", "ok", "onverhard"] | None = None,
 ) -> RouteWorkflowResult:
     """Start een routeworkflow; kan eerst gerichte ``needs_input``-vragen geven."""
     return _structured_errors(intents.plan_route)(
@@ -431,6 +433,8 @@ def plan_route(
         request_id=request_id,
         rond_plaats=rond_plaats,
         langs_water=langs_water,
+        heuvels=heuvels,
+        ondergrond=ondergrond,
     )
 
 

@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from . import config
+from . import activities, config
 
 
 def _out(obj) -> None:
@@ -456,10 +456,12 @@ def cmd_plan_route(args):
         langs_water=args.langs_water,
         via_klimmen=args.via_klim,
         vermijd_plaatsen=args.vermijd_plaats,
-        kasseien=args.kasseien,
-        beton_vermijden=not args.beton_toestaan,
+        kasseien=True if args.kasseien else False if args.vermijd_kasseien else None,
+        beton_vermijden=(
+            False if args.beton_toestaan else True if args.vermijd_beton else None
+        ),
         autovrij=args.autovrij,
-        strict=args.strict,
+        strict=True if args.strict else None,
         naam=args.naam,
         activiteit=args.activiteit,
         geen_opvulling=args.geen_opvulling,
@@ -578,7 +580,7 @@ def main(argv=None):
     s.set_defaults(func=cmd_profile_list)
     s = rsub.add_parser("set", help="wijzig voorkeuren en bewaar historiek")
     s.add_argument("naam")
-    s.add_argument("--activiteit", choices=("fietsen", "trail"))
+    s.add_argument("--activiteit", choices=activities.ACCEPTED)
     s.add_argument("--gewichten", help="bv. hoogtemeters=0.5,offroad=0.5")
     s.add_argument("--kasseien", choices=("vermijd", "ok", "graag"))
     s.add_argument("--beton", choices=("vermijd", "ok", "graag"))
@@ -634,8 +636,8 @@ def main(argv=None):
     s.add_argument("--profiel-naam", help="persistent voorkeurenprofiel")
     s.add_argument(
         "--activiteit",
-        choices=("fietsen", "trail"),
-        default="fietsen",
+        choices=activities.ACCEPTED,
+        default=activities.DEFAULT,
     )
     s.add_argument("--max-km", type=float)
     s.add_argument("--target-km", type=float, help="gewenste routeafstand")
@@ -648,11 +650,17 @@ def main(argv=None):
     s.add_argument(
         "--doel",
         choices=("hoogtemeters", "offroad", "kort", "toeren"),
-        default="hoogtemeters",
+        default="toeren",
     )
     s.add_argument("--via-klim", action="append", default=[])
     s.add_argument("--vermijd-plaats", action="append", default=[])
     s.add_argument("--kasseien", action="store_true", help="kasseien zijn toegestaan")
+    s.add_argument(
+        "--vermijd-kasseien", action="store_true", help="kasseien liever vermijden"
+    )
+    s.add_argument(
+        "--vermijd-beton", action="store_true", help="betonbanen liever vermijden"
+    )
     s.add_argument(
         "--beton-toestaan",
         action="store_true",
