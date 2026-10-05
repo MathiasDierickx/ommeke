@@ -11,7 +11,7 @@
 
 Lusmaker ("wij") is een dienst van Ommeke (in pilotfase), beheerd door
 Mathias Dierickx, België. Postadres: [POSTADRES — nog in te vullen door de
-eigenaar]. Contact: [CONTACT-E-MAIL — nog in te vullen door de eigenaar]. Lusmaker stelt fiets- en looproutes
+eigenaar]. Contact: mathias.dierickx@gmail.com (zoals in de User-Agent van de dienst). Lusmaker stelt fiets- en looproutes
 samen op basis van jouw voorkeuren, via AI-assistenten (zoals Claude en
 ChatGPT) die met onze dienst verbinden.
 
@@ -21,7 +21,7 @@ ChatGPT) die met onze dienst verbinden.
 |---|---|---|---|
 | Accountgegevens | e-mailadres, gebruikers-ID van je AI-assistent-login (OAuth) | authenticatie, jouw routes aan jou koppelen | tot verwijdering van je account |
 | Voorkeurenprofiel | gewichten (klimmen/offroad), voorkeuren (kasseien, autovrij), antwoordhistoriek | betere routes voorstellen | tot je ze wist of je account verwijdert |
-| Routes en concepten | startpunten (adres!), routes, GPX-exports | de kerndienst | tot je ze wist of je account verwijdert; GPX-exports worden on the fly uit de route gemaakt en niet apart bewaard |
+| Routes en concepten | startpunten (adres!), routes, GPX-exports | de kerndienst | tot je ze wist of je account verwijdert; GPX-exports horen bij de route en worden samen met die route gewist |
 | Technische logs | IP-adres, tijdstippen, foutmeldingen | beveiliging, misbruikpreventie | 7 dagen in CloudWatch (instelling `log_retention_days`) |
 
 Startpunten kunnen je woonadres onthullen; we behandelen route- en
@@ -75,7 +75,7 @@ Vlaanderen open data, open hoogtedata). De server gebruikt vooraf ingelezen data
 ## Jouw rechten
 
 Inzage, rectificatie, wissing, beperking, overdraagbaarheid en bezwaar:
-mail [CONTACT-E-MAIL]. Je kunt je profiel en routes ook rechtstreeks via de
+mail mathias.dierickx@gmail.com. Je kunt je profiel en routes ook rechtstreeks via de
 assistent wissen. Klachten: Gegevensbeschermingsautoriteit (België),
 www.gegevensbeschermingsautoriteit.be.
 
@@ -90,7 +90,7 @@ Wezenlijke wijzigingen kondigen we aan op deze pagina met nieuwe datum.
 
 ## Nog te beslissen door de eigenaar
 
-- Postadres en contact-e-mailadres (nergens in de repo vastgelegd).
+- Postadres (nergens in de repo vastgelegd) en bevestiging dat mathias.dierickx@gmail.com het publieke contactadres is (nu enkel in de User-Agent).
 - Juridische entiteit: blijft het "Ommeke (in pilotfase), beheerd door Mathias
   Dierickx", of komt er een bedrijfsnaam/ondernemingsnummer?
 - Bevestigen dat het gekozen Bedrock-model geen inferentie buiten de EU doet en
