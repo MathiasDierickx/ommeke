@@ -14,6 +14,11 @@ from . import activities, aws_state, config
 WEIGHT_KEYS = ("hoogtemeters", "offroad", "populair", "autovrij", "kort")
 PREFERENCE_VALUES = {None, "vermijd", "ok", "graag"}
 AUTOVRIJ_VALUES = {None, "belangrijk", "ok"}
+HEUVELS_VALUES = {None, "zoek", "ok", "vlak"}
+ONDERGROND_VALUES = {None, "verhard", "ok", "onverhard"}
+# Nullable situationele voorkeuren: null = onbekend (mag gevraagd worden),
+# "ok" = expliciet onverschillig (nooit meer vragen, niets wijzigen).
+OPTIONAL_PREFERENCES = ("heuvels", "ondergrond")
 _NAME_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
 
@@ -44,6 +49,8 @@ def default_document(name: str = "standaard") -> dict:
             "beton": None,
             "steenwegen": None,
             "autovrij": None,
+            "heuvels": None,
+            "ondergrond": None,
             "vermijd_plaatsen": [],
         },
         "historiek": [],
@@ -86,6 +93,8 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
         profile["gewichten"].setdefault("autovrij", 0.0)
     if isinstance(profile.get("voorkeuren"), dict):
         profile["voorkeuren"].setdefault("autovrij", None)
+        for key in OPTIONAL_PREFERENCES:
+            profile["voorkeuren"].setdefault(key, None)
     required = {"naam", "activiteit", "gewichten", "voorkeuren", "historiek"}
     if set(profile) != required:
         raise ProfileError("profiel bevat ontbrekende of onbekende velden")
@@ -100,7 +109,8 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
     normalized = normalize_weights(profile["gewichten"])
     preferences = profile["voorkeuren"]
     if not isinstance(preferences, dict) or set(preferences) != {
-        "kasseien", "beton", "steenwegen", "autovrij", "vermijd_plaatsen"
+        "kasseien", "beton", "steenwegen", "autovrij", "heuvels",
+        "ondergrond", "vermijd_plaatsen",
     }:
         raise ProfileError("voorkeuren bevatten ontbrekende of onbekende velden")
     for key in ("kasseien", "beton", "steenwegen"):
@@ -110,6 +120,10 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
         raise ProfileError("steenwegen ondersteunt 'graag' niet")
     if preferences["autovrij"] not in AUTOVRIJ_VALUES:
         raise ProfileError("autovrij moet null, 'belangrijk' of 'ok' zijn")
+    if preferences["heuvels"] not in HEUVELS_VALUES:
+        raise ProfileError("heuvels moet null, 'zoek', 'ok' of 'vlak' zijn")
+    if preferences["ondergrond"] not in ONDERGROND_VALUES:
+        raise ProfileError("ondergrond moet null, 'verhard', 'ok' of 'onverhard' zijn")
     places = preferences["vermijd_plaatsen"]
     if not isinstance(places, list) or not all(
         isinstance(place, str) and place.strip() for place in places

@@ -404,6 +404,8 @@ class RouteToolExecutor:
             values.setdefault("geen_opvulling", False)
             values.setdefault("rond_plaats", None)
             values.setdefault("langs_water", None)
+            values.setdefault("heuvels", None)
+            values.setdefault("ondergrond", None)
             return intents.plan_route(
                 **values,
                 profiel_naam="standaard",

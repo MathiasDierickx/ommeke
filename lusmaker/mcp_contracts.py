@@ -187,6 +187,8 @@ class PreferencePatch(TypedDict, total=False):
     beton: Preference
     steenwegen: MainRoadPreference
     autovrij: QuietPreference
+    heuvels: Literal["zoek", "ok", "vlak"] | None
+    ondergrond: Literal["verhard", "ok", "onverhard"] | None
     vermijd_plaatsen: list[str]
 
 

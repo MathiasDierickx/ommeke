@@ -36,6 +36,14 @@ PLAN_ROUTE_SCHEMA = {
             "description": "Kies de activiteit die bij de vraag past; 'fietsen' is de oude naam van toerfiets.",
         },
         "geen_opvulling": {"type": "boolean"},
+        "heuvels": {
+            "type": ["string", "null"], "enum": ["zoek", "ok", "vlak", None],
+            "description": "Alleen invullen als de gebruiker heuvels uitdrukkelijk zoekt (zoek), onverschillig is (ok) of vlak wil (vlak).",
+        },
+        "ondergrond": {
+            "type": ["string", "null"], "enum": ["verhard", "ok", "onverhard", None],
+            "description": "Alleen invullen als de gebruiker de ondergrond noemt.",
+        },
     },
 }
 

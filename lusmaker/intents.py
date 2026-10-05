@@ -383,6 +383,8 @@ def _route_request(
     rond_plaats: str | None,
     langs_water: str | None,
     input_signature: dict,
+    heuvels: str | None = None,
+    ondergrond: str | None = None,
 ) -> dict:
     hard_max = max_km
     if target_km is not None and hard_max is None:
@@ -396,6 +398,10 @@ def _route_request(
         explicit_preferences["autovrij"] = "belangrijk" if autovrij else "ok"
     if strict is not None:
         explicit_preferences["steenwegen"] = "vermijd" if strict else "ok"
+    if heuvels is not None:
+        explicit_preferences["heuvels"] = heuvels
+    if ondergrond is not None:
+        explicit_preferences["ondergrond"] = ondergrond
     return {
         "doel": doel,
         "target_km": target_km,
@@ -666,6 +672,8 @@ def plan_route(
     request_id: str | None = None,
     rond_plaats: str | None = None,
     langs_water: str | None = None,
+    heuvels: str | None = None,
+    ondergrond: str | None = None,
     *,
     create_fn=draft.create,
     load_fn=draft.load,
@@ -691,6 +699,10 @@ def plan_route(
     if activities.canonical(activiteit) is None:
         raise IntentError(_ACTIVITY_ERROR)
     activiteit = activities.canonical(activiteit)
+    if heuvels not in profiles.HEUVELS_VALUES:
+        raise IntentError("heuvels moet 'zoek', 'ok' of 'vlak' zijn")
+    if ondergrond not in profiles.ONDERGROND_VALUES:
+        raise IntentError("ondergrond moet 'verhard', 'ok' of 'onverhard' zijn")
     if request_id is not None and not _REQUEST_ID_RE.fullmatch(request_id):
         raise IntentError(
             "request-id gebruikt 1-128 letters, cijfers, '.', '_', ':' of '-'"
@@ -736,6 +748,11 @@ def plan_route(
         "autovrij": autovrij,
         "strict": strict,
     }
+    # Nieuwe optionele invoer komt alleen in de signatuur als ze gegeven is,
+    # zodat bestaande request-id's idempotent hervatbaar blijven.
+    for key, value in (("heuvels", heuvels), ("ondergrond", ondergrond)):
+        if value is not None:
+            input_signature[key] = value
     request = _route_request(
         doel=doel,
         target_km=target_km,
@@ -752,6 +769,8 @@ def plan_route(
         rond_plaats=rond_plaats,
         langs_water=langs_water,
         input_signature=input_signature,
+        heuvels=heuvels,
+        ondergrond=ondergrond,
     )
     existing = find_request_fn(request_id) if request_id is not None else None
     if existing is not None:
