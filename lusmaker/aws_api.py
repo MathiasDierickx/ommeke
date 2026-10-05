@@ -16,7 +16,7 @@ import math
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_sharing, aws_state, climbs, coverage, draft, geo, intents, tenant, quotas, requests, account, pilot
+from . import artifacts, aws_sharing, aws_state, climbs, coverage, draft, geo, intents, tenant, quotas, requests, account, pilot, funnel
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -109,6 +109,14 @@ async def route_reroute(request: Request) -> JSONResponse:
         return _error(str(exc), 409)
     except (ValueError, ChatError) as exc:
         return _error(str(exc))
+
+
+def _quick(fn):
+    """Voer een domeinfunctie uit als bediening van het webscherm (zonder taalmodel)."""
+    def call(*args, **kwargs):
+        with funnel.channel("quick"):
+            return fn(*args, **kwargs)
+    return call
 
 
 async def route_plan(request: Request) -> JSONResponse:
@@ -309,7 +317,7 @@ async def route_adjust(request: Request) -> JSONResponse:
         )
         effective_max = (effective_target + 3.0) if effective_target is not None else None
         await asyncio.to_thread(
-            intents.adjust_route,
+            _quick(intents.adjust_route),
             draft_id,
             target_km=float(target_km) if target_km is not None else None,
             max_km=effective_max,
@@ -353,7 +361,8 @@ async def route_answers(request: Request) -> JSONResponse:
         def execute():
             from .progress import emit
             emit("routing", "Ik verwerk je keuzes en bereken je lus opnieuw.")
-            return intents.apply_answers(draft_id, answers)
+            with funnel.channel("quick"):
+                return intents.apply_answers(draft_id, answers)
 
         result = await asyncio.to_thread(requests.once, "answers", rid, values, execute)
         return JSONResponse(result)
@@ -452,6 +461,7 @@ async def route_share(request: Request) -> JSONResponse:
             except Exception:
                 await asyncio.to_thread(aws_sharing.delete_reference, token)
                 raise
+        funnel.exported("share", item)
         return JSONResponse({"token": token, "url": _share_url(request, token)})
     except draft.DraftError as exc:
         return _error(str(exc), 404, "route_not_found")
@@ -532,6 +542,7 @@ async def route_gpx(request: Request) -> Response:
         item = await asyncio.to_thread(draft.load, draft_id)
         payload = await asyncio.to_thread(artifacts.read, draft_id, "route.gpx")
         filename = quote(f"{item.get('name') or 'lusmaker-route'}.gpx")
+        funnel.exported("gpx", item)
         return Response(
             payload,
             media_type="application/gpx+xml",
@@ -553,6 +564,7 @@ async def route_fit(request: Request) -> Response:
                 return encode(item, climbs.all_climbs())
         payload = await asyncio.to_thread(build)
         filename = quote(f"{item.get('name') or 'ommeke-route'}.fit")
+        funnel.exported("fit", item)
         return Response(payload, media_type="application/vnd.ant.fit", headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{filename}", "Cache-Control": "private, no-store"})
     except (ValueError, draft.DraftError) as exc:

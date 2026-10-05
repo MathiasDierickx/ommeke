@@ -1,7 +1,7 @@
 """Modelvrij plannen met hetzelfde domeincontract en persistente receipts."""
 from __future__ import annotations
 import math
-from . import activities, intents, requests
+from . import activities, funnel, intents, requests
 
 
 def parameters(body: dict) -> dict:
@@ -32,7 +32,8 @@ def plan(body, *, planner=intents.plan_route, once=requests.once, store_factory=
     def execute():
         from .progress import emit
         emit("routing", "Ik zoek het vertrekpunt en bereken je lus.")
-        result = planner(**values, request_id=rid)
+        with funnel.channel('quick'):
+            result = planner(**values, request_id=rid)
         if store_factory is not None and result.get('status') == 'needs_input':
             store = store_factory()
             conversation = store.create('Routewensen aanvullen')
