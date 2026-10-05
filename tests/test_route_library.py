@@ -288,3 +288,16 @@ def test_unpaginated_fallback_reads_each_draft_once_with_bounded_concurrency():
         assert len(body['routes']) == 40
         assert client.body_reads == 40  # eerder 80: list_all + load per route
         assert 1 < client.max_parallel <= aws_state.READ_CONCURRENCY
+
+
+def test_route_items_report_the_chosen_activity_also_from_compact_summaries():
+    from lusmaker import aws_api, route_library
+    import base64, json
+    walk = {'id': 'w1', 'revision': 1, 'name': 'Wandellus', 'profile': 'trail',
+            'route_request': {'activiteit': 'wandelen'}, 'computed': {'total_km': 5.0, 'ascend_m': 10}}
+    assert aws_api._route_item(walk)['activity'] == 'wandelen'
+    compact = json.loads(base64.b64decode(route_library.summary_metadata(walk)[route_library.METADATA_KEY]))
+    assert aws_api._route_item(compact)['activity'] == 'wandelen'
+    assert aws_api._route_item({'id': 'o', 'profile': 'trail'})['activity'] == 'trail'
+    assert aws_api._route_item({'id': 'o', 'profile': 'quiet'})['activity'] == 'fietsen'
+    assert aws_api._route_item({'id': 'l', 'route_request': {'activiteit': 'fietsen'}})['activity'] == 'toerfiets'

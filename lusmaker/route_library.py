@@ -63,6 +63,9 @@ def summary_metadata(draft: dict) -> dict[str, str]:
     fields = ('id', 'revision', 'name', 'created', 'profile', 'region', 'climbs')
     small = {key: draft[key] for key in fields if key in draft}
     small['start'] = {'label': (draft.get('start') or {}).get('label')}
+    activity = (draft.get('route_request') or {}).get('activiteit')
+    if activity:
+        small['route_request'] = {'activiteit': activity}
     computed = draft.get('computed')
     small['computed'] = {key: computed.get(key) for key in ('total_km', 'ascend_m')} if computed else None
     from .intents import constraint_report

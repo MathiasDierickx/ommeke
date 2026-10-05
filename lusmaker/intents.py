@@ -82,7 +82,12 @@ def suggest_route_name(
     activiteit: str,
 ) -> str:
     """Bouw een compacte fallbacknaam uit de gestructureerde routewens."""
-    place = start.strip().split(",", 1)[0]
+    parts = [part.strip() for part in start.split(",") if part.strip()]
+    # "Markt, Oudenaarde" of "Stationsstraat 5, 9230 Wetteren": noem de gemeente,
+    # niet de straat. Eén deel ("Wetteren station") blijft zoals het is.
+    place = re.sub(r"^\d{4}\s+", "", parts[-1]) if len(parts) > 1 else (parts[0] if parts else "")
+    if len(parts) == 2 and re.fullmatch(r"[-+]?\d+(?:\.\d+)?", parts[0] or ""):
+        place = ""  # coördinaten "51.2,2.9"
     if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", place) or not place:
         place = "je startpunt"
     if activities.is_foot(activiteit):

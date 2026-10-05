@@ -54,6 +54,15 @@ def _draft_id(request: Request) -> str:
     return value
 
 
+def _route_activity(item: dict[str, Any]) -> str:
+    """De gekozen activiteit; oude routes kennen alleen hun routeringsprofiel."""
+    from .activities import canonical
+    chosen = canonical((item.get("route_request") or {}).get("activiteit"))
+    if chosen:
+        return chosen
+    return "trail" if item.get("profile") == "trail" else "fietsen"
+
+
 def _route_item(item: dict[str, Any]) -> dict[str, Any]:
     computed = item.get("computed") or {}
     distance = computed.get("total_km")
@@ -64,7 +73,7 @@ def _route_item(item: dict[str, Any]) -> dict[str, Any]:
         "name": item.get("name") or "Naamloze route",
         "created": item.get("created"),
         "start": (item.get("start") or {}).get("label"),
-        "activity": "trail" if item.get("profile") == "trail" else "fietsen",
+        "activity": _route_activity(item),
         "region": item.get("region"),
         "climbs": item.get("climbs") or [],
         "total_km": computed.get("total_km"),
@@ -233,7 +242,7 @@ def public_route_payload(item: dict[str, Any]) -> dict[str, Any]:
         geometry["start"].pop("label", None)
     return {
         "name": item.get("name") or "Naamloze route",
-        "activity": "trail" if item.get("profile") == "trail" else "fietsen",
+        "activity": _route_activity(item),
         "region": item.get("region"),
         "climbs": item.get("climbs") or [],
         "total_km": computed.get("total_km"),

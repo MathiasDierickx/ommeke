@@ -993,3 +993,11 @@ def test_plan_route_defaults_are_neutral_and_never_prefer_climbing_or_cobble_avo
     assert created["strict"] is False
     assert optimize_calls[0]["objective"] == "toeren"
     assert draft.objective_for_draft({"route_request": {"doel": "toeren"}}, None) == "toeren"
+
+
+def test_route_names_use_the_municipality_for_street_addresses():
+    name = lambda start: intents.suggest_route_name(start, target_km=40, max_km=None, doel="toeren", activiteit="koersfiets")
+    assert name("Markt, Oudenaarde").endswith("rond Oudenaarde · 40 km")
+    assert name("Stationsstraat 5, 9230 Wetteren").endswith("rond Wetteren · 40 km")
+    assert name("Wetteren station").endswith("rond Wetteren station · 40 km")
+    assert name("51.25097,2.97303").endswith("rond je startpunt · 40 km")
