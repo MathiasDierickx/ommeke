@@ -40,6 +40,11 @@ def wait_until_ready(*, health=_health_ok, sleep=time.sleep, clock=time.monotoni
     if budget <= 0 or _ready_url == url:
         return
     marker = os.environ.get("LUSMAKER_GH_FAILED_MARKER")
+    if not health(url):
+        from . import progress
+
+        # Zonder deze stap lijkt een koude start op een hangende opdracht.
+        progress.emit("router_start", "De routeplanner start op na een rustige periode. Dat duurt meestal minder dan een minuut.")
     with _ready_lock:
         if _ready_url == url:
             return

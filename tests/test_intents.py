@@ -156,7 +156,10 @@ def test_suggest_route_name_summarises_place_character_and_distance():
         max_km=None,
         doel="toeren",
         activiteit="trail",
-    ) == "Traillus rond je startpunt · 12 km"
+    ) == "Wandellus rond je startpunt · 12 km"
+    assert intents.suggest_route_name(
+        "Gent", target_km=8, max_km=None, doel="offroad", activiteit="trail",
+    ) == "Traillus rond Gent · 8 km"
 
 
 def test_heat_activity_for_maps_activity_and_profile_name():

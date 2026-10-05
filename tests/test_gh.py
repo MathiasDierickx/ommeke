@@ -190,3 +190,15 @@ def test_local_runs_do_not_wait_for_a_router():
         gh.wait_until_ready(health=lambda _url: (_ for _ in ()).throw(AssertionError("polled")))
     finally:
         restore()
+
+
+def test_a_cold_router_start_is_reported_as_progress():
+    from lusmaker import progress
+    restore = _with_startup_env(60)
+    events, checks = [], []
+    try:
+        with progress.capture(events.append):
+            gh.wait_until_ready(health=lambda _url: checks.append(1) or len(checks) >= 3, sleep=lambda _s: None)
+    finally:
+        restore()
+    assert [event["stage"] for event in events] == ["router_start"]

@@ -61,7 +61,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     {busy && <RouteProgress event={progress} />}
     {result?.status === "ready" && <div className="quick-result">
       <h3 role="status" tabIndex={-1} ref={resultHeading}>{result.constraints?.voldaan === false ? "Route gevonden — controleer je wensen" : "Je route is klaar"}</h3>
-      <p>{typeof result.km === "number" ? `${result.km.toFixed(1)} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
+      <p>{typeof result.km === "number" ? `${result.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
       {result.constraints?.waarschuwingen.map(warning => <p className="route-result-warning" key={warning}>{warning}</p>)}
       <button onClick={() => onRoute(result.draft)}>Bekijk mijn route</button>
       <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>

@@ -132,7 +132,7 @@ def test_router_calls_and_startup_wait_are_recorded_per_request():
     try:
         gh._ready_url = None
         ticks = iter([0.0, 0.0, 2.0])
-        results = iter([False, True])
+        results = iter([False, False, True])  # eerste probe meldt de koude start
         os.environ['LUSMAKER_GH_STARTUP_WAIT_S'] = '30'
         gh.wait_until_ready(health=lambda _u: next(results), sleep=lambda _s: None, clock=lambda: next(ticks))
         assert stats['wait_ms'] == 2000.0 and stats['calls'] == 0

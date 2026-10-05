@@ -78,7 +78,9 @@ def suggest_route_name(
     if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", place) or not place:
         place = "je startpunt"
     if activiteit == "trail":
-        kind = "Traillus"
+        # Het trailprofiel dient wandelaars en trailrunners; alleen een
+        # uitdrukkelijk onverharde wens heet een traillus.
+        kind = "Traillus" if doel == "offroad" else "Wandellus"
     elif doel == "hoogtemeters":
         kind = "Heuvelrit"
     elif doel == "toeren":

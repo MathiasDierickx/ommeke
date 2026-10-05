@@ -5,8 +5,15 @@ import { useEffect, useRef, useState } from "react";
 
 import type { RouteGeometry } from "@/lib/types";
 
+const POI_LABELS: Record<string, string> = { water: "Drinkwater", cafe: "Cafés", bakker: "Bakkers", toilet: "Toiletten", fietsenmaker: "Fietsenmakers", logies: "Logies" };
+// In een stad liggen tientallen voorzieningen langs de lus; die overspoelen
+// de routelijn. Toon ze dan pas op vraag.
+const POI_AUTO_LIMIT = 15;
+
 export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | null; loading: boolean }) {
   const [poiKind, setPoiKind] = useState("alle");
+  const poiCount = geometry?.pois?.length ?? 0;
+  useEffect(() => { setPoiKind(poiCount > POI_AUTO_LIMIT ? "geen" : "alle"); }, [poiCount]);
   const elementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,7 +50,7 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
           title: climb.id,
         }).addTo(map).bindTooltip(climb.id);
       });
-      (geometry.pois || []).filter(p => poiKind === "alle" || p.kind === poiKind).forEach(p => {
+      (geometry.pois || []).filter(p => poiKind !== "geen" && (poiKind === "alle" || p.kind === poiKind)).forEach(p => {
         const label = document.createElement("span");
         const details = [p.name, `${p.at_km.toFixed(1)} km`, p.opening_hours || "openingstijden onbekend"];
         const wheelchair = ({ yes: "ja", no: "nee", limited: "beperkt" } as Record<string, string>)[p.wheelchair || ""];
@@ -76,5 +83,5 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
 
   if (loading) return <div className="map-state"><LoaderCircle className="spin" /> Routekaart laden…</div>;
   if (!geometry?.points.length) return <div className="map-state"><MapIcon />Nog geen kaart voor deze route</div>;
-  return <><div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />{geometry.pois?.length ? <label className="poi-filter">Onderweg <select value={poiKind} onChange={e=>setPoiKind(e.target.value)}><option value="alle">Alle voorzieningen</option>{[...new Set(geometry.pois.map(p=>p.kind))].map(k=><option key={k} value={k}>{k}</option>)}</select></label> : null}</>;
+  return <><div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />{geometry.pois?.length ? <label className="poi-filter">Onderweg <select value={poiKind} onChange={e=>setPoiKind(e.target.value)}><option value="geen">Verbergen</option><option value="alle">Alle voorzieningen ({geometry.pois.length})</option>{[...new Set(geometry.pois.map(p=>p.kind))].map(k=><option key={k} value={k}>{POI_LABELS[k] || k}</option>)}</select></label> : null}</>;
 }
