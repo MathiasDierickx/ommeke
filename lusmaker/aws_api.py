@@ -87,7 +87,7 @@ async def route_reroute(request: Request) -> JSONResponse:
         values = {**body, "draft_id": _draft_id(request)}
         validate_arguments(values, REROUTE_SCHEMA)
         def execute():
-            return requests.once("reroute", rid, values, lambda: reroute_from(**values))
+            return requests.once("reroute", rid, values, lambda: reroute_from(**values, request_id=rid))
         return JSONResponse(await asyncio.to_thread(execute))
     except quotas.QuotaExceeded as exc:
         return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
@@ -633,7 +633,7 @@ async def account_delete(request: Request) -> JSONResponse:
 async def route_feedback(request: Request) -> JSONResponse:
     try:
         body = await _json_body(request)
-        result = await asyncio.to_thread(pilot.feedback, _draft_id(request), body.get('category'), body.get('comment', ''))
+        result = await asyncio.to_thread(pilot.feedback, _draft_id(request), body.get('category'), body.get('comment', ''), request_id=body.get('request_id'))
         return JSONResponse(result, status_code=201)
     except quotas.QuotaExceeded as exc:
         return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,

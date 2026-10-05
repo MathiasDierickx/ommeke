@@ -12,6 +12,8 @@ import time
 import uuid
 
 request_id = ContextVar('request_id', default=None)
+# Per request: {'calls', 'ms', 'wait_ms'} voor GraphHopper-aanroepen (geen inhoud).
+router_stats = ContextVar('router_stats', default=None)
 logger = logging.getLogger('lusmaker.metrics')
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -19,7 +21,7 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter('%(message)s'))
     logger.addHandler(handler)
 logger.propagate = False
-ALLOWED = {'event', 'request_id', 'operation', 'status', 'seconds', 'input_tokens', 'output_tokens', 'iterations', 'success', 'cold_start', 'actor', 'date'}
+ALLOWED = {'event', 'request_id', 'operation', 'status', 'seconds', 'input_tokens', 'output_tokens', 'iterations', 'success', 'cold_start', 'actor', 'date', 'error_class', 'router_calls', 'router_ms', 'router_wait_ms', 'routes_ready'}
 
 
 def actor_id():
@@ -27,6 +29,14 @@ def actor_id():
     if salt and tenant.current() != 'anonymous':
         return hmac.new(salt.encode(), tenant.current().encode(), hashlib.sha256).hexdigest()[:24]
     return None
+
+
+def router_record(*, calls=0, ms=0.0, wait_ms=0.0):
+    stats = router_stats.get()
+    if stats is not None:
+        stats['calls'] += calls
+        stats['ms'] += ms
+        stats['wait_ms'] += wait_ms
 
 
 def emit(event, **values):
@@ -52,6 +62,8 @@ class MetricsMiddleware:
         if scope['type'] != 'http':
             return await self.app(scope, receive, send)
         token = request_id.set(uuid.uuid4().hex)
+        stats = {'calls': 0, 'ms': 0.0, 'wait_ms': 0.0}
+        stats_token = router_stats.set(stats)
         started = time.monotonic()
         status = 500
         cold, self.cold = self.cold, False
@@ -65,5 +77,7 @@ class MetricsMiddleware:
             await self.app(scope, receive, tracked)
         finally:
             emit('http', actor=scope.get('lusmaker.actor'), operation=operation(scope['path']), status=status,
-                 seconds=round(time.monotonic()-started, 3), success=status < 400, cold_start=cold)
+                 seconds=round(time.monotonic()-started, 3), success=status < 400, cold_start=cold,
+                 **({'router_calls': stats['calls'], 'router_ms': round(stats['ms']), 'router_wait_ms': round(stats['wait_ms'])} if stats['calls'] or stats['wait_ms'] else {}))
+            router_stats.reset(stats_token)
             request_id.reset(token)

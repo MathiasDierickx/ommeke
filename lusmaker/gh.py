@@ -8,7 +8,7 @@ import urllib.request
 from functools import lru_cache
 from pathlib import Path
 
-from . import config
+from . import config, telemetry
 from .heat import ACTIVITIES, PAVED_PREFERENCE_ACTIVITIES
 
 
@@ -43,20 +43,32 @@ def wait_until_ready(*, health=_health_ok, sleep=time.sleep, clock=time.monotoni
     with _ready_lock:
         if _ready_url == url:
             return
-        deadline = clock() + budget
-        while True:
-            if health(url):
-                _ready_url = url
-                return
-            if marker and Path(marker).exists():
-                raise GhError("De router kon niet starten. Probeer het over enkele minuten opnieuw.")
-            if clock() >= deadline:
-                raise GhError("De router is nog aan het opstarten. Probeer het over een minuut opnieuw.")
-            sleep(0.25)
+        began = clock()
+        deadline = began + budget
+        try:
+            while True:
+                if health(url):
+                    _ready_url = url
+                    return
+                if marker and Path(marker).exists():
+                    raise GhError("De router kon niet starten. Probeer het over enkele minuten opnieuw.")
+                if clock() >= deadline:
+                    raise GhError("De router is nog aan het opstarten. Probeer het over een minuut opnieuw.")
+                sleep(0.25)
+        finally:
+            telemetry.router_record(wait_ms=(clock() - began) * 1000)
 
 
 def _post(path: str, body: dict) -> dict:
     wait_until_ready()
+    started = time.monotonic()
+    try:
+        return _post_request(path, body)
+    finally:
+        telemetry.router_record(calls=1, ms=(time.monotonic() - started) * 1000)
+
+
+def _post_request(path: str, body: dict) -> dict:
     req = urllib.request.Request(
         config.GH_URL + path,
         data=json.dumps(body).encode(),

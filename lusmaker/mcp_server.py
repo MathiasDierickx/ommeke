@@ -120,10 +120,10 @@ mcp = _server("lusmaker")
 
 
 @mcp.tool(**tool_contract("reroute_from"))
-def reroute_from(draft_id: str, lat: float, lon: float, rest_km: float | str = "kortste", expected_revision: int | None = None, closure: dict | None = None) -> dict:
+def reroute_from(draft_id: str, lat: float, lon: float, rest_km: float | str = "kortste", expected_revision: int | None = None, closure: dict | None = None, request_id: RequestId | None = None) -> dict:
     """Breng me terug vanaf mijn huidige positie, binnen een resterend kilometerbudget."""
     from .reroute import reroute_from as execute
-    return execute(draft_id, lat, lon, rest_km, expected_revision=expected_revision, closure=closure)
+    return execute(draft_id, lat, lon, rest_km, expected_revision=expected_revision, closure=closure, request_id=request_id)
 
 
 @mcp.tool(**tool_contract("status"))

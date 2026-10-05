@@ -457,7 +457,7 @@ class BedrockRouteAgent:
             "LUSMAKER_BEDROCK_MODEL_ID", "eu.anthropic.claude-sonnet-4-6"
         )
 
-    def _converse(self, messages: list[dict[str, Any]], request_id: str) -> dict[str, Any]:
+    def _converse(self, messages: list[dict[str, Any]], request_id: str, call: int = 0) -> dict[str, Any]:
         """Roep Bedrock aan met retry op transiente model-/throttlingfouten.
 
         Nova produceert af en toe een ongeldige tool-use-sequentie
@@ -469,7 +469,7 @@ class BedrockRouteAgent:
             try:
                 # UTF-8 bytes form a conservative input-token upper bound.
                 reserved = len(json.dumps([messages, SYSTEM_PROMPT, TOOL_CONFIG], ensure_ascii=False).encode()) + 1400
-                quotas.consume("tokens", amount=reserved)
+                quotas.consume("tokens", amount=reserved, request_id=f"{request_id}:tokens:{call}:{attempt}" if request_id else None)
                 return self.client.converse(
                     modelId=self.model_id,
                     system=[{"text": SYSTEM_PROMPT}],
@@ -495,6 +495,18 @@ class BedrockRouteAgent:
         *,
         request_id: str,
     ) -> dict[str, Any]:
+        usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
+        state = {"iterations": 0}
+        try:
+            return self._reply(history, request_id, usage, state)
+        except Exception as exc:
+            # Alleen tellers voor telemetrie; nooit inhoud.
+            exc.chat_usage = dict(usage)
+            exc.chat_iterations = state["iterations"]
+            raise
+
+    def _reply(self, history: list[dict[str, Any]], request_id: str,
+               usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:
         # Bedrock vereist strikt afwisselende user/assistant-rollen die met
         # 'user' beginnen. Mislukte turns laten soms twee user-berichten na
         # elkaar staan (assistant-antwoord werd niet opgeslagen); zonder
@@ -515,11 +527,11 @@ class BedrockRouteAgent:
         route_ids: set[str] = set()
         ready_route_ids: set[str] = set()
         tool_events: list[dict[str, Any]] = []
-        usage = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
 
         for iteration in range(1, MAX_AGENT_ITERATIONS + 1):
+            state["iterations"] = iteration
             progress.emit("thinking", "Ik bekijk je routewensen." if iteration == 1 else "Ik beoordeel het resultaat en werk je antwoord af.")
-            response = self._converse(messages, request_id)
+            response = self._converse(messages, request_id, iteration)
             for key in usage:
                 usage[key] += int((response.get("usage") or {}).get(key, 0))
             message = (response.get("output") or {}).get("message") or {}
@@ -633,10 +645,18 @@ def send_message(
         user_message = store.add_message(conversation_id, "user", clean_content)
         history = store.messages(conversation_id)
         route_agent = agent or BedrockRouteAgent()
-        result = route_agent.reply(
-            history,
-            request_id=f"{conversation_id}:{user_message['id']}",
-        )
+        try:
+            result = route_agent.reply(
+                history,
+                request_id=f"{conversation_id}:{user_message['id']}",
+            )
+        except Exception as exc:
+            used = getattr(exc, "chat_usage", None) or {}
+            telemetry.emit("chat", input_tokens=used.get("inputTokens", 0),
+                           output_tokens=used.get("outputTokens", 0),
+                           iterations=getattr(exc, "chat_iterations", 0), success=False,
+                           error_class=type(exc).__name__)
+            raise
         progress.emit("saving", "Ik sla het antwoord en je routegegevens op.")
         assistant_message = store.add_message(
             conversation_id,
@@ -646,6 +666,7 @@ def send_message(
         )
         telemetry.emit("chat", input_tokens=result.get("usage", {}).get("inputTokens", 0),
                        output_tokens=result.get("usage", {}).get("outputTokens", 0),
-                       iterations=result.get("iterations", 0), success=True)
+                       iterations=result.get("iterations", 0), success=True,
+                       routes_ready=len(result.get("ready_route_ids") or []))
         return {"message": assistant_message, **result}
     return requests.once(f"chat:{conversation_id}", request_id, {"content": clean_content}, execute)
