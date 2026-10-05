@@ -692,7 +692,8 @@ def test_final_route_sends_aligned_point_hints_and_climb_headings():
     approach, climb, back = bodies
     assert approach["point_hints"] == ["", "Testklim"]
     assert "headings" not in approach  # eerste leg heeft nog geen vorige richting
-    assert climb["point_hints"] == ["Testklim"] * len(climb["points"])
+    # Het eerste klimpunt krijgt de richting; GraphHopper weigert daar ook een hint.
+    assert climb["point_hints"] == [""] + ["Testklim"] * (len(climb["points"]) - 1)
     # klim loopt naar het oosten: heading ~90 graden, enkel voor het eerste punt
     assert abs(climb["headings"][0] - 90.0) < 1.0
     assert len(climb["headings"]) == 1

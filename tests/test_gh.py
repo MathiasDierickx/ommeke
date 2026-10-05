@@ -229,3 +229,18 @@ def test_area_evs_fall_back_to_probes_without_a_directory():
         assert gh.available_area_evs(areas_dir=tmp) == frozenset()
     assert gh.available_area_evs(present)  # expliciete probe blijft werken
     assert probed
+
+
+def test_a_point_never_gets_both_a_heading_and_a_point_hint():
+    sent = []
+
+    def post(_path, body):
+        sent.append(body)
+        return {"paths": [{"distance": 1000, "time": 60_000, "points": {"coordinates": [[3.6, 50.8], [3.61, 50.81]]}}]}
+
+    points = [(50.80, 3.60), (50.81, 3.61), (50.82, 3.62)]
+    gh.route(points, point_hints=["Berendries", "Kerkstraat", ""], headings=[90.0, None, None], area_evs=set(), post_fn=post)
+    assert sent[-1]["headings"] == [90.0]
+    assert sent[-1]["point_hints"] == ["", "Kerkstraat", ""]
+    gh.route(points, point_hints=["Berendries", "", ""], headings=[90.0, None, None], area_evs=set(), post_fn=post)
+    assert "point_hints" not in sent[-1]  # alleen een lege hint over: niets meesturen

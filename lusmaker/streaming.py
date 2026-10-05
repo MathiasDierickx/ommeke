@@ -1,8 +1,12 @@
 """SSE rond bestaande geauthenticeerde JSON-handlers, inclusief requestreceipts."""
 import asyncio
 import json
+import logging
 from starlette.responses import StreamingResponse
 from . import progress
+
+
+logger = logging.getLogger(__name__)
 
 
 def frame(event, data):
@@ -25,7 +29,9 @@ async def response(request, handler, *, heartbeat_seconds=10):
                     result = await handler(request)
                 payload = json.loads(result.body)
                 await queue.put(('result' if result.status_code < 400 else 'error', {**payload, 'http_status': result.status_code}))
-            except Exception:
+            except Exception as exc:
+                # Zonder dit logregel was een mislukte stream onzichtbaar in CloudWatch.
+                logger.error("stream mislukt: %s: %s", type(exc).__name__, str(exc)[:300])
                 await queue.put(('error', {'error':'De opdracht kon niet worden afgerond. Herlaad het gesprek en controleer je routes.', 'http_status':500}))
         task = asyncio.create_task(produce())
         yield frame('progress', {'stage':'accepted','message':'Je opdracht is ontvangen.'})

@@ -177,7 +177,10 @@ def available_area_evs(probe_post=None, *, areas_dir=None) -> frozenset[str]:
     koude Lambda). Zonder leesbare map valt dit terug op probes.
     """
     names = _area_names()
-    if probe_post is None:
+    # Alleen waar GraphHopper zelf net uit deze map is opgestart (Lambda) is de
+    # map betrouwbaar; een lokale container kan oudere areas geladen hebben.
+    trusted = areas_dir is not None or bool(os.environ.get("LUSMAKER_GH_STARTUP_WAIT_S"))
+    if probe_post is None and trusted:
         directory = Path(areas_dir) if areas_dir is not None else Path(config.CUSTOM_AREAS)
         try:
             known = _areas_from_directory(str(directory), directory.stat().st_mtime_ns)
@@ -371,7 +374,14 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     if point_hints is not None and len(point_hints) == n_points \
             and any(point_hints):
         # snap via-punten op de juiste (genoemde) weg, niet op een parallelpad
-        body["point_hints"] = point_hints
+        hints = list(point_hints)
+        # GraphHopper weigert een heading en een point_hint op hetzelfde punt
+        # ("Cannot specify heading and point_hint at the same time"); de
+        # richting wint, want die bepaalt dat een klim bergop gereden wordt.
+        for index, _heading in enumerate(body.get("headings", [])):
+            hints[index] = ""
+        if any(hints):
+            body["point_hints"] = hints
     if details:
         body["details"] = ["surface", "road_class"]
     body["custom_model"] = _custom_model(
