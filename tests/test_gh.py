@@ -202,3 +202,30 @@ def test_a_cold_router_start_is_reported_as_progress():
     finally:
         restore()
     assert [event["stage"] for event in events] == ["router_start"]
+
+
+def test_area_evs_come_from_the_custom_areas_directory_without_router_calls():
+    import json
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as tmp:
+        features = [{"type": "Feature", "id": key, "properties": {}, "geometry": None}
+                    for key in ("druk_tvl", "kassei_tvl", "popular", "popular_trail")]
+        Path(tmp, "popular.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": features}))
+        available = gh.available_area_evs(areas_dir=tmp)
+    assert available == {"in_kassei_tvl", "in_druk_tvl", "in_popular_trail"}
+
+
+def test_area_evs_fall_back_to_probes_without_a_directory():
+    import tempfile
+    probed = []
+
+    def present(_path, body):
+        probed.append(body["custom_model"]["priority"][0]["if"])
+        return {"paths": []}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # Lege map: geen bruikbare kennis, dus probes; offline faalt elke probe zonder crash.
+        assert gh.available_area_evs(areas_dir=tmp) == frozenset()
+    assert gh.available_area_evs(present)  # expliciete probe blijft werken
+    assert probed

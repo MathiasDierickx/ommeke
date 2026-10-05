@@ -144,15 +144,47 @@ def _cached_area_ev_works(name: str, router_url: str, bbox: tuple, probe_post=No
 _area_ev_works.cache_clear = _cached_area_ev_works.cache_clear
 
 
-def available_area_evs(probe_post=None) -> frozenset[str]:
-    """Welke ingebakken area-EV's bruikbaar zijn (probe-gebaseerd, gecachet)."""
-    names = (
+def _area_names() -> tuple[str, ...]:
+    return (
         "in_kassei_tvl",
         "in_druk_tvl",
         "in_niet_autovrij_tvl",
         *(f"in_popular_{activity}" for activity in ACTIVITIES),
         "in_onverhard",
     )
+
+
+@lru_cache(maxsize=8)
+def _areas_from_directory(directory: str, mtime_ns: int) -> frozenset[str] | None:
+    """Feature-id's die GraphHopper bij het opstarten als ``in_<id>`` aanbiedt."""
+    ids: set[str] = set()
+    try:
+        for path in sorted(Path(directory).glob("*.geojson")):
+            for feature in json.loads(path.read_text()).get("features", []):
+                identifier = feature.get("id") or (feature.get("properties") or {}).get("id")
+                if identifier:
+                    ids.add(str(identifier))
+    except (OSError, ValueError, AttributeError):
+        return None
+    return frozenset(ids)
+
+
+def available_area_evs(probe_post=None, *, areas_dir=None) -> frozenset[str]:
+    """Welke area-EV's bruikbaar zijn.
+
+    GraphHopper laadt de areas bij het opstarten uit ``custom_areas``; die map
+    lezen kost niets, terwijl elke probe ~1,2 s routeertijd vroeg (tien per
+    koude Lambda). Zonder leesbare map valt dit terug op probes.
+    """
+    names = _area_names()
+    if probe_post is None:
+        directory = Path(areas_dir) if areas_dir is not None else Path(config.CUSTOM_AREAS)
+        try:
+            known = _areas_from_directory(str(directory), directory.stat().st_mtime_ns)
+        except OSError:
+            known = None
+        if known:
+            return frozenset(name for name in names if name.removeprefix("in_") in known)
     return frozenset(
         name for name in names
         if _area_ev_works(name, probe_post)
