@@ -227,7 +227,7 @@ def _fetch_url(url: str) -> bytes:
     import urllib.request
 
     request = urllib.request.Request(
-        url, headers={"User-Agent": "lusmaker/0.1 (hobby routeplanner)"}
+        url, headers={"User-Agent": config.USER_AGENT}
     )
     with urllib.request.urlopen(request, timeout=90) as response:
         return response.read()
@@ -532,7 +532,7 @@ def fetch_osm(max_pages_per_tile: int = 150) -> dict:
         for page in range(max_pages_per_tile):
             url = (f"https://api.openstreetmap.org/api/0.6/trackpoints"
                    f"?bbox={l:.4f},{b:.4f},{r:.4f},{tp:.4f}&page={page}")
-            req = urllib.request.Request(url, headers={"User-Agent": "lusmaker/0.1 (hobby routeplanner)"})
+            req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
             data = None
             for attempt in range(3):
                 try:

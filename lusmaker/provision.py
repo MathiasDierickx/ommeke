@@ -197,7 +197,7 @@ def _unpack(pack: Path, target: Path, expected_slug: str) -> dict:
 
 
 def _download_file(url: str, destination: Path) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "lusmaker/0.1"})
+    request = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response, open(
         destination, "wb"
     ) as output:
