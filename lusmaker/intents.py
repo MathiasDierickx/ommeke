@@ -290,6 +290,8 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
         warnings.append(
             f"route wijkt {abs(actual - target):.1f} km af van de doelafstand"
         )
+        if d.get("optimize_note"):
+            warnings.append(d["optimize_note"])
     if within_hard_max is False:
         warnings.append(
             f"route overschrijdt het harde maximum met {actual - hard_max:.1f} km"

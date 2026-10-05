@@ -1361,6 +1361,16 @@ def _round_trip_anchor(d: dict, climb_db: dict) -> tuple[tuple[float, float], st
     return (lat, lon), label
 
 
+def _target_tolerance_m(d: dict, target_total_m: float) -> float:
+    """Toegestane afwijking rond een doelafstand (aanvraag wint van default)."""
+    request = d.get("route_request") or {}
+    if request.get("target_km") is not None and abs(
+        request["target_km"] * 1000.0 - target_total_m
+    ) < 1.0:
+        return request.get("tolerance_km", 2.5) * 1000.0
+    return max(100.0, target_total_m * 0.1)
+
+
 def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                           router=route, round_trip_fn=gh.round_trip,
                           objective="hm", prefer_cobbles: bool = False,
@@ -1453,10 +1463,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         return exhausted("geen round_trip-kandidaat zonder overlap binnen budget")
 
     before = copy.deepcopy(d)
-    tolerance_m = max(100.0, (target_total_m or 0) * .1)
-    request = d.get("route_request") or {}
-    if target_total_m is not None and request.get("target_km") == target_total_m / 1000:
-        tolerance_m = request.get("tolerance_km", 2.5) * 1000
+    tolerance_m = _target_tolerance_m(d, target_total_m or 0.0)
     # A requested distance comes before soft surface/popularity preferences.
     # Without a distance target, preserve the existing objective ordering.
     ordered = sorted(candidates, key=lambda item: (
@@ -1622,79 +1629,110 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             if tour_only
             else "offroad-doel: alleen rondrit-opvulling"
         )
-    for round_number in range(1, max_rounds + 1):
-        from .progress import emit
-        emit("optimizing", f"Ik vergelijk routevarianten (ronde {round_number}).")
-        budget_km = max_km - d["computed"]["total_km"]
-        if budget_km < 1.0:
-            stopped_because = "minder dan 1 km budget over"
-            break
-        if not d["climbs"] and not d.get("_geometry"):
-            stopped_because = "geen klim bereikbaar; round_trip vanaf start"
-            break
+    target_m = fill_target_km * 1000.0 if fill_target_km is not None else None
+    tolerance_m = _target_tolerance_m(d, target_m) if target_m is not None else 0.0
+    # Met een afstandsdoel mag een klim de route nooit buiten het doelvenster
+    # duwen: een ceiling van 1,2x target liet routes tot ver boven de tolerantie
+    # groeien, waarna opvulling ze niet meer kon corrigeren.
+    climb_cap_km = (
+        min(max_km, (target_m + tolerance_m) / 1000.0)
+        if target_m is not None
+        else max_km
+    )
 
-        candidate_kwargs = {
-            "max_detour_km": budget_km * 0.85,
-            "limit": 10,
-            "banned": frozenset(banned),
-        }
-        if weights is not None:
-            import inspect
+    def climb_rounds(ratio, rounds_limit, start_number, cap_km, label=None):
+        nonlocal stopped_because
+        for round_number in range(start_number, start_number + rounds_limit):
+            from .progress import emit
+            emit("optimizing", f"Ik vergelijk routevarianten (ronde {round_number}).")
+            budget_km = cap_km - d["computed"]["total_km"]
+            if budget_km < 1.0:
+                stopped_because = "minder dan 1 km budget over"
+                return
+            if not d["climbs"] and not d.get("_geometry"):
+                stopped_because = "geen klim bereikbaar; round_trip vanaf start"
+                return
 
-            if "weighted" in inspect.signature(candidates_fn).parameters:
-                candidate_kwargs["weighted"] = True
-        candidates = candidates_fn(d, climb_db, **candidate_kwargs)
-        eligible = _eligible_candidates(candidates, budget_km, min_ratio, banned)
-        selected = _select_candidate(
-            eligible,
-            objective,
-            budget_km=budget_km,
-            prefer_cobbles=prefer_cobbles,
+            candidate_kwargs = {
+                "max_detour_km": budget_km * 0.85,
+                "limit": 10,
+                "banned": frozenset(banned),
+            }
+            if weights is not None:
+                import inspect
+
+                if "weighted" in inspect.signature(candidates_fn).parameters:
+                    candidate_kwargs["weighted"] = True
+            candidates = candidates_fn(d, climb_db, **candidate_kwargs)
+            eligible = _eligible_candidates(candidates, budget_km, ratio, banned)
+            selected = _select_candidate(
+                eligible,
+                objective,
+                budget_km=budget_km,
+                prefer_cobbles=prefer_cobbles,
+            )
+            if selected is None:
+                stopped_because = "geen kandidaten boven min-ratio binnen budget"
+                return
+
+            climb_id = selected["climb"]["id"]
+            position = selected["invoegen_op_positie"]
+            prev_retrace = (d["computed"].get("kwaliteit") or {}).get("heen_en_weer_m", 0)
+            d["climbs"].insert(position, climb_id)
+            d["computed"] = None
+            d.pop("_geometry", None)
+            route_fn(d, climb_db)
+
+            round_result = {
+                "ronde": len(rounds) + 1,
+                "toegevoegd": climb_id,
+                "voorspeld_extra_km": selected["extra_km"],
+                "totaal_na": d["computed"]["total_km"],
+            }
+            if label:
+                round_result["fase"] = label
+            new_retrace = (d["computed"].get("kwaliteit") or {}).get("heen_en_weer_m", 0)
+            if d["computed"]["total_km"] > cap_km:
+                round_result["status"] = "teruggedraaid (budget)"
+                d["climbs"].pop(position)
+                d["computed"] = None
+                d.pop("_geometry", None)
+                banned.add(climb_id)
+                route_fn(d, climb_db)
+                save(d)
+            elif new_retrace - prev_retrace > 120:
+                # de toevoeging maakte de lus heen-en-weer-achtig: terugdraaien
+                round_result["status"] = "teruggedraaid (heen-en-weer)"
+                round_result["heen_en_weer_delta_m"] = round(new_retrace - prev_retrace)
+                d["climbs"].pop(position)
+                d["computed"] = None
+                d.pop("_geometry", None)
+                banned.add(climb_id)
+                route_fn(d, climb_db)
+                save(d)
+            else:
+                round_result["status"] = "geaccepteerd"
+                save(d)
+            rounds.append(round_result)
+            if label and abs(d["computed"]["total_km"] * 1000.0 - target_m) <= tolerance_m:
+                return
+
+    climb_rounds(min_ratio, max_rounds, 1, climb_cap_km)
+
+    def short_of_target():
+        return (
+            target_m is not None
+            and d["computed"]["total_km"] * 1000.0 < target_m - tolerance_m
         )
-        if selected is None:
-            stopped_because = "geen kandidaten boven min-ratio binnen budget"
-            break
 
-        climb_id = selected["climb"]["id"]
-        position = selected["invoegen_op_positie"]
-        prev_retrace = (d["computed"].get("kwaliteit") or {}).get("heen_en_weer_m", 0)
-        d["climbs"].insert(position, climb_id)
-        d["computed"] = None
-        d.pop("_geometry", None)
-        route_fn(d, climb_db)
+    can_top_up = not (pure_offroad or tour_only)
+    filled = False
 
-        round_result = {
-            "ronde": round_number,
-            "toegevoegd": climb_id,
-            "voorspeld_extra_km": selected["extra_km"],
-            "totaal_na": d["computed"]["total_km"],
-        }
-        new_retrace = (d["computed"].get("kwaliteit") or {}).get("heen_en_weer_m", 0)
-        if d["computed"]["total_km"] > max_km:
-            round_result["status"] = "teruggedraaid (budget)"
-            d["climbs"].pop(position)
-            d["computed"] = None
-            d.pop("_geometry", None)
-            banned.add(climb_id)
-            route_fn(d, climb_db)
-            save(d)
-        elif new_retrace - prev_retrace > 120:
-            # de toevoeging maakte de lus heen-en-weer-achtig: terugdraaien
-            round_result["status"] = "teruggedraaid (heen-en-weer)"
-            round_result["heen_en_weer_delta_m"] = round(new_retrace - prev_retrace)
-            d["climbs"].pop(position)
-            d["computed"] = None
-            d.pop("_geometry", None)
-            banned.add(climb_id)
-            route_fn(d, climb_db)
-            save(d)
-        else:
-            round_result["status"] = "geaccepteerd"
-            save(d)
-        rounds.append(round_result)
-
-    remaining_m = (max_km - d["computed"]["total_km"]) * 1000.0
-    if fill and d.get("loop") and remaining_m >= 1500.0:
+    def try_fill():
+        nonlocal stopped_because, filled
+        remaining_m = (max_km - d["computed"]["total_km"]) * 1000.0
+        if not (fill and d.get("loop") and remaining_m >= 1500.0):
+            return
         fill_result = _fill_with_round_trip(
             d,
             climb_db,
@@ -1703,11 +1741,10 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             round_trip_fn=round_trip_fn,
             objective=objective,
             prefer_cobbles=prefer_cobbles,
-            target_total_m=(
-                fill_target_km * 1000.0 if fill_target_km is not None else None
-            ),
+            target_total_m=target_m,
         )
         if fill_result["filled"]:
+            filled = True
             rounds.append(
                 {
                     "ronde": len(rounds) + 1,
@@ -1721,6 +1758,26 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         else:
             stopped_because = fill_result["reason"]
         save(d)
+
+    try_fill()
+    if short_of_target() and can_top_up and d.get("climbs"):
+        # De strikte hm/km-drempel en/of de rondrit lieten de route onder het
+        # doelvenster. Een gevraagde afstand gaat voor: vul aan met de beste
+        # resterende klimmen zonder ratio-drempel tot het venster bereikt is.
+        climb_rounds(0.0, 12, len(rounds) + 1, climb_cap_km, label="aanvulling")
+        if short_of_target() and not filled:
+            try_fill()
+    if short_of_target():
+        shortfall = target_m / 1000.0 - d["computed"]["total_km"]
+        stopped_because = (
+            f"doelafstand niet haalbaar: {d['computed']['total_km']:.1f} km, "
+            f"{shortfall:.1f} km onder het doel van {target_m / 1000.0:.1f} km "
+            f"({stopped_because})"
+        )
+        d["optimize_note"] = stopped_because
+    else:
+        d.pop("optimize_note", None)
+    save(d)
 
     return {
         "id": d["id"],

@@ -747,3 +747,88 @@ def test_optimize_emits_budget_rollback_count_to_telemetry():
     assert result["budget_rollbacks"] == 2
     event = next(r for r in records if r["event"] == "optimize")
     assert event["budget_rollbacks"] == 2 and event["rounds"] == 3
+
+
+def _target_scenario(extras, start_km=30.0, target_km=45.0):
+    """Draft + injected router/candidates: elke klim kost vast extra km."""
+    from lusmaker import gh
+
+    routed = _synthetic_routed_draft()
+    routed["computed"]["total_km"] = start_km
+    routed["computed"]["legs"] = []
+    routed["_geometry"] = []
+    routed["route_request"] = {"target_km": target_km, "tolerance_km": 2.5}
+
+    def router(current, _db):
+        extra = sum(extras[c][0] for c in current["climbs"] if c in extras)
+        current["computed"] = {
+            "total_km": start_km + extra,
+            "ascend_m": sum(extras[c][1] for c in current["climbs"] if c in extras),
+            "descend_m": 0,
+            "legs": [],
+            "kwaliteit": {"heen_en_weer_m": 0},
+        }
+        current["_geometry"] = [[[50.0, 4.0, 0], [50.0, 4.01, 0]]]
+
+    def candidates(current, _db, max_detour_km=10.0, limit=10, banned=frozenset(), **_kw):
+        return [
+            _candidate(cid, km, hm)
+            for cid, (km, hm) in extras.items()
+            if cid not in current["climbs"] and cid not in banned and km <= max_detour_km
+        ]
+
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        raise gh.GhError("geen kandidaat")
+
+    router.ids = list(extras)
+    return routed, router, candidates, round_trip
+
+
+def _run_target(routed, router, candidates, round_trip, max_km=54.0):
+    from unittest.mock import patch
+
+    db = _synthetic_climb_db()
+    for cid in routed["climbs"] + list(getattr(router, "ids", [])):
+        db.setdefault(cid, db["testklim"])
+    with tempfile.TemporaryDirectory() as root, patch.dict(os.environ, {"LUSMAKER_HOME": root}):
+        return draft._optimize(
+            routed, db, max_km=max_km, objective="hm-per-km", route_fn=router,
+            candidates_fn=candidates, round_trip_fn=round_trip, fill_target_km=45.0,
+        )
+
+
+def test_target_distance_tops_up_with_low_ratio_climbs_when_fill_fails():
+    # Lage hm/km-klim (ratio 4 < min_ratio 8) is de enige weg naar het doel.
+    extras = {"hoog": (6.5, 130), "laag1": (6.5, 26), "laag2": (6.5, 26)}
+    routed, router, candidates, round_trip = _target_scenario(extras)
+
+    result = _run_target(routed, router, candidates, round_trip)
+
+    total = routed["computed"]["total_km"]
+    assert 42.5 <= total <= 47.5, total
+    assert "hoog" in routed["climbs"] and "laag1" in routed["climbs"]
+    assert any(r.get("fase") == "aanvulling" for r in result["rondes"])
+    assert "optimize_note" not in routed
+
+
+def test_target_distance_caps_climbs_at_tolerance_window_not_one_point_two_times_target():
+    # Zonder cap groeide de route tot 50 km (ceiling 54), buiten 45 +- 2,5.
+    extras = {f"k{i}": (5.0, 100) for i in range(4)}
+    routed, router, candidates, round_trip = _target_scenario(extras)
+
+    _run_target(routed, router, candidates, round_trip)
+
+    assert 42.5 <= routed["computed"]["total_km"] <= 47.5
+
+
+def test_infeasible_target_is_reported_clearly_in_constraint_report():
+    from lusmaker import intents
+
+    routed, router, candidates, round_trip = _target_scenario({})
+    result = _run_target(routed, router, candidates, round_trip)
+
+    assert routed["computed"]["total_km"] == 30.0
+    assert "doelafstand niet haalbaar" in result["gestopt_omdat"]
+    report = intents.constraint_report(routed)
+    assert report["binnen_doelbereik"] is False and report["voldaan"] is False
+    assert any("niet haalbaar" in w for w in report["waarschuwingen"])
