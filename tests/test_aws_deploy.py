@@ -43,7 +43,8 @@ def test_container_and_pack_pin_the_same_graphhopper_release():
     assert "AWS_LWA_ASYNC_INIT=true" in dockerfile
     assert "find /opt/graphhopper" in entrypoint
     assert 'JAR="$GRAPH_JAR"' in entrypoint
-    assert "-Xms256m -Xmx2g" in entrypoint
+    assert "-Xms256m -Xmx1536m" in entrypoint
+    assert "graph.dataaccess.default_type: MMAP" in entrypoint
 
 
 def test_workflows_are_valid_yaml_and_deploy_by_digest_with_oidc():
