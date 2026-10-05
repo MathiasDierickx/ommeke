@@ -188,7 +188,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setError(undefined);
   }, [view]);
 
-  useEffect(() => { messageEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
+  // Alleen meescrollen als er een gesprek loopt; een leeg startscherm begint bovenaan.
+  useEffect(() => { if (messages.length || busy) messageEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
   const activeConversation = useMemo(() => conversations.find((item) => item.id === conversationId), [conversations, conversationId]);
   useEffect(() => {
     document.title = view.kind === "route" ? `${selectedRoute?.name || "Route"} — Lusmaker` : `${activeConversation?.title || "Nieuwe route"} — Lusmaker`;
@@ -411,8 +412,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       <section className="chat-panel">
         <header className="chat-head">
           <button className="icon-button mobile-menu" onClick={() => setLeftOpen(true)} aria-label="Open navigatie"><Menu /></button>
-          <div><span className="chat-kicker">Routegesprek</span><h1>{activeConversation?.title || "Nieuwe route"}</h1></div>
-          <div className="model-status"><span /> Routeatelier online</div>
+          <div><h1>{activeConversation?.title || "Nieuwe route"}</h1></div>
         </header>
         {error ? <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
         <div className="messages">

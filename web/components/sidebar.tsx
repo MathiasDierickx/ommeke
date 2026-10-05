@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { filterRoutes } from "@/lib/route-library";
+import { filterRoutes, type ActivityFilter } from "@/lib/route-library";
 
 import { LogOut, Map, MessageSquare, Plus, X } from "lucide-react";
 
@@ -34,7 +34,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
   onMoreRoutes?: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [activity, setActivity] = useState<"all" | "fietsen" | "trail">("all");
+  const [activity, setActivity] = useState<ActivityFilter>("all");
   const visibleRoutes = useMemo(() => filterRoutes(routes, query, activity), [routes, query, activity]);
   return (
     <aside className="sidebar">
@@ -51,14 +51,14 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
         <section>
           <div className="nav-label"><span>Mijn routes</span><Map /></div>
           <div className="library-filters">
-            <label>Zoek in geladen routes<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Naam of startplaats" /></label>
-            <label>Activiteit<select value={activity} onChange={event => setActivity(event.target.value as typeof activity)}><option value="all">Alle activiteiten</option><option value="fietsen">Fietsen</option><option value="trail">Trail</option></select></label>
-            <p className="nav-empty" role="status">{loading ? "Je routebibliotheek wordt geladen…" : `${visibleRoutes.length} van ${routes.length} geladen routes · recent gewijzigd eerst`}</p>
+            <label>Zoeken<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Naam of startplaats" /></label>
+            <label>Activiteit<select value={activity} onChange={event => setActivity(event.target.value as typeof activity)}><option value="all">Alle activiteiten</option><option value="voet">Te voet</option><option value="fiets">Fiets</option></select></label>
+            <p className="nav-empty" role="status">{loading ? "Je routebibliotheek wordt geladen…" : `${visibleRoutes.length} van ${routes.length} routes`}</p>
           </div>
           <div className="nav-items route-nav-items">
             {routes.length > 0 && !visibleRoutes.length ? <p className="nav-empty">Geen overeenkomst in de geladen routes. Pas je zoekterm aan of laad meer routes.</p> : null}
             {!routes.length && !loading ? <p className="nav-empty">Je eerste route verschijnt hier</p> : null}
-            {visibleRoutes.map((route) => <button key={route.id} className={selectedRoute === route.id ? "active" : ""} onClick={() => onRoute(route)}><span className="nav-title">{route.name}</span><span className="nav-meta">{route.ready && route.total_km != null ? `${route.total_km.toFixed(1)} km` : "Concept"}{route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}</span></button>)}
+            {visibleRoutes.map((route) => <button key={route.id} className={selectedRoute === route.id ? "active" : ""} onClick={() => onRoute(route)}><span className="nav-title">{route.name}</span><span className="nav-meta">{route.ready && route.total_km != null ? `${route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km` : "Concept"}{route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}</span></button>)}
           </div>
           {hasMoreRoutes ? <button className="new-chat" disabled={loadingMoreRoutes} onClick={onMoreRoutes}>{loadingMoreRoutes ? "Routes laden…" : "Meer routes laden"}</button> : null}
         </section>

@@ -1,0 +1,6 @@
+# Alleen de webapp uploaden bij een CLI-deploy (Vercel root directory = web).
+/*
+!/web
+/web/node_modules
+/web/.next
+/web/.vercel

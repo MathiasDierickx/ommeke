@@ -7,10 +7,10 @@ import type { ChatMessage, Route } from "@/lib/types";
 import { Logo } from "./brand";
 
 const STARTERS = [
-  "Een rustige fietsroute van 50 km vanuit Wetteren",
-  "35 km met zoveel mogelijk hoogtemeters",
-  "Een traillus van 12 km zonder drukke wegen",
-];
+  "Een wandeling van 6 km langs water vanuit Gent",
+  "60 km met de racefiets door de Vlaamse Ardennen",
+  "Een rustige stadsfietstocht van 15 km in Antwerpen",
+]
 
 function messageOptions(message: ChatMessage): string[] {
   if (message.role !== "assistant" || !message.content.includes("?")) return [];
@@ -20,15 +20,13 @@ function messageOptions(message: ChatMessage): string[] {
 
 export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }) {
   return (
-    <div className="empty-chat">
-      <div className="route-orbit" aria-hidden="true"><span className="orbit-dot" /><RouteIcon /></div>
-      <p className="eyebrow">Nieuwe route</p>
-      <h2>Waar wil je vandaag rijden?</h2>
-      <p>Noem je start, afstand en wat de rit goed moet maken.</p>
+    <section className="empty-chat" aria-labelledby="empty-chat-title">
+      <h2 id="empty-chat-title">Of beschrijf je lus zelf</h2>
+      <p>Vertel waar je start, hoe ver je wilt en wat de tocht goed maakt. Ommeke stelt alleen de vragen die voor jouw route tellen.</p>
       <div className="starter-list">
         {STARTERS.map((starter) => <button key={starter} onClick={() => onStarter(starter)}><span>{starter}</span><ArrowUp /></button>)}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -46,7 +44,7 @@ export function Message({ message, onRoute, onOption, routes = [] }: { routes?: 
         {options.length ? <div className="option-chips" aria-label="Antwoordopties">{options.map((option) => <button key={option} onClick={() => onOption(option)}>{option}</button>)}</div> : null}
       </div>
       {routeId ? <div className="route-result">
-        <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route?.name || "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toFixed(1) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>
+        <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route?.name || "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>
         {route?.constraints?.waarschuwingen.length ? <p className="route-result-warning">Let op: {route.constraints.waarschuwingen.join(" · ")}</p> : null}
       </div> : null}
     </article>

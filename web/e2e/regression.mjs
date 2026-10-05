@@ -173,7 +173,7 @@ async function tabStops(page, max = 60) {
       const s = getComputedStyle(el);
       const outline = s.outlineStyle !== "none" && parseFloat(s.outlineWidth) > 0;
       const shadow = s.boxShadow && s.boxShadow !== "none";
-      const container = el.closest("label, .composer, .distance-form, .avoid-place, .auth-field, .library-filters, .adjust-row, form");
+      const container = el.closest("label, .composer, .start-input, .distance-form, .avoid-place, .auth-field, .library-filters, .adjust-row, form");
       const cs = container ? getComputedStyle(container) : null;
       const outerFocus = container ? container.matches(":focus-within") && cs.boxShadow !== "none" : false;
       const r = el.getBoundingClientRect();
@@ -205,7 +205,7 @@ async function openRoute(page, url) {
 
 async function openHome(page, url) {
   await page.goto(`${url}/?new=1`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("heading", { name: "Een lus vanaf hier" }).waitFor();
+  await page.getByRole("heading", { name: /^Waar wil je/ }).waitFor();
 }
 
 /** Sluit de menubalk als hij openstaat (mobiel), zodat de rest bereikbaar is. */
@@ -255,7 +255,7 @@ test("route openen via de zijbalk en met toetsenbord", async ({ page, url, vp })
   await page.getByRole("navigation", { name: "Gesprekken en routes" }).getByRole("button", { name: /Berendries-lus/ }).click();
   await page.waitForURL(/\/routes\/r1\/?$/);
   await page.getByRole("heading", { level: 2, name: "Berendries-lus" }).waitFor();
-  assert.ok(await page.getByLabel("Routedetails").getByText("30.0 km").first().isVisible(), "afstand zichtbaar");
+  assert.ok(await page.getByLabel("Routedetails").getByText("30 km").first().isVisible(), "afstand zichtbaar");
   assert.equal(await page.title(), "Berendries-lus — Lusmaker");
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { level: 2, name: "Berendries-lus" }).waitFor();
@@ -306,13 +306,13 @@ test("afstand aanpassen via Gewenste afstand", async ({ page, url }) => {
   assert.ok(await field.isDisabled(), "veld vergrendeld tijdens berekenen");
   await page.getByRole("status").filter({ hasText: "Route aanpassen" }).waitFor();
   release();
-  await page.getByLabel("Routedetails").getByText("42.0 km").first().waitFor();
+  await page.getByLabel("Routedetails").getByText("42 km").first().waitFor();
   const call = state.calls.find((c) => c.key === "POST /api/routes/r1/adjust");
   assert.deepEqual(call.body, { target_km: 42, expected_revision: 1 });
   assert.equal(await field.inputValue(), "42");
   // Stap-knoppen sturen ook de nieuwe revisie mee.
   await page.getByRole("button", { name: /^\+?\s*5 km$/ }).first().click();
-  await page.getByLabel("Routedetails").getByText("47.0 km").first().waitFor();
+  await page.getByLabel("Routedetails").getByText("47 km").first().waitFor();
   assert.equal(state.calls.filter((c) => c.key === "POST /api/routes/r1/adjust").at(-1).body.expected_revision, 2);
   expectNoStrays(state, "afstand");
 });
@@ -329,7 +329,7 @@ test("revision-conflict (409) toont melding en laadt nieuwste versie", async ({ 
   const alert = alerts(page);
   await alert.waitFor();
   assert.match(await alert.innerText(), /De route is intussen gewijzigd\. Je ziet nu de nieuwste versie/);
-  await page.getByLabel("Routedetails").getByText("33.0 km").first().waitFor(); // verse versie opnieuw geladen
+  await page.getByLabel("Routedetails").getByText("33 km").first().waitFor(); // verse versie opnieuw geladen
   assert.equal(state.calls.filter((c) => c.key === "GET /api/routes/r1").length >= 2, true);
   expectNoStrays(state, "409");
 });

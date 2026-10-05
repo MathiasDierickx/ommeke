@@ -52,7 +52,7 @@ export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | nul
       });
       (geometry.pois || []).filter(p => poiKind !== "geen" && (poiKind === "alle" || p.kind === poiKind)).forEach(p => {
         const label = document.createElement("span");
-        const details = [p.name, `${p.at_km.toFixed(1)} km`, p.opening_hours || "openingstijden onbekend"];
+        const details = [p.name, `${p.at_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km`, p.opening_hours || "openingstijden onbekend"];
         const wheelchair = ({ yes: "ja", no: "nee", limited: "beperkt" } as Record<string, string>)[p.wheelchair || ""];
         if (wheelchair) details.push(`Rolstoeltoegang bij stop: ${wheelchair}; toegangspad niet gecontroleerd`);
         if (p.changing_table === "yes") details.push("Verschoontafel aanwezig volgens bron");

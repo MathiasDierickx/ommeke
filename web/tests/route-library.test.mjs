@@ -9,11 +9,12 @@ const routes = [
 test('routezoeker negeert accenten, combineert woorden en behoudt recente volgorde', () => {
   assert.deepEqual(filterRoutes(routes, ' CAFE   wetteren ', 'all').map(r => r.id), ['new']);
   assert.deepEqual(filterRoutes(routes, 'vlaanderen', 'all').map(r => r.id), ['new','old']);
-  assert.equal(filterRoutes(routes, 'schelde', 'trail').length, 0);
-  assert.deepEqual(filterRoutes(routes, '', 'trail').map(r => r.id), ['old']);
+  assert.equal(filterRoutes(routes, 'schelde', 'voet').length, 0);
+  assert.deepEqual(filterRoutes(routes, '', 'voet').map(r => r.id), ['old']);
   assert.equal(routes.length, 2);
 });
 test('routezoeker verdraagt ontbrekende optionele velden en lege bibliotheek', () => {
   assert.equal(filterRoutes([{id:'x',name:'Lus',activity:'fietsen'}], 'lus', 'all').length, 1);
+  assert.deepEqual(filterRoutes([{id:'w',name:'A',activity:'wandelen'},{id:'r',name:'B',activity:'koersfiets'}], '', 'fiets').map(r => r.id), ['r']);
   assert.deepEqual(filterRoutes([], '', 'all'), []);
 });

@@ -4,6 +4,7 @@ import { ArrowDownToLine, ArrowLeft, Bike, Check, Copy, Footprints, LoaderCircle
 import { useEffect, useMemo, useState } from "react";
 
 import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, SharedRoute } from "@/lib/types";
+import { activityKind, activityLabel } from "@/lib/route-library";
 import { Logo } from "./brand";
 import { OfflineRoute } from "./offline-route";
 import { ReturnRoute } from "./return-route";
@@ -12,7 +13,7 @@ import { RouteMap } from "./route-map";
 export function StatGrid({ route }: { route: Route | SharedRoute }) {
   return (
     <dl className="route-stats">
-      <div><dt>Afstand</dt><dd>{route.total_km != null ? route.total_km.toFixed(1) : "—"}<small> km</small></dd></div>
+      <div><dt>Afstand</dt><dd>{route.total_km != null ? route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) : "—"}<small> km</small></dd></div>
       <div><dt>Hoogtemeters</dt><dd>{route.elevation_gain_m != null ? Math.round(route.elevation_gain_m) : "—"}<small> m</small></dd></div>
       <div><dt>Klimmen</dt><dd>{route.climbs.length}</dd></div>
     </dl>
@@ -105,7 +106,7 @@ export function RouteDetail({
   const [name, setName] = useState(route?.name || "");
   const [adjusting, setAdjusting] = useState(false);
   const [targetDistance, setTargetDistance] = useState("");
-  const distanceStep = route?.activity === "trail" ? 1 : 5;
+  const distanceStep = activityKind(route?.activity) === "voet" ? 1 : 5;
   useEffect(() => {
     setTargetDistance(String(route?.constraints?.doel_km ?? route?.total_km ?? ""));
   }, [route?.id, route?.revision, route?.constraints?.doel_km, route?.total_km]);
@@ -150,7 +151,7 @@ export function RouteDetail({
       <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} />}</div>
       <header className="route-topbar">
         <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
-        <div className="route-topbar-title"><Logo /><span><small>Routedetail</small><strong>{route?.name || "Route laden…"}</strong></span></div>
+        <div className="route-topbar-title"><Logo /><span><strong>{route?.name || "Route laden…"}</strong></span></div>
         <button className="route-back" onClick={onBack}><ArrowLeft /> Gesprekken</button>
       </header>
       {route ? (
@@ -165,7 +166,7 @@ export function RouteDetail({
             ) : (
               <><h2>{route.name}</h2><button className="icon-button" onClick={() => setEditing(true)} aria-label="Naam wijzigen"><Pencil /></button></>
             )}
-            <span className="activity-tag">{route.activity === "trail" ? <Footprints /> : <Bike />}{route.activity}</span>
+            <span className="activity-tag">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}{activityLabel(route.activity)}</span>
           </div>
           <p className="route-origin">Vertrek vanuit {route.start || route.geometry?.start?.label || "je gekozen startpunt"}</p>
           <StatGrid route={route} />
@@ -178,9 +179,11 @@ export function RouteDetail({
               {route.constraints.waarschuwingen.length ? <div role="status"><strong>Niet alle wensen zijn gehaald</strong><ul>{route.constraints.waarschuwingen.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
             </section>
           ) : null}
-          <div className="route-actions">
+          <div className="route-downloads">
             <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
-            {onDownloadFit && <button className="button" onClick={onDownloadFit} disabled={!route.ready}>Download FIT</button>}
+            {onDownloadFit && <button className="button button-secondary" onClick={onDownloadFit} disabled={!route.ready}><ArrowDownToLine /> Download FIT</button>}
+          </div>
+          <div className="route-actions">
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>
             {route.shared || shareUrl ? <button className="button button-quiet" onClick={async () => { try { await onUnshare(); setShareUrl(undefined); } catch { /* caller toont de fout; link blijft zichtbaar */ } }}>Stop delen</button> : null}
             <button className="button button-danger" onClick={() => void onDelete()} aria-label="Route verwijderen"><Trash2 /><span>Verwijder</span></button>
@@ -231,7 +234,7 @@ export function RouteDetail({
               <div className="nearby-climbs">
                 {nearbyClimbs.length ? nearbyClimbs.map((climb) => (
                   <button key={climb.id} disabled={adjusting || route.climbs.includes(climb.id)} onClick={() => void adjust({ voeg_klimmen_toe: [climb.id] })}>
-                    <span><strong>{climb.naam}</strong><small>{climb.km.toFixed(1)} km · +{climb.hm} hm</small></span>
+                    <span><strong>{climb.naam}</strong><small>{climb.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km · +{climb.hm} hm</small></span>
                     <Plus />
                   </button>
                 )) : <p>Geen klimmen binnen 15 km van deze route.</p>}
