@@ -38,6 +38,25 @@ heeft een aparte regressietest. Een groene deployment alleen is geen E2E-bewijs.
 Pilotgebruikers (#7), platformreview (#17), echte fietscomputer (#21) en juridische
 acceptatie (#6) blijven externe acceptatie. Die worden niet als voltooid gemarkeerd.
 
+### Issue #24: klimhints, rijrichting en kandidaten
+
+Gedaan: de finale routering (`draft._route`) geeft per leg `point_hints`
+(straatnaam van de klim) en `headings` (klim-leg vertrekt bergop; andere legs
+in de aankomstrichting van de vorige leg) door aan `gh.route`, met exact
+evenveel items als punten. Per `optimize`-run wordt het aantal
+budget-rollbacks als telemetry-event `optimize` gelogd. `recording.hash_body`
+negeert `point_hints` en `headings`, zodat de drie bestaande cassettes geldig
+blijven zonder herrecord; de replay bewijst dus niet dat de hints de
+GraphHopper-keuze verbeteren.
+
+Nog open: (1) `_candidates` routeert een klim nog als `[foot, mid, top]` zonder
+corridors en klimvia-punten; dat moet dezelfde via-punten, hints, headings en
+corridors als de finale route gebruiken. (2) Daarna cassettes opnieuw opnemen
+met `tests/record_fixtures.py` (hash-negering dan weer verwijderen) en
+controleren dat `heen_en_weer_m` daalt, of het besluit om terug te draaien
+documenteren. (3) Live controleren dat GraphHopper JSON-`null` in `headings`
+accepteert voor punten zonder richting.
+
 ## Vervolg: afronding en modelevaluatie
 
 Commit `774ba76` is via CI 37059502388 en AWS-deploy 37059502680 geslaagd;

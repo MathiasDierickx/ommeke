@@ -279,7 +279,8 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           avoid_concrete: bool = False, avoid_busy: bool = False,
           details: bool = False,
           profile: str = config.GH_PROFILE, start_heading: float | None = None,
-          point_hints: list | None = None, *,
+          point_hints: list | None = None,
+          headings: list | None = None, *,
           instructions: bool = False,
           heat_activity: str | None = None,
           area_evs: set[str] | frozenset[str] | None = None,
@@ -295,6 +296,11 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     details: per-segment surface/road_class in het resultaat ("details").
     profile: GraphHopper-profiel, standaard het bestaande fietsprofiel.
     heat_activity: activiteit voor de request-side populariteitsvoorkeur.
+    point_hints: één straatnaam per punt ("" = geen hint); lengte moet gelijk
+    zijn aan het aantal punten, anders wordt de hint genegeerd.
+    headings: één kompasrichting per punt (None = geen voorkeur, als JSON
+    null); alleen gebruikt als de lengte gelijk is aan het aantal punten en
+    anders dan `start_heading`.
     """
     body = {
         "points": [[lon, lat] for lat, lon in points_latlon],
@@ -308,11 +314,21 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         # bij klimvoeten en -toppen
         "pass_through": True,
     }
-    if start_heading is not None:
+    n_points = len(points_latlon)
+    if headings is not None and len(headings) == n_points \
+            and any(h is not None for h in headings):
+        if headings[0] is not None and all(h is None for h in headings[1:]):
+            # Eén waarde = richting van het eerste punt; zo sturen we geen
+            # JSON-null die GraphHopper niet als "geen voorkeur" kent.
+            body["headings"] = [round(headings[0], 1)]
+        elif all(h is not None for h in headings):
+            body["headings"] = [round(h, 1) for h in headings]
+    elif start_heading is not None:
         # vertrek in de aankomstrichting van de vorige leg: voorkomt
         # heen-en-weer-uitsteeksels op leg-grenzen
         body["headings"] = [round(start_heading, 1)]
-    if point_hints is not None:
+    if point_hints is not None and len(point_hints) == n_points \
+            and any(point_hints):
         # snap via-punten op de juiste (genoemde) weg, niet op een parallelpad
         body["point_hints"] = point_hints
     if details:

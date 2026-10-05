@@ -643,3 +643,106 @@ def test_round_trip_uses_integrated_distance_and_retains_best_effort_when_needed
             round_trip_fn=round_trip,target_total_m=3000,objective='toeren')
         assert result['filled'] and routed['computed']['total_km']==expected
         assert len(routed['opvullingen'])==1
+
+
+def _echo_post(bodies):
+    def post(_path, body):
+        bodies.append(body)
+        return {"paths": [{
+            "distance": 1000.0, "time": 1000, "ascend": 10.0, "descend": 5.0,
+            "points": {"coordinates": [[lon, lat, 10.0] for lon, lat in body["points"]]},
+            "details": {},
+        }]}
+    return post
+
+
+def test_final_route_sends_aligned_point_hints_and_climb_headings():
+    from lusmaker import gh
+
+    routed = _synthetic_routed_draft()
+    routed["computed"] = None
+    routed.pop("_geometry")
+    geom = [[50.0, 4.0 + i * 0.002] for i in range(4)]
+    climb_db = {"testklim": {
+        "name": "Testklim (west)", "foot": geom[0], "top": geom[-1], "geom": geom,
+    }}
+    bodies = []
+
+    with tempfile.TemporaryDirectory() as home:
+        previous = os.environ.get("LUSMAKER_HOME")
+        os.environ["LUSMAKER_HOME"] = home
+        try:
+            draft._route(
+                routed, climb_db, router=gh.route, post_fn=_echo_post(bodies),
+                area_evs=set(), save_fn=lambda *_a, **_k: None,
+            )
+        finally:
+            if previous is None:
+                os.environ.pop("LUSMAKER_HOME", None)
+            else:
+                os.environ["LUSMAKER_HOME"] = previous
+
+    assert len(bodies) == 3  # naar voet, klim, terug
+    for body in bodies:
+        n = len(body["points"])
+        assert len(body.get("point_hints", [""] * n)) == n
+        # GraphHopper: één heading = eerste punt; anders exact één per punt.
+        assert len(body.get("headings", [0.0])) in (1, n)
+        assert None not in body.get("headings", [])
+    approach, climb, back = bodies
+    assert approach["point_hints"] == ["", "Testklim"]
+    assert "headings" not in approach  # eerste leg heeft nog geen vorige richting
+    assert climb["point_hints"] == ["Testklim"] * len(climb["points"])
+    # klim loopt naar het oosten: heading ~90 graden, enkel voor het eerste punt
+    assert abs(climb["headings"][0] - 90.0) < 1.0
+    assert len(climb["headings"]) == 1
+    assert "point_hints" not in back
+    assert back["headings"][0] is not None  # aankomstrichting top
+    assert all(body["pass_through"] is True for body in bodies)
+
+
+def test_gh_route_ignores_hints_and_headings_with_wrong_length():
+    from lusmaker import gh
+
+    bodies = []
+    gh.route(
+        [(50.0, 4.0), (50.0, 4.01)], point_hints=["a"], headings=[90.0],
+        post_fn=_echo_post(bodies), area_evs=set(),
+    )
+    assert "point_hints" not in bodies[0] and "headings" not in bodies[0]
+
+
+def test_replay_hash_ignores_snap_hints_so_old_cassettes_stay_valid():
+    from lusmaker import recording
+
+    base = {"points": [[4.0, 50.0], [4.1, 50.0]], "profile": "bike"}
+    hinted = {**base, "point_hints": ["", "X"], "headings": [90.0, None]}
+    assert recording.hash_body(base) == recording.hash_body(hinted)
+
+
+def test_optimize_emits_budget_rollback_count_to_telemetry():
+    import logging
+    import json
+    from lusmaker import telemetry
+
+    records = []
+
+    class Handler(logging.Handler):
+        def emit(self, record):
+            records.append(json.loads(record.getMessage()))
+
+    original = draft._optimize
+    draft._optimize = lambda *_a, **_k: {"rondes": [
+        {"status": "teruggedraaid (budget)"}, {"status": "toegevoegd"},
+        {"status": "teruggedraaid (budget)"},
+    ]}
+    handler = Handler()
+    telemetry.logger.addHandler(handler)
+    try:
+        result = draft.optimize(_synthetic_routed_draft(), {}, 10)
+    finally:
+        telemetry.logger.removeHandler(handler)
+        draft._optimize = original
+    assert result["budget_rollbacks"] == 2
+    event = next(r for r in records if r["event"] == "optimize")
+    assert event["budget_rollbacks"] == 2 and event["rounds"] == 3
