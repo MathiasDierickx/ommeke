@@ -24,6 +24,7 @@ from . import (
     aws_state,
     climbs,
     config,
+    coverage,
     draft,
     geocode as geocode_mod,
     geo,
@@ -376,6 +377,16 @@ def suggest_climbs(
     }
 
 
+def _structured_errors(fn):
+    """Zet ``buiten_gebied`` om in een JSON-foutmelding met code en dekking."""
+    def call(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except coverage.OutOfCoverage as exc:
+            raise ValueError(json.dumps(exc.payload(), ensure_ascii=False)) from exc
+    return call
+
+
 @mcp.tool(**tool_contract("plan_route"))
 def plan_route(
     start: NonEmptyString,
@@ -399,7 +410,7 @@ def plan_route(
     langs_water: NonEmptyString | None = None,
 ) -> RouteWorkflowResult:
     """Start een routeworkflow; kan eerst gerichte ``needs_input``-vragen geven."""
-    return intents.plan_route(
+    return _structured_errors(intents.plan_route)(
         start=start,
         region=region,
         max_km=max_km,
@@ -442,7 +453,7 @@ def adjust_route(
     langs_water: NonEmptyString | None = None,
 ) -> RouteWorkflowResult:
     """Vervolg of wijzig een routeworkflow; kan opnieuw om input vragen."""
-    return intents.adjust_route(
+    return _structured_errors(intents.adjust_route)(
         draft_id=draft_id,
         voeg_klimmen_toe=voeg_klimmen_toe,
         verwijder_klimmen=verwijder_klimmen,

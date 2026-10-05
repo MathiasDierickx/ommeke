@@ -29,7 +29,8 @@ def create_server(executor=None, trace_path=None):
             return result
         except Exception as exc:
             event["error"] = str(exc)
-            return {"error": str(exc)}
+            from . import coverage
+            return coverage.error_payload(exc)
         finally:
             if trace_path:
                 with Path(trace_path).open("a", encoding="utf-8") as handle:

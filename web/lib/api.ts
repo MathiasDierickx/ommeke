@@ -9,7 +9,7 @@ function apiBase(): string {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(message: string, public readonly status: number, public readonly code?: string) {
     super(message);
     this.name = "ApiError";
   }
@@ -18,7 +18,7 @@ export class ApiError extends Error {
 async function responseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new ApiError(errorMessage(response.status, payload.error, response.headers.get("Retry-After"), payload.code), response.status);
+    throw new ApiError(errorMessage(response.status, payload.error, response.headers.get("Retry-After"), payload.code), response.status, typeof payload.code === "string" ? payload.code : undefined);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

@@ -15,6 +15,7 @@ from . import (
     aws_state,
     climbs,
     config,
+    coverage,
     draft,
     geocode,
     gpx,
@@ -442,7 +443,7 @@ def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=
     _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn)
     actual = (d.get("computed") or {}).get("total_km")
     problem = None
-    if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual <= 0:
+    if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual < 0.1:
         problem = "De router leverde geen bruikbare routeafstand op. Kies een andere afstand of startplek."
     elif request.get("max_km_explicit", True) and request.get("max_km") is not None and actual > request["max_km"]:
         problem = f"route is {actual:.1f} km en overschrijdt het harde maximum van {request['max_km']:.1f} km"
@@ -612,6 +613,9 @@ def _set_water_via(d: dict, request: dict, water_fn) -> bool:
     )
     if not via:
         return False
+    for point in via:
+        lat, lon = (point["lat"], point["lon"]) if isinstance(point, dict) else point
+        coverage.check_point({"lat": lat, "lon": lon}, "via-punt")
     d["water_via"] = via
     # Een waterloop en rond-plek zijn alternatieve lusankers; water wint.
     d.pop("round_trip_anchor", None)
@@ -818,6 +822,7 @@ def plan_route(
         water_active = _set_water_via(d, request, water_fn)
         if rond_plaats and not water_active:
             anchor, _alternatives = resolve_fn(rond_plaats)
+            coverage.check_point(anchor, "ankerpunt")
             d["round_trip_anchor"] = anchor
             d["opvullingen"] = []
             d["computed"] = None
@@ -1013,6 +1018,7 @@ def adjust_route(
         water_active = _set_water_via(d, request, water_fn)
         if effective_round_place and not water_active:
             anchor, _alternatives = resolve_fn(effective_round_place)
+            coverage.check_point(anchor, "ankerpunt")
             if d.get("round_trip_anchor") != anchor:
                 d["round_trip_anchor"] = anchor
                 d["opvullingen"] = []

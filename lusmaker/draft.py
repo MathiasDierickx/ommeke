@@ -219,11 +219,14 @@ def create(start: str, name: str | None = None, loop: bool = True,
            region: str | None = None, profile: str = config.GH_PROFILE,
            profile_doc: str | None = None) -> dict:
     """Maak een draft vanuit gebruikersgerichte plaatsnamen of coördinaten."""
-    from . import geocode
+    from . import coverage, geocode
 
     with config.use_region(region):
         start_point, alternatives = geocode.resolve(start)
+        coverage.check_point(start_point, "startpunt")
         end_point = geocode.resolve(end)[0] if end else None
+        if end_point is not None:
+            coverage.check_point(end_point, "eindpunt")
         d = new(
             start=start_point,
             name=name,

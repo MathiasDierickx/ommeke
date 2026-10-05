@@ -388,3 +388,4 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .distance-form input, .distance-form button { width: 100%; min-width: 0; min-height: 44px; padding: .6rem .8rem; border: 1px solid #bbc9bd; border-radius: .5rem; background: white; color: var(--green); }
 .distance-form button { cursor: pointer; font-weight: 700; }
 .distance-form :disabled { opacity: .5; cursor: wait; }
+.quick-plan-outside { border-left: 4px solid #b45309; padding: .6rem .8rem; background: #fef3e2; color: #5b2f00; border-radius: 6px; }

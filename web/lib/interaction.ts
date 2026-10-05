@@ -22,6 +22,13 @@ export function errorMessage(status: number, message?: string, retryAfter?: stri
   return message || `Verzoek mislukt (${status}).`;
 }
 
+export const OUT_OF_COVERAGE = "buiten_gebied";
+
+/** Server zegt: start, anker of via-punt ligt buiten het gedekte gebied (HTTP 422). */
+export function isOutOfCoverage(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === OUT_OF_COVERAGE;
+}
+
 export function mergeById<T extends { id: string }>(current: T[], next: T[]): T[] {
   return [...new Map([...current, ...next].map(item => [item.id, item])).values()];
 }

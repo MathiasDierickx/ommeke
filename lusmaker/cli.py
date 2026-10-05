@@ -13,8 +13,10 @@ def _out(obj) -> None:
     print(json.dumps(obj, ensure_ascii=False, indent=2))
 
 
-def _err(msg: str) -> None:
-    print(json.dumps({"error": str(msg)}, ensure_ascii=False, indent=2))
+def _err(msg) -> None:
+    from . import coverage
+    print(json.dumps(coverage.error_payload(msg) if isinstance(msg, BaseException) else {"error": str(msg)},
+                     ensure_ascii=False, indent=2))
     sys.exit(1)
 
 

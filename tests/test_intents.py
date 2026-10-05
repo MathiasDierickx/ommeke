@@ -383,11 +383,11 @@ def test_water_via_points_follow_longest_direction_for_half_target():
 
 
 def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
-    river = [(51.0, 3.0 + index * 0.01) for index in range(11)]
+    river = [(51.0, 3.5 + index * 0.01) for index in range(11)]
     state = {
         "id": "water1",
         "name": "waterlus",
-        "start": {"label": "Teststad", "lat": 51.001, "lon": 3.05},
+        "start": {"label": "Teststad", "lat": 51.001, "lon": 3.55},
         "loop": True,
         "climbs": [],
         "avoid_places": [],
@@ -438,7 +438,7 @@ def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
 
 
 def test_adjust_route_replaces_waterway_via_before_one_reroute():
-    river = [(51.0, 3.0 + index * 0.01) for index in range(11)]
+    river = [(51.0, 3.5 + index * 0.01) for index in range(11)]
     state = _routed_draft()
     state["climbs"] = []
     state["route_request"] = {
