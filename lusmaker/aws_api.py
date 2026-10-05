@@ -340,6 +340,41 @@ async def route_adjust(request: Request) -> JSONResponse:
         return _error(str(exc), 404, "route_not_found")
 
 
+async def route_answers(request: Request) -> JSONResponse:
+    """Antwoorden uit het startscherm toepassen zonder chatmodel."""
+    try:
+        draft_id = _draft_id(request)
+        body = await _json_body(request)
+        answers = body.get("antwoorden")
+        rid = body.get("request_id")
+        requests.request_path("answers", rid)
+        values = {"draft_id": draft_id, "antwoorden": answers}
+
+        def execute():
+            from .progress import emit
+            emit("routing", "Ik verwerk je keuzes en bereken je lus opnieuw.")
+            return intents.apply_answers(draft_id, answers)
+
+        result = await asyncio.to_thread(requests.once, "answers", rid, values, execute)
+        return JSONResponse(result)
+    except quotas.QuotaExceeded as exc:
+        return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
+                            headers={"Retry-After": str(exc.retry_after)})
+    except coverage.OutOfCoverage as exc:
+        return _coverage_error(exc)
+    except requests.RequestConflict as exc:
+        return _error(str(exc), 409, "request_conflict")
+    except (ValueError, ChatError, intents.IntentError) as exc:
+        return _error(str(exc))
+    except draft.DraftError as exc:
+        return _error(str(exc), 404, "route_not_found")
+
+
+async def route_answers_stream(request: Request) -> Response:
+    from .streaming import response
+    return await response(request, route_answers)
+
+
 def _nearby_climbs(item: dict[str, Any], radius_km: float) -> list[dict[str, Any]]:
     route_points = [point[:2] for leg in item.get("_geometry") or [] for point in leg]
     if not route_points:

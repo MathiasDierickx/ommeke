@@ -116,6 +116,25 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
+  async function submitAnswers() {
+    if (!result?.vragen?.length || lock.current) return;
+    const antwoorden = Object.fromEntries(result.vragen.filter(q => q.id).map(q => [q.id!, answers[q.vraag]]));
+    const signature = JSON.stringify({ draft: result.draft, antwoorden });
+    if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
+    lock.current = true; onBusyChange?.(true); setProgress(null); setBusy(true); setError("");
+    try {
+      const next = await apiStream<Result>(`/api/routes/${encodeURIComponent(result.draft)}/answers/stream`, token, { antwoorden, request_id: pending.current.id }, setProgress);
+      pending.current = null;
+      setAnswers({});
+      setResult(next);
+      onResultChange?.(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Je keuzes konden niet worden verwerkt.");
+      setCanRestart(e instanceof StreamFailure);
+    }
+    finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
+  }
+
   const coordinates = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(start.trim());
   return <section className="planner" aria-labelledby="planner-title">
     <h2 id="planner-title" className="planner-title">Waar wil je {current.verb}?</h2>
@@ -189,11 +208,8 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
           <span>{optionLabel(q, option)}</span>
         </label>)}</div>
       </div>)}
-      {result.conversation_id ? <button className="planner-submit" disabled={result.vragen.some(q => !answers[q.vraag])} onClick={() => {
-        const choices = result.vragen!.map(q => `${q.vraag} Mijn keuze: ${optionLabel(q, answers[q.vraag])} (${answers[q.vraag]}).`).join("\n");
-        try { sessionStorage.setItem(`ommeke-answer:${result.conversation_id}`, `${choices}\nGa verder met routeconcept ${result.draft}.`); } catch { /* Antwoord kan in het gesprek worden ingevuld. */ }
-        onConversation(result.conversation_id!);
-      }}>Maak mijn route met deze keuzes</button> : null}
+      <button className="planner-submit" disabled={busy || result.vragen.some(q => !answers[q.vraag])} onClick={() => void submitAnswers()}>Maak mijn route met deze keuzes</button>
+      {result.conversation_id ? <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Liever iets anders vragen in het gesprek</button> : null}
     </div> : null}
     {result?.conversation_id && !result.vragen?.length && <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}
   </section>;

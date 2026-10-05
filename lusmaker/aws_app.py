@@ -275,6 +275,7 @@ def create_app(
             Route("/api/routes", aws_api.routes_list, methods=["GET"]),
             Route("/api/routes", aws_api.route_plan, methods=["POST"]),
             Route("/api/routes/stream", aws_api.route_plan_stream, methods=["POST"]),
+            Route("/api/routes/{draft_id}/answers/stream", aws_api.route_answers_stream, methods=["POST"]),
             Route("/api/conversations/{conversation_id}/messages/stream", aws_api.conversation_message_stream, methods=["POST"]),
             Route("/api/routes/{draft_id}/reroute", aws_api.route_reroute, methods=["POST"]),
             Route("/api/routes/{draft_id}/fit", aws_api.route_fit, methods=["GET"]),

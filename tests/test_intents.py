@@ -1001,3 +1001,36 @@ def test_route_names_use_the_municipality_for_street_addresses():
     assert name("Stationsstraat 5, 9230 Wetteren").endswith("rond Wetteren · 40 km")
     assert name("Wetteren station").endswith("rond Wetteren station · 40 km")
     assert name("51.25097,2.97303").endswith("rond je startpunt · 40 km")
+
+
+def test_apply_answers_stores_per_ride_preferences_and_routes_without_a_model():
+    state = {"id": "d1", "revision": 3, "route_request": {"doel": "toeren", "activiteit": "koersfiets", "expliciete_voorkeuren": {"steenwegen": "ok"}}}
+    saved, adjusted = [], []
+    result = intents.apply_answers(
+        "d1", {"heuvels": "zoek", "kasseien": "vermijd", "ondergrond": "verhard"},
+        load_fn=lambda _id: state, save_fn=lambda d: saved.append(dict(d)),
+        adjust_fn=lambda draft_id, **kwargs: adjusted.append((draft_id, kwargs)) or {"status": "ready", "draft": draft_id},
+    )
+    assert result == {"status": "ready", "draft": "d1"}
+    assert state["route_request"]["expliciete_voorkeuren"] == {"steenwegen": "ok", "heuvels": "zoek", "kasseien": "vermijd", "ondergrond": "verhard"}
+    assert state["avoid_cobbles"] is True
+    assert adjusted == [("d1", {"doel": "hoogtemeters", "check_readiness": True})]
+    assert saved
+
+
+def test_apply_answers_maps_flat_and_unpaved_and_rejects_unknown_values():
+    def run(answers, doel="hoogtemeters"):
+        state = {"id": "d", "route_request": {"doel": doel}}
+        calls = []
+        intents.apply_answers("d", answers, load_fn=lambda _id: state, save_fn=lambda _d: None,
+                              adjust_fn=lambda _id, **kw: calls.append(kw["doel"]) or {})
+        return calls[0]
+    assert run({"heuvels": "vlak"}) == "toeren"
+    assert run({"ondergrond": "onverhard"}, doel="toeren") == "offroad"
+    assert run({"heuvels": "ok"}, doel="toeren") == "toeren"
+    for bad in ({}, {"heuvels": "veel"}, {"wind": "ok"}, ["heuvels"]):
+        try:
+            intents.apply_answers("d", bad, load_fn=lambda _id: {"route_request": {"doel": "toeren"}}, save_fn=lambda _d: None, adjust_fn=lambda *_a, **_k: {})
+            raise AssertionError(f"verwacht IntentError voor {bad}")
+        except intents.IntentError:
+            pass

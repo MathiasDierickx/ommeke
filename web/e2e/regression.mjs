@@ -431,18 +431,33 @@ test("snelle planner: validatie, voortgang en buiten_gebied (422)", async ({ pag
   expectNoStrays(state, "planner");
 });
 
+test("planner houdt invoer vast terwijl de bibliotheek nog laadt", async ({ page, url }) => {
+  const state = await installBackend(page, {
+    handlers: {
+      "GET /api/conversations": async () => { await wait(4000); return json(200, { conversations: [] }); },
+      "GET /api/routes": async ({ state: s }) => { await wait(4000); return json(200, { routes: [s.route], next_cursor: null }); },
+    },
+  });
+  await page.goto(`${url}/?new=1`);
+  await page.getByRole("heading", { name: /^Waar wil je/ }).waitFor();
+  await page.getByRole("radio", { name: "Racefiets" }).check();
+  await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
+  await page.getByText(/1 van 1 routes/).first().waitFor({ state: "attached", timeout: TIMEOUT });
+  await wait(500);
+  assert.equal(await page.getByLabel("Startplaats").inputValue(), "Markt, Oudenaarde", "startplaats bleef staan");
+  assert.equal(await page.getByRole("radio", { name: "Racefiets" }).isChecked(), true, "activiteit bleef staan");
+  expectNoStrays(state, "laden");
+});
+
 test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async ({ page, url }) => {
-  const conversation = { id: "c9", title: "Routewensen aanvullen", created_at: "2026-10-05T21:00:00Z" };
   const vragen = [
     { id: "ondergrond", vraag: "6,0 km van je verkenningsroute is onverhard. Blijf je liever op verharde wegen?", opties: { verhard: {}, ok: {}, onverhard: {} } },
     { id: "heuvels", vraag: "Het is hier heuvelachtig. Zoek je de heuvels op?", opties: { zoek: {}, ok: {}, vlak: {} } },
   ];
-  let sent = null;
   const state = await installBackend(page, {
     handlers: {
       "POST /api/routes/stream": () => sse([["result", { status: "needs_input", draft: "d1", conversation_id: "c9", vragen }]]),
-      "GET /api/conversations/c9/messages": () => json(200, { conversation, messages: sent ? [{ id: "m1", conversation_id: "c9", role: "user", content: sent, created_at: "2026-10-05T21:01:00Z" }, { id: "m2", conversation_id: "c9", role: "assistant", content: "Komt eraan.", created_at: "2026-10-05T21:01:05Z" }] : [] }),
-      "POST /api/conversations/c9/messages/stream": ({ body }) => { sent = body.content; return sse([["result", { message: { id: "m2", conversation_id: "c9", role: "assistant", content: "Komt eraan.", created_at: "2026-10-05T21:01:05Z" }, route_ids: [] }]]); },
+      "POST /api/routes/d1/answers/stream": () => sse([["progress", { stage: "routing", message: "Ik verwerk je keuzes en bereken je lus opnieuw." }], ["result", { status: "ready", draft: "d1", km: 40.4, constraints: { voldaan: true, waarschuwingen: [] } }]]),
     },
   });
   await openHome(page, url);
@@ -455,11 +470,11 @@ test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async
   assert.equal(await go.isDisabled(), true);
   await page.getByRole("radio", { name: "Liever vlak" }).check();
   await go.click();
-  await page.waitForURL(/\/chats\/c9\/?$/);
-  await page.getByText("Komt eraan.").first().waitFor();
-  assert.match(sent, /Liever verhard \(verhard\)/);
-  assert.match(sent, /Liever vlak \(vlak\)/);
-  assert.match(sent, /routeconcept d1/);
+  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  assert.match(await page.locator(".quick-result").innerText(), /40,4 km/);
+  const call = state.calls.find((c) => c.key === "POST /api/routes/d1/answers/stream");
+  assert.deepEqual(call.body.antwoorden, { ondergrond: "verhard", heuvels: "vlak" });
+  assert.ok(call.body.request_id, "verzoeknummer voor idempotentie");
   expectNoStrays(state, "vragen");
 });
 

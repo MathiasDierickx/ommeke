@@ -919,6 +919,55 @@ def plan_route(
     return compact_result(d, climb_db, files, request)
 
 
+# Antwoorden op de situationele vragen (lusmaker/questions.py).
+ANSWER_VALUES = {
+    "kasseien": {"graag", "ok", "vermijd"},
+    "heuvels": {"zoek", "ok", "vlak"},
+    "ondergrond": {"verhard", "ok", "onverhard"},
+}
+
+
+def apply_answers(
+    draft_id: str,
+    antwoorden: dict,
+    *,
+    expected_revision: int | None = None,
+    load_fn=draft.load,
+    save_fn=draft.save,
+    adjust_fn=None,
+) -> dict:
+    """Pas antwoorden op situationele vragen toe zonder taalmodel en routeer opnieuw.
+
+    De antwoorden gelden voor deze rit (expliciete voorkeuren), niet voor het
+    profiel: een racefietser die hier 'verhard' kiest, wil dat niet voor elke
+    wandeling.
+    """
+    if not isinstance(antwoorden, dict) or not antwoorden:
+        raise IntentError("geef minstens één antwoord")
+    for key, value in antwoorden.items():
+        if key not in ANSWER_VALUES or value not in ANSWER_VALUES[key]:
+            raise IntentError(f"onbekend antwoord: {key}={value}")
+    d = load_fn(draft_id)
+    draft.require_revision(d, expected_revision)
+    request = dict(d.get("route_request") or {})
+    if not request:
+        raise IntentError("deze route heeft geen routewens om aan te vullen")
+    request["expliciete_voorkeuren"] = {**(request.get("expliciete_voorkeuren") or {}), **antwoorden}
+    d["route_request"] = request
+    if "kasseien" in antwoorden:
+        d["avoid_cobbles"] = antwoorden["kasseien"] == "vermijd"
+    goal = request.get("doel") or "toeren"
+    if antwoorden.get("heuvels") == "zoek":
+        goal = "hoogtemeters"
+    elif antwoorden.get("ondergrond") == "onverhard":
+        goal = "offroad"
+    elif antwoorden.get("heuvels") == "vlak" and goal == "hoogtemeters":
+        goal = "toeren"
+    save_fn(d)
+    adjust = adjust_fn or adjust_route
+    return adjust(draft_id, doel=goal, check_readiness=True)
+
+
 @quotas.metered("route")
 def adjust_route(
     draft_id: str,
