@@ -25,6 +25,32 @@ def _fmt(value: float, digits: int = 1) -> str:
     return f"{value:.{digits}f}".replace(".", ",")
 
 
+ROAD_FACTOR = 1.3  # hemelsbreed naar wegafstand; de echte meerprijs volgt bij toepassen
+
+
+def estimate_climbs(d: dict, climb_db: dict, max_detour_km: float, limit: int) -> list[dict]:
+    """Klimvoorstellen zonder routercalls.
+
+    ``draft.suggest`` routeert tot 24 kandidaten x 4 legs (~1,7 s per call in
+    productie); dat is te duur voor elk resultaat. Een voorstel mag een
+    schatting zijn: het toepassen routeert exact.
+    """
+    best: dict[str, tuple] = {}
+    for est, cid, climb, *_rest in draft._candidate_prefilter(d, climb_db, max_detour_km):
+        if cid not in best or est < best[cid][0]:
+            best[cid] = (est, climb)
+    out = []
+    for cid, (est, climb) in sorted(best.items(), key=lambda item: item[1][0]):
+        extra_km = max(0.5, est / 1000 * ROAD_FACTOR)
+        if extra_km > max_detour_km:
+            continue
+        out.append({"id": cid, "climb": {"name": climb.get("name") or cid},
+                    "extra_km": round(extra_km, 1), "extra_hoogtemeters": round(float(climb.get("gain_m", 0)))})
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _climb_proposals(d: dict, climb_db: dict, request: dict, suggest_fn) -> list[dict]:
     explicit = request.get("expliciete_voorkeuren") or {}
     if explicit.get("heuvels") == "vlak":
@@ -121,7 +147,7 @@ def build(
     climb_db: dict,
     request: dict | None = None,
     *,
-    suggest_fn=draft.suggest,
+    suggest_fn=estimate_climbs,
     gazetteer_fn=None,
     limit: int = MAX_PROPOSALS,
 ) -> list[dict]:

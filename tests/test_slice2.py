@@ -360,3 +360,20 @@ def test_chat_prompt_tells_the_model_to_offer_proposals():
 
     assert "voorstellen" in aws_chat.SYSTEM_PROMPT
     assert "adjust_route-argumenten" in aws_chat.SYSTEM_PROMPT
+
+
+def test_climb_proposals_are_estimated_without_router_calls():
+    from unittest import mock
+    from lusmaker import draft, gh, proposals
+    d = {"climbs": [], "computed": {"total_km": 40.0, "legs": [{"km": 20.0}, {"km": 20.0}]},
+         "_geometry": [[(50.80, 3.60), (50.90, 3.60)], [(50.90, 3.60), (50.80, 3.60)]]}
+    climbs = {
+        "dichtbij": {"name": "Dichtbij", "foot": [50.85, 3.605], "top": [50.851, 3.606], "length_m": 900, "gain_m": 70},
+        "ver": {"name": "Ver", "foot": [50.85, 3.75], "top": [50.851, 3.751], "length_m": 900, "gain_m": 90},
+    }
+    with mock.patch.object(gh, "route", side_effect=AssertionError("geen routercall")), \
+         mock.patch.object(gh, "_post", side_effect=AssertionError("geen routercall")):
+        found = proposals.estimate_climbs(d, climbs, max_detour_km=8.0, limit=4)
+    assert [item["id"] for item in found][0] == "dichtbij"
+    assert all(item["extra_km"] <= 8.0 for item in found)
+    assert found[0]["extra_hoogtemeters"] == 70
