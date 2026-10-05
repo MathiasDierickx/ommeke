@@ -15,6 +15,13 @@ on:
         description: Vernieuw de Vlaamse bronsnapshots vanuit Toerisme Vlaanderen
         type: boolean
         default: false
+      image_digest:
+        description: >-
+          Rollback: sha256-digest van een bestaande ECR-image (sha256:...). Laat leeg
+          voor een gewone deployment. Er wordt niets gebouwd; checks, stale-guard,
+          Terraform-plan en smoke-test blijven gelden.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -58,6 +65,7 @@ jobs:
       TF_VAR_metrics_salt: ${{ secrets.METRICS_SALT }}
       TF_VAR_google_maps_api_key: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
+      ROLLBACK_DIGEST: ${{ inputs.image_digest }}
 
     steps:
       - uses: actions/checkout@v7.0.1
@@ -66,6 +74,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: test "$(gh api repos/${{ github.repository }}/commits/main --jq .sha)" = "$GITHUB_SHA"
+
+      - name: Controleer rollback-digest
+        if: env.ROLLBACK_DIGEST != ''
+        run: |
+          if ! printf '%s' "$ROLLBACK_DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "image_digest moet de vorm sha256:<64 hex-tekens> hebben" >&2
+            exit 1
+          fi
+          echo "### Rollback naar $ROLLBACK_DIGEST" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Controleer deploymentconfiguratie
         run: |
@@ -95,6 +112,7 @@ jobs:
 
       - name: Download en valideer regiopack
         id: pack
+        if: env.ROLLBACK_DIGEST == ''
         run: |
           PACK="$RUNNER_TEMP/${REGION_SLUG}.tar.gz"
           aws s3 cp \
@@ -106,7 +124,7 @@ jobs:
           echo "tag=${GITHUB_SHA}-${PACK_SHA:0:12}" >> "$GITHUB_OUTPUT"
 
       - name: Bouw en activeer Vlaamse brondata voor de cloudengine
-        if: env.REGION_SLUG == 'vlaanderen'
+        if: env.REGION_SLUG == 'vlaanderen' && env.ROLLBACK_DIGEST == ''
         id: sources
         env:
           REFRESH_SOURCES: ${{ inputs.refresh_route_sources || 'false' }}
@@ -150,8 +168,20 @@ jobs:
             -target=aws_ecr_repository.app \
             -target=aws_ecr_lifecycle_policy.app
 
+      - name: Controleer rollback-image in ECR
+        id: rollback
+        if: env.ROLLBACK_DIGEST != ''
+        run: |
+          ECR_URL=$(terraform -chdir=infra/terraform output -raw ecr_repository_url)
+          REPOSITORY_NAME=${ECR_URL#*/}
+          aws ecr describe-images \
+            --repository-name "$REPOSITORY_NAME" \
+            --image-ids "imageDigest=$ROLLBACK_DIGEST" >/dev/null
+          echo "uri=$ECR_URL@$ROLLBACK_DIGEST" >> "$GITHUB_OUTPUT"
+
       - name: Bepaal immutable image-tag
         id: image
+        if: env.ROLLBACK_DIGEST == ''
         run: |
           ECR_URL=$(terraform -chdir=infra/terraform output -raw ecr_repository_url)
           REPOSITORY_NAME=${ECR_URL#*/}
@@ -201,6 +231,7 @@ jobs:
 
       - name: Resolve image digest
         id: digest
+        if: env.ROLLBACK_DIGEST == ''
         run: |
           DIGEST=$(aws ecr describe-images \
             --repository-name "${{ steps.image.outputs.repository }}" \
@@ -212,7 +243,7 @@ jobs:
 
       - name: Plan applicatiestack
         run: |
-          PLAN_ARGS=(-var="image_uri=${{ steps.digest.outputs.uri }}")
+          PLAN_ARGS=(-var="image_uri=${{ steps.rollback.outputs.uri || steps.digest.outputs.uri }}")
           if [ -n "$BILLING_EMAIL" ]; then
             PLAN_ARGS+=(-var="billing_email=$BILLING_EMAIL")
           fi
@@ -230,7 +261,7 @@ jobs:
           API=$(terraform -chdir=infra/terraform output -raw api_endpoint)
           curl --fail --show-error --max-time 900 "$HEALTH" > "$RUNNER_TEMP/health.json"
           cat "$RUNNER_TEMP/health.json"
-          if [ "$REGION_SLUG" = vlaanderen ]; then
+          if [ "$REGION_SLUG" = vlaanderen ] && [ -z "$ROLLBACK_DIGEST" ]; then
             jq -e --arg build "${{ steps.sources.outputs.id }}" \
               '.route_sources.build_id == $build and .route_sources.features > 0' "$RUNNER_TEMP/health.json"
           fi
@@ -244,4 +275,4 @@ jobs:
           echo "### Lusmaker AWS" >> "$GITHUB_STEP_SUMMARY"
           echo "MCP endpoint: \`$MCP\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Web API: \`$API/api\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Image: \`${{ steps.digest.outputs.uri }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image: \`${{ steps.rollback.outputs.uri || steps.digest.outputs.uri }}\`" >> "$GITHUB_STEP_SUMMARY"

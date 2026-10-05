@@ -22,3 +22,4 @@ web_callback_urls = [
 # force_destroy_data  = false
 # force_destroy_ecr   = false
 # protect_user_data   = true
+# alarm_email         = "alarmen@example.com"  # SNS-abonnement op de monitoringalarmen

@@ -10,6 +10,26 @@ resource "aws_cloudwatch_log_metric_filter" "http_errors" {
   }
 }
 
+# SNS-topic voor de alarmen hieronder; bestaat alleen wanneer monitoring aan staat.
+resource "aws_sns_topic" "alarms" {
+  count = var.enable_application_monitoring ? 1 : 0
+  name  = "${local.name}-alarms"
+}
+
+resource "aws_sns_topic_subscription" "alarm_email" {
+  count     = var.enable_application_monitoring && var.alarm_email != null ? 1 : 0
+  topic_arn = aws_sns_topic.alarms[0].arn
+  protocol  = "email"
+  endpoint  = var.alarm_email
+}
+
+locals {
+  alarm_actions = concat(
+    var.monitoring_alarm_actions,
+    aws_sns_topic.alarms[*].arn,
+  )
+}
+
 resource "aws_cloudwatch_metric_alarm" "http_errors" {
   count               = var.enable_application_monitoring ? 1 : 0
   alarm_name          = "${local.name}-http-errors"
@@ -22,7 +42,8 @@ resource "aws_cloudwatch_metric_alarm" "http_errors" {
   metric_name         = "HttpErrors"
   namespace           = "Ommeke/${local.name}"
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.monitoring_alarm_actions
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
 }
 
 resource "aws_cloudwatch_metric_alarm" "duration" {
@@ -38,7 +59,8 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
   namespace           = "AWS/Lambda"
   dimensions          = { FunctionName = aws_lambda_function.app[0].function_name }
   treat_missing_data  = "notBreaching"
-  alarm_actions       = var.monitoring_alarm_actions
+  alarm_actions       = local.alarm_actions
+  ok_actions          = local.alarm_actions
 }
 
 resource "aws_cloudwatch_dashboard" "pilot" {
