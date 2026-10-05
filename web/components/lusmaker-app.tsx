@@ -72,7 +72,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       } finally { if (active) setAuthReady(true); }
     };
     void resolve();
-    return () => { active = false; };
+    // Reset de vergrendeling: React Strict Mode (dev) draait deze effect twee
+    // keer; zonder reset blijft de app dan eeuwig op "Lusmaker laden…" staan.
+    return () => { active = false; authStarted.current = false; };
   }, []);
 
   const loadWorkspace = useCallback(async (accessToken: string) => {

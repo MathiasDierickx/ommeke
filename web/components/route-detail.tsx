@@ -201,7 +201,7 @@ export function RouteDetail({
             </form>
           </details>
           <section className="route-adjust" aria-labelledby="adjust-title">
-            <div className="adjust-heading"><div><small>Routeatelier</small><h3 id="adjust-title">Aanpassen</h3></div>{adjusting ? <LoaderCircle className="spin" aria-label="Route aanpassen" /> : null}</div>
+            <div className="adjust-heading"><div><small>Routeatelier</small><h3 id="adjust-title">Aanpassen</h3></div><span role="status">{adjusting ? <><LoaderCircle className="spin" aria-hidden="true" /><span className="sr-only">Route aanpassen…</span></> : null}</span></div>
             <div className="adjust-row">
               <span>Afstand</span>
               <div className="adjust-buttons">

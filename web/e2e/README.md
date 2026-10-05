@@ -70,3 +70,21 @@ mobile-screenshots:
         path: web/e2e/shots/*.png
         if-no-files-found: error
 ```
+
+## Offline browserregressie (`npm run test:e2e`)
+
+`regression.mjs` start zelf `next dev` met een nep-API-host en onderschept elk
+netwerkverzoek met `page.route`; alles buiten localhost wordt geblokkeerd. Elke
+test draait op 390 px en 1280 px. Gedekt: loginfout, route openen, afstand
+aanpassen, 409-conflict, delen/intrekken, GPX/FIT-download, snelle planner
+(validatie, voortgang, `buiten_gebied`), 429 `quota_exceeded`, toetsenbord,
+zichtbare focus, toegankelijke namen en `role=alert`/`status`.
+
+```sh
+npx playwright install chromium      # eenmalig
+npm run test:e2e
+E2E_ONLY=409 E2E_DEBUG=1 npm run test:e2e   # filter + paginadump bij falen
+E2E_BASE_URL=http://127.0.0.1:3017 npm run test:e2e   # bestaande server (met nep-API-env)
+```
+
+Live acceptatie tegen een deployment blijft apart (`npm run shots`).

@@ -90,8 +90,8 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 /* Navigation */
 .workspace, .route-shell { height: 100svh; overflow: hidden; }
 .workspace { background: var(--white); }
-.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; width: min(20rem, 88vw); display: flex; flex-direction: column; background: var(--paper); border-right: 1px solid var(--line); box-shadow: 20px 0 50px rgba(18, 36, 26, .18); transform: translateX(-102%); transition: transform .28s cubic-bezier(.2, .7, .2, 1); }
-.left-open .sidebar { transform: translateX(0); }
+.sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; width: min(20rem, 88vw); display: flex; flex-direction: column; background: var(--paper); border-right: 1px solid var(--line); box-shadow: 20px 0 50px rgba(18, 36, 26, .18); transform: translateX(-102%); visibility: hidden; transition: transform .28s cubic-bezier(.2, .7, .2, 1), visibility 0s linear .28s; }
+.left-open .sidebar { transform: translateX(0); visibility: visible; transition-delay: 0s; }
 .sidebar-head { min-height: 4.6rem; padding: .4rem .8rem .4rem 1.15rem; display: flex; align-items: center; justify-content: space-between; }
 .sidebar-close, .mobile-menu { display: inline-grid; }
 .new-chat { min-height: 44px; margin: .2rem .75rem 1.1rem; border: 0; border-radius: 999px; display: flex; align-items: center; justify-content: center; gap: .55rem; color: white; background: var(--green); font-size: .82rem; font-weight: 750; cursor: pointer; }
@@ -285,6 +285,7 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
   .auth-success { color: var(--green); }
 
   .workspace { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
+  .workspace .sidebar { visibility: visible; }
   .sidebar { position: static; width: auto; height: 100svh; min-height: 0; box-shadow: none; transform: none; }
   .sidebar-close, .mobile-menu { display: none; }
   .mobile-scrim, .left-open .mobile-scrim { display: none; }
@@ -394,3 +395,4 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .orphan-notice p { margin: 0 0 .6rem; }
 .orphan-notice p:last-child { margin-bottom: 0; }
 .orphan-notice button { padding: .5rem .9rem; border-radius: 999px; border: 1px solid var(--green); color: var(--green); background: white; font-weight: 600; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
