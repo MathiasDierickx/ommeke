@@ -267,7 +267,14 @@ vercel env add NEXT_PUBLIC_COGNITO_CLIENT_ID production
 vercel git connect https://github.com/owner/repository.git --yes
 ```
 
-Vercel bouwt voortaan pushes naar `main`. `next.config.ts` zet
+Vercel bouwt voortaan pushes naar `main`, maar `web/vercel.json` laat via
+`ignoreCommand` een productiebuild alleen door als de GitHub-CI van die commit
+slaagde (zie `docs/OPERATIONS.md`). Geen extra secrets nodig; de repository
+moet publiek blijven. Controleer dat **Root Directory** `web` is (anders wordt
+`vercel.json` niet gelezen) en dat onder **Settings -> Git** geen "Ignored
+Build Step" in het dashboard is ingesteld, want die overschrijft het bestand.
+
+`next.config.ts` zet
 `output: "export"`; laat de Vercel Output Directory toch leeg, zodat de
 Next.js-builder zijn vereiste `.next`-metadata kan verwerken en de statische
 export publiceert. De production alias moet exact in `WEB_CALLBACK_URLS_JSON`

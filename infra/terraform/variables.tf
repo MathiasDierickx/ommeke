@@ -253,6 +253,12 @@ variable "monitoring_alarm_actions" {
   default     = []
 }
 
+variable "alarm_email" {
+  description = "Optioneel e-mailadres voor operationele alarmen via SNS; null maakt geen abonnement. De ontvanger moet de bevestigingsmail goedkeuren."
+  type        = string
+  default     = null
+}
+
 variable "enable_application_monitoring" {
   type        = bool
   default     = true

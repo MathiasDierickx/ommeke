@@ -227,6 +227,19 @@ data "aws_iam_policy_document" "github_deploy" {
   }
 
   statement {
+    sid = "ApplicationAlarmTopic"
+    actions = [
+      "sns:CreateTopic", "sns:DeleteTopic", "sns:GetTopicAttributes",
+      "sns:SetTopicAttributes", "sns:ListTagsForResource",
+      "sns:TagResource", "sns:UntagResource",
+      "sns:Subscribe", "sns:Unsubscribe", "sns:GetSubscriptionAttributes"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${var.project_name}-*"
+    ]
+  }
+
+  statement {
     sid       = "AccountDiscovery"
     actions   = ["sts:GetCallerIdentity", "tag:GetResources"]
     resources = ["*"]
