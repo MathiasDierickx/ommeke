@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
+import { isOutOfCoverage } from "@/lib/interaction";
 
 type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
 export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResultChange }: { onResultChange?: (hasResult:boolean)=>void; onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
@@ -14,6 +15,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [canRestart,setCanRestart]=useState(false);
+  const [outside, setOutside] = useState(false);
   const [result, setResult] = useState<Result>();
   const resultHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (result) resultHeading.current?.focus(); }, [result]);
@@ -28,13 +30,20 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     const values = { start, target_km: km, activiteit: activity, doel: goal };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setResult(undefined); onResultChange?.(false);
+    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setOutside(false); setResult(undefined); onResultChange?.(false);
     try {
       const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
       setResult(next);
       onResultChange?.(true);
-    } catch (e) { setError(e instanceof Error ? e.message : "Route maken mislukt."); setCanRestart(e instanceof StreamFailure); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Route maken mislukt.");
+      const isOutside = isOutOfCoverage(e);
+      setOutside(isOutside);
+      // Buiten het gedekte gebied is geen onderbroken poging: de invoer blijft bewerkbaar en een nieuwe start krijgt een nieuw verzoeknummer.
+      if (isOutside) pending.current = null;
+      setCanRestart(e instanceof StreamFailure && !isOutside);
+    }
     finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
   return <section className="quick-plan" aria-label="Snel een route maken">
@@ -58,7 +67,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
       <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>
     </div>}
     {result && result.status !== "ready" && <h3 role="status" tabIndex={-1} ref={resultHeading}>Nog even je wensen aanvullen</h3>}
-    {error && <p role="alert">{error}</p>}
+    {error && <p role="alert" className={outside ? "quick-plan-outside" : undefined}>{error}{outside ? " Pas je startplaats aan en probeer opnieuw." : ""}</p>}
     {canRestart && <button onClick={()=>{pending.current=null;setCanRestart(false);setError("De vorige poging is gestopt. Controleer Mijn routes: er kan al een concept bestaan. Met Maak mijn route start je bewust een nieuwe poging.");}}>Nieuwe poging voorbereiden</button>}
     {result?.vragen?.map(q => <div key={q.vraag}><p>{q.vraag}</p>{Object.keys(q.opties).map(option => <button key={option} onClick={() => { if (result.conversation_id) { try { sessionStorage.setItem(`ommeke-answer:${result.conversation_id}`, `${q.vraag} Mijn keuze: ${option}. Ga verder met routeconcept ${result.draft}.`); } catch { /* Antwoord kan in het gesprek worden ingevuld. */ } onConversation(result.conversation_id); } }}>{option.replaceAll("_", " ")}</button>)}</div>)}
     {result?.conversation_id && <button onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}

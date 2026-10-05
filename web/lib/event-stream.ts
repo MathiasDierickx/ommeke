@@ -1,5 +1,6 @@
 export class StreamFailure extends Error {
-  constructor(message: string) { super(message); this.name = "StreamFailure"; }
+  readonly code?: string;
+  constructor(message: string, code?: string) { super(message); this.name = "StreamFailure"; this.code = code; }
 }
 
 export type ProgressEvent = { stage: string; message: string };
@@ -21,7 +22,7 @@ export async function readEventStream<T>(body: ReadableStream<Uint8Array>, onPro
         if (!data) continue;
         const parsed = JSON.parse(data);
         if(event === "progress" && typeof parsed.stage === "string" && typeof parsed.message === "string") onProgress(parsed);
-        if(event === "error") throw new StreamFailure(parsed.error || "De opdracht is mislukt. Herlaad je gesprek.");
+        if(event === "error") throw new StreamFailure(parsed.error || "De opdracht is mislukt. Herlaad je gesprek.", typeof parsed.code === "string" ? parsed.code : undefined);
         if(event === "result") return parsed as T;
       }
       if(done) throw new Error("De verbinding werd onderbroken. Herlaad het gesprek; dezelfde opdracht opnieuw verzenden maakt geen dubbele route.");

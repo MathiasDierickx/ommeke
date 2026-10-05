@@ -576,7 +576,8 @@ class BedrockRouteAgent:
                     status = "success"
                 except Exception as exc:
                     error_detail = f"{type(exc).__name__}: {exc}"
-                    output = {"error": str(exc)}
+                    from . import coverage
+                    output = coverage.error_payload(exc)
                     status = "error"
                     print(
                         f"[chat] tool {name} faalde (req={request_id}): {error_detail}",

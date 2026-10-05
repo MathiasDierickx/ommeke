@@ -16,7 +16,7 @@ import math
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_sharing, aws_state, climbs, draft, geo, intents, tenant, quotas, requests, account, pilot
+from . import artifacts, aws_sharing, aws_state, climbs, coverage, draft, geo, intents, tenant, quotas, requests, account, pilot
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -25,6 +25,10 @@ _DRAFT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 def _error(message: str, status: int = 400, code: str = "bad_request") -> JSONResponse:
     return JSONResponse({"error": message, "code": code}, status_code=status)
+
+
+def _coverage_error(exc: "coverage.OutOfCoverage") -> JSONResponse:
+    return JSONResponse(exc.payload(), status_code=422)
 
 
 logger = logging.getLogger(__name__)
@@ -109,6 +113,8 @@ async def route_plan(request: Request) -> JSONResponse:
                             headers={"Retry-After": str(exc.retry_after)})
     except requests.RequestConflict as exc:
         return _error(str(exc), 409, "request_conflict")
+    except coverage.OutOfCoverage as exc:
+        return _coverage_error(exc)
     except (ValueError, ChatError, intents.IntentError, draft.DraftError) as exc:
         return _error(str(exc))
 
@@ -303,6 +309,8 @@ async def route_adjust(request: Request) -> JSONResponse:
     except quotas.QuotaExceeded as exc:
         return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
                             headers={"Retry-After": str(exc.retry_after)})
+    except coverage.OutOfCoverage as exc:
+        return _coverage_error(exc)
     except intents.IntentError as exc:
         return _error(str(exc))
     except draft.DraftError as exc:
