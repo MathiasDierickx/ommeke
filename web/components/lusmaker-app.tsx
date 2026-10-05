@@ -16,6 +16,7 @@ import { chatReply, mergeById, pendingPrompt, type PendingPrompt } from "@/lib/i
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { clearStored, currentSession, signOut } from "@/lib/cognito";
+import { safeFilename, saveBlob } from "@/lib/save-file";
 import type { AuthSession, ChatMessage, Conversation, NearbyClimb, Route, RouteAdjustment } from "@/lib/types";
 
 export type WorkspaceView =
@@ -236,12 +237,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!session || !selectedRoute?.download_url) return;
     try {
       const blob = await authenticatedBlob(format === "fit" ? `/api/routes/${selectedRoute.id}/fit` : selectedRoute.download_url, session.accessToken);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${selectedRoute.name}.${format}`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      saveBlob(blob, safeFilename(selectedRoute.name, format));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Download mislukt."); }
   };
 

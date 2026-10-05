@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { apiRequest, authenticatedBlob } from "@/lib/api";
+import { saveBlob } from "@/lib/save-file";
 
 export function AccountControls({ token, onDeleted }: { token: string; onDeleted: () => void }) {
   const [message, setMessage] = useState("");
@@ -9,10 +10,7 @@ export function AccountControls({ token, onDeleted }: { token: string; onDeleted
     setBusy(true);
     try {
       const blob = await authenticatedBlob("/api/account/export", token);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url; link.download = "ommeke-gegevens.zip"; link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      saveBlob(blob, "ommeke-gegevens.zip");
       setMessage("Je gegevens zijn geëxporteerd.");
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Export mislukt."); }
     finally { setBusy(false); }
