@@ -91,7 +91,7 @@ export function RouteDetail({
   loading: boolean;
   onDownload: () => void;
   onDownloadFit?: () => void;
-  onReturn?: (lat:number,lon:number,budget:number | "kortste",requestId:string)=>Promise<void>;
+  onReturn?: (lat:number,lon:number,budget:number | "kortste",requestId:string,closure?:{lat:number;lon:number})=>Promise<void>;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onAdjust: (adjustment: RouteAdjustment) => Promise<void>;

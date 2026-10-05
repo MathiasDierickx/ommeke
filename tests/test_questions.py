@@ -224,3 +224,52 @@ def test_plan_route_with_injected_probe_returns_situational_needs_input():
     assert result["status"] == "needs_input"
     assert {q["id"] for q in result["vragen"]} == {"kasseien", "heuvels"}
     assert "2,4 km kasseien" in result["vragen"][0]["reden"] or "2,4 km kasseien" in result["vragen"][1]["reden"]
+
+
+# -- onbekend (null) versus expliciet ok/nee (#11) -------------------------
+
+def _request(**choices):
+    base = dict(doel="toeren", target_km=30, max_km=None, tolerance_km=2.5, geen_opvulling=False,
+                profiel_naam="standaard", activiteit="koersfiets", kasseien=None, beton_vermijden=None,
+                autovrij=None, strict=None, request_id=None, rond_plaats=None, langs_water=None,
+                input_signature={})
+    return intents._route_request(**{**base, **choices})
+
+
+def test_unknown_plan_route_inputs_are_not_recorded_as_explicit_choices():
+    assert _request()["expliciete_voorkeuren"] == {}
+    # False en True zijn echte antwoorden en worden nooit als onbekend behandeld.
+    nee = _request(kasseien=False, beton_vermijden=False, autovrij=False, strict=False)["expliciete_voorkeuren"]
+    assert nee == {"kasseien": "vermijd", "beton": "ok", "steenwegen": "ok", "autovrij": "ok"}
+    ja = _request(kasseien=True, beton_vermijden=True, autovrij=True, strict=True)["expliciete_voorkeuren"]
+    assert ja == {"kasseien": "ok", "beton": "vermijd", "steenwegen": "vermijd", "autovrij": "belangrijk"}
+    assert _request(heuvels="ok", ondergrond="verhard")["expliciete_voorkeuren"] == {"heuvels": "ok", "ondergrond": "verhard"}
+
+
+def test_unknown_preference_stays_null_in_profile_but_explicit_values_override_it():
+    profile = profiles.default_document()
+    profile["voorkeuren"].update(kasseien="graag", heuvels=None)
+    loader = lambda _name: profile
+    unknown = intents._profile_for_request(_request(), loader)["voorkeuren"]
+    assert unknown["kasseien"] == "graag" and unknown["heuvels"] is None   # onbekend wist niets uit
+    explicit = intents._profile_for_request(_request(kasseien=False, heuvels="ok"), loader)["voorkeuren"]
+    assert explicit["kasseien"] == "vermijd" and explicit["heuvels"] == "ok"
+    assert profile["voorkeuren"]["kasseien"] == "graag"                    # bronprofiel blijft onaangeroerd
+
+
+def test_questions_distinguish_unknown_from_explicit_ok_and_nee():
+    from lusmaker import questions
+    d = {"id": "q", "start": {"label": "Start", "lat": 51.0, "lon": 3.7}, "end": None, "avoid_places": [],
+         "_probe": {"km": 45, "hm": 700, "kwaliteit": {"kassei_m": 2400, "onverhard_m": 0},
+                    "terrein": {"kassei_aanwezig_m": 2400, "plaatskernen": []}}}
+
+    def asked(**choices):
+        request = _request(**choices)
+        profile = intents._profile_for_request(request, lambda _n: profiles.default_document())
+        profile["activiteit"] = "koersfiets"
+        return {q["id"] for q in questions.ask(d, profile, d["_probe"])}
+
+    assert "kasseien" in asked()                    # onbekend: vragen
+    assert "kasseien" not in asked(kasseien=True)   # expliciet oké: nooit meer vragen
+    assert "kasseien" not in asked(kasseien=False)  # expliciet vermijden: ook niet
+    assert "heuvels" in asked() and "heuvels" not in asked(heuvels="ok")

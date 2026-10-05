@@ -378,7 +378,7 @@ class RouteToolExecutor:
         validate_arguments(arguments, schemas[name])
         if name == "reroute_from":
             from .reroute import reroute_from
-            return reroute_from(**arguments)
+            return reroute_from(**arguments, request_id=request_id)
         if name in {"get_profile", "update_profile"}:
             from . import profiles
             if name == "get_profile":

@@ -546,6 +546,42 @@ test("chatscherm: toetsenbord en namen van iconknoppen", async ({ page, url, vp 
   expectNoStrays(state, "chatscherm");
 });
 
+test("Breng me terug stuurt de afsluitingszone mee", async ({ page, url }) => {
+  const state = await installBackend(page, {
+    handlers: { "POST /api/routes/r1/reroute": () => json(200, { status: "ready", draft: "r1", revision: 2 }) },
+  });
+  await page.context().grantPermissions(["geolocation"]);
+  await page.context().setGeolocation({ latitude: 50.9, longitude: 3.6 });
+  await openRoute(page, url);
+  await page.getByText("Breng me terug", { exact: true }).click();
+  const box = page.getByRole("checkbox", { name: "Afgesloten weg vermijden" });
+  await box.check();
+  await page.getByRole("button", { name: /Gebruik mijn locatie/ }).click();
+  for (let i = 0; i < 50 && !state.calls.some((c) => c.key === "POST /api/routes/r1/reroute"); i++) await wait(100);
+  assert.ok(state.calls.some((c) => c.key === "POST /api/routes/r1/reroute"), "reroute-call verwacht");
+  const body = state.calls.find((c) => c.key === "POST /api/routes/r1/reroute").body;
+  assert.deepEqual(body.closure, { lat: 50.9, lon: 3.6 });
+  assert.equal(body.rest_km, "kortste");
+  assert.equal(body.lat, 50.9);
+  expectNoStrays(state, "terugweg met afsluiting");
+});
+
+test("Breng me terug zonder vinkje stuurt geen closure", async ({ page, url }) => {
+  const state = await installBackend(page, {
+    handlers: { "POST /api/routes/r1/reroute": () => json(200, { status: "ready", draft: "r1", revision: 2 }) },
+  });
+  await page.context().grantPermissions(["geolocation"]);
+  await page.context().setGeolocation({ latitude: 50.9, longitude: 3.6 });
+  await openRoute(page, url);
+  await page.getByText("Breng me terug", { exact: true }).click();
+  await page.getByRole("button", { name: /Gebruik mijn locatie/ }).click();
+  for (let i = 0; i < 50 && !state.calls.some((c) => c.key === "POST /api/routes/r1/reroute"); i++) await wait(100);
+  assert.ok(state.calls.some((c) => c.key === "POST /api/routes/r1/reroute"), "reroute-call verwacht");
+  const body = state.calls.find((c) => c.key === "POST /api/routes/r1/reroute").body;
+  assert.equal("closure" in body, false);
+  expectNoStrays(state, "terugweg zonder afsluiting");
+});
+
 // --- Runner ---------------------------------------------------------------
 
 const only = process.env.E2E_ONLY;
