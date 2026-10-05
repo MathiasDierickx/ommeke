@@ -93,8 +93,8 @@ def _weight_question(
         "prioriteit": 4,
         "reden": reason,
         "vraag": (
-            "Wat weegt voor jou het zwaarst: vooral klimmen, de beschikbare "
-            f"onverharde stukken, of {popularity_label}?"
+            "Wat weegt voor jou het zwaarst: heuvels en hoogtemeters, de "
+            f"beschikbare onverharde stukken, of {popularity_label}?"
         ),
         "opties": options,
     }

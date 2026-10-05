@@ -456,10 +456,12 @@ def cmd_plan_route(args):
         langs_water=args.langs_water,
         via_klimmen=args.via_klim,
         vermijd_plaatsen=args.vermijd_plaats,
-        kasseien=args.kasseien,
-        beton_vermijden=not args.beton_toestaan,
+        kasseien=True if args.kasseien else False if args.vermijd_kasseien else None,
+        beton_vermijden=(
+            False if args.beton_toestaan else True if args.vermijd_beton else None
+        ),
         autovrij=args.autovrij,
-        strict=args.strict,
+        strict=True if args.strict else None,
         naam=args.naam,
         activiteit=args.activiteit,
         geen_opvulling=args.geen_opvulling,
@@ -648,11 +650,17 @@ def main(argv=None):
     s.add_argument(
         "--doel",
         choices=("hoogtemeters", "offroad", "kort", "toeren"),
-        default="hoogtemeters",
+        default="toeren",
     )
     s.add_argument("--via-klim", action="append", default=[])
     s.add_argument("--vermijd-plaats", action="append", default=[])
     s.add_argument("--kasseien", action="store_true", help="kasseien zijn toegestaan")
+    s.add_argument(
+        "--vermijd-kasseien", action="store_true", help="kasseien liever vermijden"
+    )
+    s.add_argument(
+        "--vermijd-beton", action="store_true", help="betonbanen liever vermijden"
+    )
     s.add_argument(
         "--beton-toestaan",
         action="store_true",

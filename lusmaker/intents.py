@@ -640,13 +640,13 @@ def plan_route(
     max_km: float | None = None,
     target_km: float | None = None,
     tolerance_km: float = 2.5,
-    doel: str = "hoogtemeters",
+    doel: str = "toeren",
     via_klimmen: list[str] = [],
     vermijd_plaatsen: list[str] = [],
-    kasseien: bool | None = False,
-    beton_vermijden: bool | None = True,
+    kasseien: bool | None = None,
+    beton_vermijden: bool | None = None,
     autovrij: bool | None = None,
-    strict: bool | None = False,
+    strict: bool | None = None,
     naam: str | None = None,
     activiteit: str = "fietsen",
     geen_opvulling: bool = False,
@@ -698,7 +698,7 @@ def plan_route(
         max_km=max_km,
         tolerance_km=tolerance_km,
     )
-    if doel == "toeren" and target_km is None and max_km is None:
+    if doel == "toeren" and not via_klimmen and target_km is None and max_km is None:
         raise IntentError("doel 'toeren' vereist target-km of max-km")
     if doel in {"hoogtemeters", "offroad"} and not via_klimmen and target_km is None and max_km is None:
         raise IntentError(
@@ -971,7 +971,7 @@ def adjust_route(
     else:
         effective_max = previous_request.get("max_km")
         max_is_explicit = previous_request.get("max_km_explicit", False)
-    effective_goal = doel or previous_request.get("doel", "hoogtemeters")
+    effective_goal = doel or previous_request.get("doel", "toeren")
     effective_profile = (
         profiel_naam
         if profiel_naam is not None

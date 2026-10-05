@@ -208,6 +208,7 @@ def test_plan_route_injects_route_and_export_functions():
             doel="kort",
             activiteit="trail",
             autovrij=True,
+            kasseien=False,
             via_klimmen=["Diepestraat"],
             create_fn=create_fn,
             load_fn=lambda _draft_id: state,
@@ -270,6 +271,7 @@ def test_plan_route_passes_no_fill_to_optimizer():
         intents.plan_route(
             "Wetteren",
             max_km=10,
+            doel="hoogtemeters",
             geen_opvulling=True,
             create_fn=lambda **_kwargs: {"id": state["id"]},
             load_fn=lambda _draft_id: state,
@@ -952,3 +954,38 @@ def test_plan_route_names_a_coordinate_start_after_the_nearest_place():
         )
     assert state["name"] == "Wandellus rond Bredene-Bad · 3 km"
     assert intents._nearby_place({"label": "Wetteren"}) is None
+
+
+def test_plan_route_defaults_are_neutral_and_never_prefer_climbing_or_cobble_avoidance():
+    state = _routed_draft()
+    state["climbs"] = []
+    state["computed"] = None
+    created, optimize_calls = {}, []
+
+    def create_fn(**kwargs):
+        created.update(kwargs)
+        return {"id": state["id"]}
+
+    def optimize_fn(d, _db, **kwargs):
+        optimize_calls.append(kwargs)
+        d["computed"] = _routed_draft()["computed"]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "Wetteren",
+            target_km=10,
+            create_fn=create_fn,
+            load_fn=lambda _draft_id: state,
+            optimize_fn=optimize_fn,
+            climbs_fn=_climbs,
+            export_gpx_fn=lambda _d, _db, path: {"file": path},
+            export_preview_fn=lambda _d, _db, path: {"file": path},
+            save_fn=lambda _d: None,
+            exports_root=Path(temp_dir),
+        )
+
+    assert created["avoid_cobbles"] is False
+    assert created["avoid_concrete"] is False
+    assert created["strict"] is False
+    assert optimize_calls[0]["objective"] == "toeren"
+    assert draft.objective_for_draft({"route_request": {"doel": "toeren"}}, None) == "toeren"

@@ -394,7 +394,7 @@ def plan_route(
     max_km: PositiveKm | None = None,
     target_km: PositiveKm | None = None,
     tolerance_km: ToleranceKm = 2.5,
-    doel: Goal = "hoogtemeters",
+    doel: Goal = "toeren",
     via_klimmen: list[str] = [],
     vermijd_plaatsen: list[str] = [],
     kasseien: bool | None = None,

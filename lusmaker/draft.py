@@ -680,6 +680,10 @@ def objective_for_draft(d: dict, objective):
         return objective
     if d.get("profile_doc"):
         return profiles.load(d["profile_doc"])["gewichten"]
+    if d.get("route_request"):
+        # Nieuwe verzoeken klimmen alleen op uitdrukkelijke wens; zonder
+        # profiel is een neutrale rondrit de redelijke standaard.
+        return "toeren"
     return _LEGACY_HM
 
 
