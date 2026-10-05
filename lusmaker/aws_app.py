@@ -194,7 +194,13 @@ async def health(_request: Request) -> JSONResponse:
         sources = route_evidence.pack_status()
     except (OSError, ValueError, KeyError):
         return JSONResponse({"status": "error", "error": "Routedatapack is niet beschikbaar."}, status_code=503)
-    return JSONResponse({"status": "ok", "version": __version__, "route_sources": sources})
+    try:
+        from . import config, pack_manifest
+        region_pack = pack_manifest.installed_summary(config.current_region())
+    except (OSError, ValueError, KeyError, RuntimeError):
+        region_pack = None  # nooit de readiness-check laten falen op optionele metadata
+    return JSONResponse({"status": "ok", "version": __version__, "route_sources": sources,
+                         "region_pack": region_pack})
 
 
 async def oauth_protected_resource(request: Request) -> JSONResponse:

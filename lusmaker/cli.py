@@ -173,6 +173,20 @@ def cmd_region_pack(args):
     return provision.create_pack(args.slug, args.output, include_personal_heat=args.include_personal_heat)
 
 
+def cmd_region_info(args):
+    from . import config, pack_manifest
+
+    if not args.pack and not args.slug:
+        raise ValueError("geef een regioslug of --pack <bestand>")
+    if args.pack:
+        manifest = pack_manifest.read_pack_json(args.pack)
+        compat = pack_manifest.validate(manifest)
+        return {"bron": "pack", **pack_manifest.describe(manifest), "compatibel": True, "legacy": compat["legacy"]}
+    region = config.get_region(args.slug)
+    return {"bron": "lokale regio", "slug": region.slug,
+            **pack_manifest.describe({"slug": region.slug, **pack_manifest.metadata(region)})}
+
+
 def cmd_geocode(args):
     from . import geocode
 
@@ -600,6 +614,10 @@ def main(argv=None):
     s.add_argument("-o", "--output")
     s.add_argument("--include-personal-heat", action="store_true", help="uitsluitend voor een privépack: persoonlijke heat meenemen")
     s.set_defaults(func=cmd_region_pack)
+    s = rsub.add_parser("info", help="toon features en versies van een lokale regio of een packbestand")
+    s.add_argument("slug", nargs="?")
+    s.add_argument("--pack", help="pad naar een regiopack (.tar.gz); leest alleen pack.json")
+    s.set_defaults(func=cmd_region_info)
 
     s = sub.add_parser("geocode", help="zoek een plaats of 'straat, plaats'")
     _region_arg(s)
