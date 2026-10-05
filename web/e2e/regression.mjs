@@ -375,6 +375,9 @@ test("GPX- en FIT-download geven een downloadevent", async ({ page, url }) => {
   assert.equal(gpx.suggestedFilename(), "Berendries-lus.gpx");
   const [fit] = await Promise.all([page.waitForEvent("download", { timeout: TIMEOUT }), page.getByRole("button", { name: "Download FIT" }).click()]);
   assert.equal(fit.suggestedFilename(), "Berendries-lus.fit");
+  // Een geslaagde download mag geen foutmelding achterlaten (bv. "Illegal invocation").
+  await page.waitForTimeout(300);
+  assert.equal(await alerts(page).count(), 0, `onverwachte melding: ${await alerts(page).allInnerTexts()}`);
   assert.deepEqual(state.calls.map((c) => c.key).filter((k) => /gpx|fit/.test(k)), ["GET /api/routes/r1/gpx", "GET /api/routes/r1/fit"]);
   expectNoStrays(state, "download");
 });

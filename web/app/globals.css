@@ -189,7 +189,7 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .route-topbar-title small { margin-bottom: .1rem; color: var(--muted); font-size: .56rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .route-topbar-title strong { max-width: 43vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 .92rem Georgia, serif; }
 .route-back { width: 44px; height: 44px; margin-left: auto; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--green); background: rgba(36, 90, 67, .07); font-size: 0; cursor: pointer; }
-.route-error { position: fixed; z-index: 20; top: 5.25rem; left: .65rem; right: .65rem; border: 1px solid rgba(156, 60, 50, .2); border-radius: .75rem; box-shadow: 0 12px 30px rgba(30, 20, 18, .1); }
+.route-error { position: fixed; z-index: 1100; top: 5.25rem; left: .65rem; right: .65rem; border: 1px solid rgba(156, 60, 50, .2); border-radius: .75rem; box-shadow: 0 12px 30px rgba(30, 20, 18, .1); }
 .route-sheet { position: absolute; z-index: 10; left: .5rem; right: .5rem; bottom: max(.5rem, env(safe-area-inset-bottom)); max-height: min(52svh, 30rem); overflow-y: auto; overscroll-behavior: contain; padding: .45rem 1rem 1rem; border: 1px solid var(--line); border-radius: 1.35rem; color: var(--ink); background: rgba(255, 254, 250, .96); box-shadow: var(--shadow); backdrop-filter: blur(16px); animation: lift-in .36s cubic-bezier(.2, .7, .2, 1) both; }
 .sheet-handle { position: sticky; top: -.45rem; z-index: 2; height: 1.8rem; margin: 0 -1rem .15rem; display: grid; place-items: center; background: linear-gradient(var(--white) 75%, transparent); }
 .sheet-handle span { width: 2.7rem; height: .28rem; border-radius: 999px; background: #c8cbc6; }

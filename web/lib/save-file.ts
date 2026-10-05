@@ -10,13 +10,20 @@ export function safeFilename(name: string, extension: string): string {
   return `${base}.${extension}`;
 }
 
+const browserSaver = (): Saver => ({
+  document,
+  url: URL,
+  // Los aanroepen: setTimeout als methode van dit object geeft "Illegal invocation".
+  schedule: (callback, ms) => window.setTimeout(callback, ms),
+});
+
 /**
  * Bewaar een blob als download. Chrome start een download van een blob-URL
  * asynchroon; wie de URL meteen na click() intrekt, verliest de download zodra
  * Chrome eerst om toestemming voor meerdere downloads vraagt. Het anker staat
  * daarom kort in het DOM en de URL wordt pas na een minuut ingetrokken.
  */
-export function saveBlob(blob: Blob, filename: string, saver: Saver = {document, url: URL, schedule: setTimeout}): void {
+export function saveBlob(blob: Blob, filename: string, saver: Saver = browserSaver()): void {
   const href = saver.url.createObjectURL(blob);
   const anchor = saver.document.createElement("a");
   anchor.href = href;
