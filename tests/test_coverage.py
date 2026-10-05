@@ -14,14 +14,34 @@ INSIDE = (51.2, 3.5)
 
 
 @contextmanager
+def _fake_graph(info):
+    """Vervang /info door een injecteerbare functie en leeg de cache."""
+    original = coverage.fetch_info
+    coverage.fetch_info = info
+    coverage._BBOX_CACHE.clear()
+    try:
+        yield
+    finally:
+        coverage.fetch_info = original
+        coverage._BBOX_CACHE.clear()
+
+
+def _info():
+    # GraphHopper /info: [minLon, minLat, maxLon, maxLat]
+    return {"bbox": [FAKE_BBOX[1], FAKE_BBOX[0], FAKE_BBOX[3], FAKE_BBOX[2]]}
+
+
+@contextmanager
 def _fake_region():
     with tempfile.TemporaryDirectory() as temp_dir:
         home = Path(temp_dir)
         previous = {k: os.environ.pop(k, None) for k in ("LUSMAKER_HOME", "LUSMAKER_REGION")}
         os.environ["LUSMAKER_HOME"] = str(home)
         try:
-            config.register_region("vlaanderen", "europe/belgium", FAKE_BBOX, 8989, home=home)
-            yield
+            # De geconfigureerde bbox is bewust smaller: alleen de gemeten graph telt.
+            config.register_region("vlaanderen", "europe/belgium", (50.68, 3.35, 51.10, 4.20), 8989, home=home)
+            with _fake_graph(_info):
+                yield
         finally:
             os.environ.pop("LUSMAKER_HOME", None)
             for key, value in previous.items():
@@ -128,3 +148,30 @@ def test_api_returns_422_with_code_and_dekking():
     assert response.status_code == 422
     body = json.loads(response.body)
     assert body["code"] == "buiten_gebied" and body["dekking"]["regio"] == "vlaanderen"
+
+
+def test_configured_region_bbox_is_not_used_graph_bbox_is():
+    with _fake_region():
+        # binnen de graph maar buiten de geconfigureerde bbox (lat 51.4 > 51.10)
+        coverage.check_point({"lat": 51.4, "lon": 3.5})
+
+
+def test_missing_or_unavailable_info_fails_open():
+    def down():
+        raise OSError("niet bereikbaar")
+    for info in (down, lambda: {}, lambda: {"bbox": [1, 2]}, lambda: {"bbox": None}):
+        with _fake_region():
+            with _fake_graph(info):
+                coverage.check_point({"lat": 0.0, "lon": 0.0})
+
+
+def test_graph_bbox_is_cached_per_gh_url():
+    calls = []
+    def info():
+        calls.append(1)
+        return _info()
+    with _fake_region():
+        with _fake_graph(info):
+            coverage.graph_bbox()
+            coverage.graph_bbox()
+            assert len(calls) == 1

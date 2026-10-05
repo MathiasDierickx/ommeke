@@ -36,10 +36,42 @@ def _area_name(region) -> str:
     return region.slug.replace("-", " ").title()
 
 
-def dekking(region=None) -> dict:
-    """Beschrijf het gedekte gebied van de (actieve) regio."""
+def fetch_info() -> dict:
+    """GraphHopper ``/info`` van de actieve router (vervangbaar in tests)."""
+    from . import gh
+    return gh.info()
+
+
+_BBOX_CACHE: dict[str, tuple[float, float, float, float]] = {}
+
+
+def graph_bbox() -> tuple[float, float, float, float] | None:
+    """Gemeten bbox (minlat, minlon, maxlat, maxlon) van de geladen graph.
+
+    Faalt open: is ``/info`` onbereikbaar of ontbreekt ``bbox``, dan ``None``
+    en wordt er niet geweigerd. Alleen geslaagde metingen worden per
+    GraphHopper-URL gecachet.
+    """
+    url = config.GH_URL
+    if url in _BBOX_CACHE:
+        return _BBOX_CACHE[url]
+    try:
+        raw = fetch_info().get("bbox")
+        min_lon, min_lat, max_lon, max_lat = (float(v) for v in raw)
+        if not all(math.isfinite(v) for v in (min_lon, min_lat, max_lon, max_lat)):
+            return None
+        if min_lat > max_lat or min_lon > max_lon:
+            return None
+    except Exception:
+        return None
+    _BBOX_CACHE[url] = (min_lat, min_lon, max_lat, max_lon)
+    return _BBOX_CACHE[url]
+
+
+def dekking(bbox, region=None) -> dict:
+    """Beschrijf het gedekte gebied (gemeten graph-bbox) van de regio."""
     region = region or config.current_region()
-    min_lat, min_lon, max_lat, max_lon = region.bbox
+    min_lat, min_lon, max_lat, max_lon = bbox
     return {
         "regio": region.slug,
         "naam": _area_name(region),
@@ -50,8 +82,8 @@ def dekking(region=None) -> dict:
     }
 
 
-def message(region=None) -> str:
-    d = dekking(region)
+def message(bbox, region=None) -> str:
+    d = dekking(bbox, region)
     b = d["bbox"]
     return (
         f"Ommeke dekt momenteel {d['naam']} ongeveer tussen "
@@ -60,9 +92,8 @@ def message(region=None) -> str:
     )
 
 
-def contains(lat: float, lon: float, region=None) -> bool:
-    region = region or config.current_region()
-    min_lat, min_lon, max_lat, max_lon = region.bbox
+def contains(lat: float, lon: float, bbox) -> bool:
+    min_lat, min_lon, max_lat, max_lon = bbox
     return (
         math.isfinite(lat) and math.isfinite(lon)
         and min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
@@ -70,15 +101,21 @@ def contains(lat: float, lon: float, region=None) -> bool:
 
 
 def check_point(point: dict, role: str = "startpunt", region=None) -> None:
-    """Gooi ``OutOfCoverage`` als het punt buiten de bbox van de regio valt."""
-    region = region or config.current_region()
-    lat, lon = point["lat"], point["lon"]
-    if contains(lat, lon, region):
+    """Gooi ``OutOfCoverage`` als het punt buiten de geladen graph valt.
+
+    Zonder meetbare graph-bbox wordt niets geweigerd (fail open).
+    """
+    bbox = graph_bbox()
+    if bbox is None:
         return
+    lat, lon = point["lat"], point["lon"]
+    if contains(lat, lon, bbox):
+        return
+    region = region or config.current_region()
     label = point.get("label") or f"{lat:.5f}, {lon:.5f}"
     raise OutOfCoverage(
         f"Het {role} '{label}' ligt buiten het gedekte gebied. "
-        f"{message(region)} Kies een plaats binnen dat gebied.",
-        dekking(region),
+        f"{message(bbox, region)} Kies een plaats binnen dat gebied.",
+        dekking(bbox, region),
         {"rol": role, "lat": lat, "lon": lon, "label": point.get("label")},
     )
