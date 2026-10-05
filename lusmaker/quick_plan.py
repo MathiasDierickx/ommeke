@@ -1,7 +1,7 @@
 """Modelvrij plannen met hetzelfde domeincontract en persistente receipts."""
 from __future__ import annotations
 import math
-from . import intents, requests
+from . import activities, intents, requests
 
 
 def parameters(body: dict) -> dict:
@@ -16,9 +16,9 @@ def parameters(body: dict) -> dict:
     km = body.get('target_km')
     if isinstance(km, bool) or not isinstance(km, (float, int)) or not math.isfinite(km) or not 1 <= km <= 300:
         raise ValueError('Kies een afstand tussen 1 en 300 km.')
-    activity = body.get('activiteit', 'fietsen')
+    activity = body.get('activiteit', activities.DEFAULT)
     goal = body.get('doel', 'toeren')
-    if activity not in ('fietsen', 'trail') or goal not in ('hoogtemeters', 'toeren', 'offroad', 'kort'):
+    if activity not in activities.ACCEPTED or goal not in ('hoogtemeters', 'toeren', 'offroad', 'kort'):
         raise ValueError('Kies een geldige activiteit en een geldig doel.')
     return dict(start=start.strip(), target_km=km, tolerance_km=min(2.5, km * .1),
                 activiteit=activity, doel=goal, check_readiness=True, profiel_naam="standaard",

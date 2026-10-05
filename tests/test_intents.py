@@ -169,7 +169,11 @@ def test_heat_activity_for_maps_activity_and_profile_name():
     assert intents.heat_activity_for("fietsen", "gravel avontuur") == "gravel"
     assert intents.heat_activity_for("fietsen", "mtb technisch") == "mtb"
     assert intents.heat_activity_for("fietsen", None) == "stadsfiets"
-    assert intents.heat_activity_for("wandelen", "standaard") is None
+    assert intents.heat_activity_for("wandelen", "standaard") == "wandelen"
+    assert intents.heat_activity_for("wegloop", None) == "wegloop"
+    assert intents.heat_activity_for("koersfiets", "standaard") == "koersfiets"
+    assert intents.heat_activity_for("toerfiets", "snelle koers") == "koersfiets"
+    assert intents.heat_activity_for("onbekend", "standaard") is None
 
 
 def test_plan_route_injects_route_and_export_functions():

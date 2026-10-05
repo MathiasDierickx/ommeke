@@ -400,7 +400,7 @@ class RouteToolExecutor:
             values.setdefault("beton_vermijden", None)
             values.setdefault("autovrij", None)
             values.setdefault("strict", None)
-            values.setdefault("activiteit", "fietsen")
+            values.setdefault("activiteit", "toerfiets")
             values.setdefault("geen_opvulling", False)
             values.setdefault("rond_plaats", None)
             values.setdefault("langs_water", None)

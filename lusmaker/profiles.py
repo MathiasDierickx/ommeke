@@ -8,7 +8,7 @@ import math
 import re
 from datetime import datetime
 
-from . import aws_state, config
+from . import activities, aws_state, config
 
 
 WEIGHT_KEYS = ("hoogtemeters", "offroad", "populair", "autovrij", "kort")
@@ -93,8 +93,10 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
     _path(name)
     if expected_name is not None and name != expected_name:
         raise ProfileError("profielnaam komt niet overeen met de bestandsnaam")
-    if profile["activiteit"] not in {"fietsen", "trail"}:
-        raise ProfileError("activiteit moet 'fietsen' of 'trail' zijn")
+    if profile["activiteit"] not in activities.ACCEPTED:
+        raise ProfileError(
+            "activiteit moet een van deze zijn: " + ", ".join(activities.KEYS)
+        )
     normalized = normalize_weights(profile["gewichten"])
     preferences = profile["voorkeuren"]
     if not isinstance(preferences, dict) or set(preferences) != {
@@ -230,5 +232,5 @@ def routing_prefs(profile: dict) -> dict:
         "avoid_concrete": preferences["beton"] == "vermijd",
         "avoid_busy": preferences["autovrij"] == "belangrijk",
         "strict": preferences["steenwegen"] == "vermijd",
-        "profile": "trail" if checked["activiteit"] == "trail" else config.GH_PROFILE,
+        "profile": activities.graph_profile(checked["activiteit"]),
     }

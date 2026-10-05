@@ -11,6 +11,7 @@ import unicodedata
 from pathlib import Path
 
 from . import (
+    activities,
     artifacts,
     aws_state,
     climbs,
@@ -30,7 +31,10 @@ class IntentError(RuntimeError):
     """Gebruikersfout bij het uitvoeren van een composiet-intentie."""
 
 
-ACTIVITY_PROFILES = {"fietsen": "quiet", "trail": "trail"}
+ACTIVITY_PROFILES = {
+    key: activities.graph_profile(key) for key in activities.ACCEPTED
+}
+_ACTIVITY_ERROR = "activiteit moet een van deze zijn: " + ", ".join(activities.KEYS)
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 POI_NAMES = {
     "picknickbank": ("picknickbank", "picknickbanken"),
@@ -50,11 +54,15 @@ POI_NAMES = {
 def heat_activity_for(
     activiteit: str | None, profiel_naam: str | None
 ) -> str | None:
-    """Leid de heat-taxonomie af uit activiteit en profielnaam."""
-    if activiteit == "trail":
-        return "trail"
-    if activiteit != "fietsen":
+    """Leid de heat-taxonomie af uit activiteit en (voor fietsen) profielnaam."""
+    activity = activities.get(activiteit)
+    if activity is None:
         return None
+    if activity.heat is not None:
+        return activity.heat
+    if activity.mode != "fiets":
+        return None
+    # Toerfiets en de oude naam "fietsen": het profiel kan nog een specialisatie noemen.
     profile = (profiel_naam or "").casefold()
     if "koers" in profile or "race" in profile:
         return "koersfiets"
@@ -77,10 +85,13 @@ def suggest_route_name(
     place = start.strip().split(",", 1)[0]
     if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", place) or not place:
         place = "je startpunt"
-    if activiteit == "trail":
-        # Het trailprofiel dient wandelaars en trailrunners; alleen een
-        # uitdrukkelijk onverharde wens heet een traillus.
-        kind = "Traillus" if doel == "offroad" else "Wandellus"
+    if activities.is_foot(activiteit):
+        # Het voetprofiel dient wandelaars en lopers; alleen een uitdrukkelijk
+        # onverharde wens of de trailactiviteit heet een traillus.
+        if activiteit == "wegloop":
+            kind = "Looplus"
+        else:
+            kind = "Traillus" if doel == "offroad" else "Wandellus"
     elif doel == "hoogtemeters":
         kind = "Heuvelrit"
     elif doel == "toeren":
@@ -648,7 +659,7 @@ def plan_route(
     autovrij: bool | None = None,
     strict: bool | None = None,
     naam: str | None = None,
-    activiteit: str = "fietsen",
+    activiteit: str = activities.DEFAULT,
     geen_opvulling: bool = False,
     profiel_naam: str | None = None,
     check_readiness: bool = False,
@@ -677,8 +688,9 @@ def plan_route(
     """Maak en routeer een lus, eventueel na een readiness-gesprek."""
     if doel not in {"hoogtemeters", "offroad", "kort", "toeren"}:
         raise IntentError("doel moet 'hoogtemeters', 'offroad', 'kort' of 'toeren' zijn")
-    if activiteit not in ACTIVITY_PROFILES:
-        raise IntentError("activiteit moet 'fietsen' of 'trail' zijn")
+    if activities.canonical(activiteit) is None:
+        raise IntentError(_ACTIVITY_ERROR)
+    activiteit = activities.canonical(activiteit)
     if request_id is not None and not _REQUEST_ID_RE.fullmatch(request_id):
         raise IntentError(
             "request-id gebruikt 1-128 letters, cijfers, '.', '_', ':' of '-'"
@@ -745,6 +757,13 @@ def plan_route(
     if existing is not None:
         stored_request = existing.get("route_request") or {}
         stored_signature = stored_request.get("input_signature")
+        if isinstance(stored_signature, dict) and stored_signature.get("activiteit"):
+            # "fietsen" is de oude naam van "toerfiets".
+            stored_signature = {
+                **stored_signature,
+                "activiteit": activities.canonical(stored_signature["activiteit"])
+                or stored_signature["activiteit"],
+            }
         comparable_signature = input_signature
         if isinstance(stored_signature, dict):
             # Oudere workflows blijven idempotent hervatbaar zolang later
@@ -813,7 +832,7 @@ def plan_route(
         avoid_concrete=beton_vermijden is True,
         avoid_busy=autovrij is True,
         region=region,
-        profile=ACTIVITY_PROFILES[activiteit],
+        profile=activities.graph_profile(activiteit),
     )
     if profiel_naam is not None:
         create_kwargs["profile_doc"] = profiel_naam
@@ -1000,7 +1019,7 @@ def adjust_route(
         "tolerance_km": effective_tolerance,
         "geen_opvulling": effective_no_fill,
         "profiel_naam": effective_profile,
-        "activiteit": previous_request.get("activiteit", "fietsen"),
+        "activiteit": previous_request.get("activiteit", activities.DEFAULT),
         "rond_plaats": effective_round_place,
         "langs_water": effective_water,
         "expliciete_voorkeuren": previous_request.get(

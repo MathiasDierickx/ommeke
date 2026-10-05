@@ -27,7 +27,14 @@ PLAN_ROUTE_SCHEMA = {
                 "zoals 'Heuvelrit rond Wetteren · 38 km'."
             ),
         },
-        "activiteit": {"type": "string", "enum": ["fietsen", "trail"]},
+        "activiteit": {
+            "type": "string",
+            "enum": [
+                "wandelen", "trail", "wegloop", "stadsfiets", "toerfiets",
+                "koersfiets", "gravel", "mtb", "fietsen",
+            ],
+            "description": "Kies de activiteit die bij de vraag past; 'fietsen' is de oude naam van toerfiets.",
+        },
         "geen_opvulling": {"type": "boolean"},
     },
 }

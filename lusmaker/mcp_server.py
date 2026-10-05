@@ -402,7 +402,7 @@ def plan_route(
     autovrij: bool | None = None,
     strict: bool | None = None,
     naam: RouteName | None = None,
-    activiteit: Activity = "fietsen",
+    activiteit: Activity = "toerfiets",
     geen_opvulling: bool = False,
     profiel_naam: NonEmptyString = "standaard",
     request_id: RequestId | None = None,

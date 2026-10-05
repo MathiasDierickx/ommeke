@@ -674,6 +674,12 @@ def _heat_activity(d: dict) -> str | None:
     )
 
 
+def _activity_kwargs(d: dict) -> dict:
+    """Routeerargumenten voor de activiteit; leeg bij oudere drafts."""
+    activity = (d.get("route_request") or {}).get("activiteit")
+    return {"activity": activity} if activity else {}
+
+
 def objective_for_draft(d: dict, objective):
     """Gebruik profielgewichten tenzij de aanroep een objective overschrijft."""
     if objective is not None:
@@ -791,6 +797,7 @@ def _route(
             "details": True,
             "profile": preferences["profile"],
             "heat_activity": _heat_activity(d),
+            **_activity_kwargs(d),
         }
         if router is gh.route:
             route_kwargs["instructions"] = True
@@ -1019,6 +1026,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             preferences = {
                 **routing,
                 "heat_activity": _heat_activity(d),
+                **_activity_kwargs(d),
             }
             if weighted:
                 preferences["details"] = True
@@ -1107,6 +1115,7 @@ def probe(
             avoid_busy=preferences["avoid_busy"],
             profile=preferences["profile"],
             heat_activity=_heat_activity(d),
+            **_activity_kwargs(d),
             details=True,
         )
         route_coords = [
@@ -1386,6 +1395,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         **routing_preferences(d),
         "avoid_polygons": place_areas(d),
         "heat_activity": _heat_activity(d),
+        **_activity_kwargs(d),
     }
     candidates = []
     def exhausted(reason):

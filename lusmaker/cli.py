@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from . import config
+from . import activities, config
 
 
 def _out(obj) -> None:
@@ -580,7 +580,7 @@ def main(argv=None):
     s.set_defaults(func=cmd_profile_list)
     s = rsub.add_parser("set", help="wijzig voorkeuren en bewaar historiek")
     s.add_argument("naam")
-    s.add_argument("--activiteit", choices=("fietsen", "trail"))
+    s.add_argument("--activiteit", choices=activities.ACCEPTED)
     s.add_argument("--gewichten", help="bv. hoogtemeters=0.5,offroad=0.5")
     s.add_argument("--kasseien", choices=("vermijd", "ok", "graag"))
     s.add_argument("--beton", choices=("vermijd", "ok", "graag"))
@@ -636,8 +636,8 @@ def main(argv=None):
     s.add_argument("--profiel-naam", help="persistent voorkeurenprofiel")
     s.add_argument(
         "--activiteit",
-        choices=("fietsen", "trail"),
-        default="fietsen",
+        choices=activities.ACCEPTED,
+        default=activities.DEFAULT,
     )
     s.add_argument("--max-km", type=float)
     s.add_argument("--target-km", type=float, help="gewenste routeafstand")
