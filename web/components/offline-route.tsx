@@ -1,11 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Route } from "@/lib/types";
-export const OFFLINE_KEY = "ommeke-offline-routes-v1";
+import { MAX_SAVED, OFFLINE_EVENT, readOffline, storeRoute } from "@/lib/offline-routes";
+export { OFFLINE_KEY } from "@/lib/offline-routes";
 export function OfflineRoute({route}:{route:Route}) {
   const [status,setStatus]=useState("");
   const [busy,setBusy]=useState(false);
-  useEffect(()=>{setStatus("");try{const saved=JSON.parse(localStorage.getItem(OFFLINE_KEY)||"[]").find((r:Route)=>r.id===route.id);if(saved)setStatus(saved.revision===route.revision?"Deze revisie is offline bewaard.":"Een oudere revisie is offline bewaard. Bewaar opnieuw om bij te werken.");}catch{/* Storage is optional. */}},[route.id,route.revision]);
+  useEffect(()=>{
+    const refresh=()=>{const saved=readOffline().find(r=>r.id===route.id);setStatus(!saved?"":saved.revision!==route.revision?"Een oudere revisie is offline bewaard. Bewaar opnieuw om bij te werken.":saved.auto?"Deze revisie is automatisch offline beschikbaar. Bewaar offline om ze vast te houden.":"Deze revisie is offline bewaard.");};
+    refresh();
+    window.addEventListener(OFFLINE_EVENT,refresh);
+    return ()=>window.removeEventListener(OFFLINE_EVENT,refresh);
+  },[route.id,route.revision]);
   async function save() {
     setBusy(true);
     try {
@@ -13,10 +19,8 @@ export function OfflineRoute({route}:{route:Route}) {
       if(!('serviceWorker' in navigator))throw new Error("Deze browser ondersteunt offline bewaren niet.");
       await navigator.serviceWorker.register('/offline-sw.js');
       await Promise.race([navigator.serviceWorker.ready,new Promise((_,reject)=>setTimeout(()=>reject(new Error("Offline voorbereiding duurt te lang. Probeer opnieuw.")),20000))]);
-      const previous=JSON.parse(localStorage.getItem(OFFLINE_KEY)||"[]") as Route[];
-      const saved={id:route.id,name:route.name,revision:route.revision,geometry:route.geometry,saved_at:new Date().toISOString()};
-      localStorage.setItem(OFFLINE_KEY,JSON.stringify([saved,...previous.filter(r=>r.id!==route.id)].slice(0,10)));
-      setStatus("Deze revisie is offline bewaard. De 10 laatst bewaarde routes blijven op dit toestel, tot je afmeldt.");
+      if(!storeRoute(route,false))throw new Error("Offline bewaren mislukt. Controleer de beschikbare opslagruimte.");
+      setStatus(`Deze revisie is offline bewaard. De ${MAX_SAVED} laatst bewaarde routes blijven op dit toestel, tot je afmeldt.`);
     } catch(e) {setStatus(e instanceof Error?e.message:"Offline bewaren mislukt. Controleer de beschikbare opslagruimte.");}
     finally {setBusy(false);}
   }

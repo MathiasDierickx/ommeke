@@ -5,7 +5,7 @@ let routes = [], selected, projection, watcher;
 try { routes = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(routes)) routes = []; } catch { routes = []; }
 function renderOptions() {
   el('routes').replaceChildren(...routes.map(route => { const option = document.createElement('option'); option.value = route.id; option.textContent = route.name; return option; }));
-  el('status').textContent = routes.length ? `${routes.length} route(s) beschikbaar zonder internet.` : 'Nog geen offline routes. Open online een route en kies Bewaar offline.';
+  el('status').textContent = routes.length ? `${routes.length} route(s) beschikbaar zonder internet.` : 'Nog geen offline routes. Open online een route; die wordt automatisch bewaard, of kies Bewaar offline.';
   el('gps').disabled = el('remove').disabled = !routes.length;
 }
 function render() {
@@ -40,4 +40,8 @@ el('gps').addEventListener('click',()=>{
     el('status').textContent=point[0]<0||point[0]>800||point[1]<0||point[1]>500?'Je locatie ligt buiten het getoonde routegebied.':`Locatie bijgewerkt. Nauwkeurigheid circa ${Math.round(p.coords.accuracy)} m.`;
   },()=>{el('status').textContent='Geen locatie beschikbaar. Controleer je locatietoestemming en GPS-ontvangst.';},{enableHighAccuracy:true,timeout:15000,maximumAge:10000});
 });
-renderOptions();render();
+renderOptions();
+const fromPath=location.pathname.match(/^\/routes\/([^/]+)/);
+const wanted=decodeURIComponent(location.hash.slice(1)||(fromPath?fromPath[1]:''));
+if(wanted&&routes.some(r=>r.id===wanted))el('routes').value=wanted;
+render();
