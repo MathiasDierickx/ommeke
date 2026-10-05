@@ -2,13 +2,56 @@
 from __future__ import annotations
 
 import base64
-import heapq
+import bisect
 import json
 import math
+import threading
+import time
+from collections import OrderedDict
 
 from . import aws_state
 
 METADATA_KEY = 'route-summary-v2'
+
+# Sleutelsnapshot voor vervolgpagina's. S3 kan niet op LastModified sorteren en
+# StartAfter/ContinuationToken volgen alleen de lexicografische volgorde; een
+# cursor op (tijd, sleutel) kan dus niet "hervatten" in de lijst. In plaats van
+# een indexobject (extra write + inconsistentierisico bij mislukte tweede write)
+# hergebruiken vervolgpagina's de gesorteerde sleutellijst van de eerste pagina
+# gedurende een korte TTL. Eerste pagina's (zonder cursor) scannen altijd vers;
+# verwijderde routes vallen af via de HEAD-read, nieuwe verschijnen bij de
+# eerstvolgende verse eerste pagina. Het blijft een levende lijst.
+SNAPSHOT_TTL_SECONDS = 60.0
+SNAPSHOT_MAX_KEYS = 20000
+SNAPSHOT_MAX_ENTRIES = 32
+_snapshots: OrderedDict = OrderedDict()
+_snapshot_lock = threading.Lock()
+_clock = time.monotonic
+
+
+def _snapshot_get(bucket, prefix):
+    with _snapshot_lock:
+        entry = _snapshots.get((bucket, prefix))
+        if entry and _clock() - entry[0] <= SNAPSHOT_TTL_SECONDS:
+            _snapshots.move_to_end((bucket, prefix))
+            return entry[1]
+        _snapshots.pop((bucket, prefix), None)
+    return None
+
+
+def _snapshot_put(bucket, prefix, rows):
+    if len(rows) > SNAPSHOT_MAX_KEYS:
+        return
+    with _snapshot_lock:
+        _snapshots[(bucket, prefix)] = (_clock(), rows)
+        _snapshots.move_to_end((bucket, prefix))
+        while len(_snapshots) > SNAPSHOT_MAX_ENTRIES:
+            _snapshots.popitem(last=False)
+
+
+def clear_snapshots():
+    with _snapshot_lock:
+        _snapshots.clear()
 
 
 def summary_metadata(draft: dict) -> dict[str, str]:
@@ -32,8 +75,8 @@ def _position(item):
     return (-item['LastModified'].timestamp(), item['Key'])
 
 
-def _cursor(prefix, item):
-    return base64.urlsafe_b64encode(json.dumps([1, prefix, *_position(item)]).encode()).decode()
+def _cursor(prefix, position):
+    return base64.urlsafe_b64encode(json.dumps([1, prefix, *position]).encode()).decode()
 
 
 def _decode_cursor(value, prefix):
@@ -75,8 +118,9 @@ def _summary(client, key):
 def page(*, limit=25, cursor=None, client=None):
     """Meest recent opgeslagen eerst. Listing leest uitsluitend objectmetadata.
 
-    S3 ondersteunt geen LastModified-index. We scannen de sleutellijst, houden
-    maximaal limit+1 kandidaten en lezen alleen de geselecteerde samenvattingen.
+    S3 ondersteunt geen LastModified-index. De eerste pagina scant de sleutellijst;
+    vervolgpagina's hergebruiken die gesorteerde snapshot (zie SNAPSHOT_TTL_SECONDS)
+    en lezen alleen de geselecteerde samenvattingen.
     Bestaande drafts zonder metadata blijven leesbaar zonder migratiewrites.
     Dit is een levende lijst, geen snapshot van ondertussen gewijzigde routes.
     """
@@ -88,7 +132,7 @@ def page(*, limit=25, cursor=None, client=None):
     prefix = aws_state.key('drafts').rstrip('/') + '/'
     after = _decode_cursor(cursor, prefix)
 
-    def candidates():
+    def scan():
         token = None
         while True:
             kwargs = {'Bucket': aws_state.bucket(), 'Prefix': prefix, 'MaxKeys': 1000}
@@ -98,8 +142,8 @@ def page(*, limit=25, cursor=None, client=None):
             for item in response.get('Contents', []):
                 if not item['Key'].startswith(prefix):
                     raise aws_state.StateError('object buiten de gebruikerpartitie')
-                if item['Key'].endswith('.json') and (after is None or _position(item) > after):
-                    yield item
+                if item['Key'].endswith('.json'):
+                    yield _position(item)
             if not response.get('IsTruncated'):
                 return
             following = response.get('NextContinuationToken')
@@ -107,7 +151,12 @@ def page(*, limit=25, cursor=None, client=None):
                 raise aws_state.StateError('ongeldige vervolgpagina van routeopslag')
             token = following
 
-    selected = heapq.nsmallest(limit + 1, candidates(), key=_position)
-    items = [item for row in selected[:limit] if (item := _summary(client, row['Key'])) is not None]
+    snapshot = _snapshot_get(aws_state.bucket(), prefix) if after is not None else None
+    if snapshot is None:
+        snapshot = sorted(scan())
+        _snapshot_put(aws_state.bucket(), prefix, snapshot)
+    start = bisect.bisect_right(snapshot, after) if after is not None else 0
+    selected = snapshot[start:start + limit + 1]
+    items = [item for row in selected[:limit] if (item := _summary(client, row[1])) is not None]
     return {'items': items, 'next_cursor': _cursor(prefix, selected[limit - 1]) if len(selected) > limit else None,
             'order': 'updated'}

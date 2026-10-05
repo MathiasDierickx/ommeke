@@ -6,10 +6,14 @@ import hashlib
 import json
 import os
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from functools import lru_cache
 
 from . import tenant
+
+
+READ_CONCURRENCY = 8  # begrensde parallelle S3-reads per listing
 
 
 class StateError(RuntimeError):
@@ -220,9 +224,16 @@ def list_json(relative_prefix: str, *, client=None) -> list[dict]:
         if token:
             kwargs["ContinuationToken"] = token
         response = client.list_objects_v2(**kwargs)
-        for item in response.get("Contents", []):
-            object_response = client.get_object(Bucket=bucket(), Key=item["Key"])
-            out.append(json.loads(object_response["Body"].read()))
+        keys = [item["Key"] for item in response.get("Contents", [])]
+
+        def read(object_key):
+            return json.loads(client.get_object(Bucket=bucket(), Key=object_key)["Body"].read())
+
+        if len(keys) > 1:
+            with ThreadPoolExecutor(max_workers=READ_CONCURRENCY) as pool:
+                out.extend(pool.map(read, keys))  # map behoudt de sleutelvolgorde
+        else:
+            out.extend(read(object_key) for object_key in keys)
         if not response.get("IsTruncated"):
             return out
         token = response["NextContinuationToken"]

@@ -119,6 +119,21 @@ async def route_plan(request: Request) -> JSONResponse:
         return _error(str(exc))
 
 
+def _load_all_drafts() -> list[dict]:
+    """Alle drafts met één read per object en begrensde concurrency (max. 8)."""
+    if aws_state.enabled():
+        return aws_state.list_json("drafts")  # bevat reeds de volledige draft
+    from concurrent.futures import ThreadPoolExecutor
+    from . import config
+
+    def read(path):
+        with open(path) as handle:
+            return json.load(handle)
+
+    with ThreadPoolExecutor(max_workers=aws_state.READ_CONCURRENCY) as pool:
+        return list(pool.map(read, sorted(config.drafts_path().glob("*.json"))))
+
+
 async def routes_list(_request: Request) -> JSONResponse:
     try:
         if aws_state.enabled() and "limit" in _request.query_params:
@@ -128,10 +143,7 @@ async def routes_list(_request: Request) -> JSONResponse:
                 return JSONResponse({"routes": [_route_item(item) for item in page['items']], "next_cursor": page['next_cursor'], "order": page['order']})
             page = await asyncio.to_thread(aws_state.json_page, "drafts", limit=int(_request.query_params['limit']), cursor=_request.query_params.get('cursor'))
             return JSONResponse({"routes": [_route_item(item) for item in page['items']], "next_cursor": page['next_cursor'], "order": "id"})
-        items = await asyncio.to_thread(draft.list_all)
-        full = await asyncio.gather(
-            *(asyncio.to_thread(draft.load, item["id"]) for item in items)
-        )
+        full = await asyncio.to_thread(_load_all_drafts)
         full.sort(key=lambda item: item.get("created", ""), reverse=True)
         return JSONResponse({"routes": [_route_item(item) for item in full]})
     except ValueError as exc:
