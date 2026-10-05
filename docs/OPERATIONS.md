@@ -34,7 +34,8 @@ digest in ECR bestaat en draait dezelfde CI, stale-guard, Terraform-plan en
 smoke-test. Let op:
 
 - De stale-guard blijft gelden: de run moet starten op de huidige `main`-HEAD
-  en de CI van die HEAD moet slagen. Terraform past de infra van HEAD toe met
+  of op een commit waarna `main` geen deploybestanden meer wijzigde (alleen
+  web/docs). De CI van die commit moet slagen. Terraform past de infra van HEAD toe met
   het oude image; kies dus een digest die compatibel is met die infra, packs en
   opslag.
 - De smoke-test slaat de vergelijking van `route_sources.build_id` over, want

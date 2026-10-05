@@ -69,11 +69,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Weiger een achterhaalde main-commit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: test "$(gh api repos/${{ github.repository }}/commits/main --jq .sha)" = "$GITHUB_SHA"
+        run: |
+          MAIN_SHA="$(gh api repos/${{ github.repository }}/commits/main --jq .sha)"
+          if [ "$MAIN_SHA" = "$GITHUB_SHA" ]; then exit 0; fi
+          git fetch --quiet origin main
+          # Een nieuwere main-commit die alleen web/docs wijzigt start zelf geen
+          # AWS-deploy; weiger dan niet, anders raakt deze backend nooit live.
+          if git merge-base --is-ancestor "$GITHUB_SHA" "$MAIN_SHA" && \
+             git diff --quiet "$GITHUB_SHA" "$MAIN_SHA" -- \
+               deploy/aws infra/terraform lusmaker pyproject.toml .github/workflows/deploy-aws.yml; then
+            echo "main ($MAIN_SHA) wijzigt geen deploybestanden ten opzichte van $GITHUB_SHA"
+            exit 0
+          fi
+          echo "::error::main is verder dan $GITHUB_SHA met deploywijzigingen; die commit deployt zelf."
+          exit 1
 
       - name: Controleer rollback-digest
         if: env.ROLLBACK_DIGEST != ''
