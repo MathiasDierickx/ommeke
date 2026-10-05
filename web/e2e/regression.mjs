@@ -582,6 +582,33 @@ test("Breng me terug zonder vinkje stuurt geen closure", async ({ page, url }) =
   expectNoStrays(state, "terugweg zonder afsluiting");
 });
 
+test("offline: geopende route blijft beschikbaar en toont een badge", async ({ page, url, vp }) => {
+  // Eigen context mét service worker (de standaardcontext blokkeert die).
+  const context = await page.context().browser().newContext({ viewport: { width: vp.width, height: vp.height }, isMobile: vp.mobile, hasTouch: vp.mobile, reducedMotion: "reduce" });
+  try {
+    const tab = await context.newPage();
+    tab.setDefaultTimeout(TIMEOUT);
+    const geometry = {
+      points: [[51.0, 3.8], [51.01, 3.82], [51.02, 3.8], [51.0, 3.78]], climbs: [], start: { lat: 51.0, lon: 3.8 },
+      elevation: [{ km: 0, ele: 10 }, { km: 1, ele: 40 }, { km: 2, ele: 15 }],
+    };
+    const state = await installBackend(tab, { handlers: { "GET /api/routes/r1": ({ state }) => json(200, { route: { ...state.route, geometry } }) } });
+    await openRoute(tab, url);
+    await tab.waitForFunction(() => { try { return JSON.parse(localStorage.getItem("ommeke-offline-routes-v1") || "[]").some((r) => r.id === "r1" && r.auto); } catch { return false; } });
+    await tab.locator(".offline-badge", { hasText: "Offline beschikbaar" }).first().waitFor({ state: "attached" });
+    await tab.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+    // Wacht tot de worker deze pagina beheert (clients.claim).
+    await tab.waitForFunction(() => !!navigator.serviceWorker.controller);
+    await context.setOffline(true);
+    await tab.goto(`${url}/routes/r1/`, { waitUntil: "domcontentloaded" });
+    await tab.locator("#name", { hasText: "Berendries-lus" }).waitFor();
+    assert.ok((await tab.locator("#line").getAttribute("d"))?.startsWith("M"), "routelijn getekend");
+    assert.ok((await tab.locator("#height").getAttribute("d"))?.startsWith("M"), "hoogteprofiel getekend");
+    await context.setOffline(false);
+    assert.deepEqual(state.pageErrors, []);
+  } finally { await context.close(); }
+});
+
 // --- Runner ---------------------------------------------------------------
 
 const only = process.env.E2E_ONLY;

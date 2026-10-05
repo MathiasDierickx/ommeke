@@ -16,6 +16,7 @@ import { chatReply, mergeById, orphanState, pendingPrompt, unansweredPrompt, typ
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { clearStored, currentSession, signOut } from "@/lib/cognito";
+import { clearOffline, registerOfflineWorker, storeRoute } from "@/lib/offline-routes";
 import { safeFilename, saveBlob } from "@/lib/save-file";
 import type { AuthSession, ChatMessage, Conversation, NearbyClimb, Route, RouteAdjustment } from "@/lib/types";
 
@@ -97,10 +98,13 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     const version = ++routeLoadVersion.current;
     const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, accessToken);
     if (version !== routeLoadVersion.current) return data.route;
+    storeRoute(data.route, true); // laatst geopende routes blijven offline beschikbaar
     setSelectedRoute(data.route);
     setRoutes((current) => current.map((item) => item.id === data.route.id ? { ...item, ...data.route } : item));
     return data.route;
   }, []);
+
+  useEffect(() => { if (session) registerOfflineWorker(); }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -380,7 +384,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   const handleLogout = () => {
     const current = session;
-    try { localStorage.removeItem("ommeke-offline-routes-v1"); } catch { /* Geen lokale opslag beschikbaar. */ }
+    clearOffline();
     libraryVersion.current++;
     routeLoadVersion.current++;
     didInitialLanding = false;
