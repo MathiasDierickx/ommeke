@@ -126,3 +126,67 @@ def test_available_area_evs_probes_all_activity_and_unpaved_areas():
     }
     assert available == expected
     assert set(probed) == expected
+
+
+def _with_startup_env(wait_s, marker=None):
+    import os
+    saved = {k: os.environ.get(k) for k in ("LUSMAKER_GH_STARTUP_WAIT_S", "LUSMAKER_GH_FAILED_MARKER")}
+    os.environ["LUSMAKER_GH_STARTUP_WAIT_S"] = str(wait_s)
+    if marker:
+        os.environ["LUSMAKER_GH_FAILED_MARKER"] = marker
+    else:
+        os.environ.pop("LUSMAKER_GH_FAILED_MARKER", None)
+    gh._ready_url = None
+
+    def restore():
+        gh._ready_url = None
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    return restore
+
+
+def test_routing_waits_for_a_graphhopper_that_starts_after_the_api():
+    restore = _with_startup_env(60)
+    checks = []
+    try:
+        gh.wait_until_ready(health=lambda _url: checks.append(1) or len(checks) >= 3, sleep=lambda _s: None)
+        gh.wait_until_ready(health=lambda _url: checks.append(1) or False, sleep=lambda _s: None)
+    finally:
+        restore()
+    assert len(checks) == 3  # ready is remembered; the second call does not poll
+
+
+def test_router_startup_failure_and_timeout_are_clear_errors():
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as tmp:
+        marker = Path(tmp) / "gh.failed"
+        marker.touch()
+        restore = _with_startup_env(60, str(marker))
+        try:
+            gh.wait_until_ready(health=lambda _url: False, sleep=lambda _s: None)
+            raise AssertionError("expected GhError")
+        except gh.GhError as error:
+            assert "kon niet starten" in str(error)
+        finally:
+            restore()
+    now = [0.0]
+    restore = _with_startup_env(1)
+    try:
+        gh.wait_until_ready(health=lambda _url: False, sleep=lambda s: now.__setitem__(0, now[0] + s), clock=lambda: now[0])
+        raise AssertionError("expected GhError")
+    except gh.GhError as error:
+        assert "opstarten" in str(error)
+    finally:
+        restore()
+
+
+def test_local_runs_do_not_wait_for_a_router():
+    restore = _with_startup_env(0)
+    try:
+        gh.wait_until_ready(health=lambda _url: (_ for _ in ()).throw(AssertionError("polled")))
+    finally:
+        restore()

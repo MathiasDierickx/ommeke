@@ -1,8 +1,12 @@
 """Client voor de lokale GraphHopper-instantie."""
 import json
+import os
+import threading
+import time
 import urllib.error
 import urllib.request
 from functools import lru_cache
+from pathlib import Path
 
 from . import config
 from .heat import ACTIVITIES, PAVED_PREFERENCE_ACTIVITIES
@@ -12,7 +16,47 @@ class GhError(RuntimeError):
     pass
 
 
+_ready_lock = threading.Lock()
+_ready_url: str | None = None
+
+
+def _health_ok(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(url + "/health", timeout=2) as resp:
+            return resp.status == 200
+    except OSError:
+        return False
+
+
+def wait_until_ready(*, health=_health_ok, sleep=time.sleep, clock=time.monotonic) -> None:
+    """Wacht op een GraphHopper die naast de API opstart (Lambda).
+
+    Alleen actief met ``LUSMAKER_GH_STARTUP_WAIT_S``; lokaal blijft een
+    ontbrekende router meteen een duidelijke fout.
+    """
+    global _ready_url
+    budget = float(os.environ.get("LUSMAKER_GH_STARTUP_WAIT_S") or 0)
+    url = config.GH_URL
+    if budget <= 0 or _ready_url == url:
+        return
+    marker = os.environ.get("LUSMAKER_GH_FAILED_MARKER")
+    with _ready_lock:
+        if _ready_url == url:
+            return
+        deadline = clock() + budget
+        while True:
+            if health(url):
+                _ready_url = url
+                return
+            if marker and Path(marker).exists():
+                raise GhError("De router kon niet starten. Probeer het over enkele minuten opnieuw.")
+            if clock() >= deadline:
+                raise GhError("De router is nog aan het opstarten. Probeer het over een minuut opnieuw.")
+            sleep(0.25)
+
+
 def _post(path: str, body: dict) -> dict:
+    wait_until_ready()
     req = urllib.request.Request(
         config.GH_URL + path,
         data=json.dumps(body).encode(),
@@ -34,6 +78,7 @@ def _post(path: str, body: dict) -> dict:
 
 
 def info() -> dict:
+    wait_until_ready()
     try:
         with urllib.request.urlopen(config.GH_URL + "/info", timeout=5) as resp:
             return json.load(resp)

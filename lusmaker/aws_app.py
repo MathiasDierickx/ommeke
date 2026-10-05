@@ -188,7 +188,7 @@ class CognitoAuthMiddleware:
 
 
 async def health(_request: Request) -> JSONResponse:
-    """Lichte readiness check; GraphHopper start vóór de ASGI-server."""
+    """Lichte readiness check; GraphHopper start parallel en routering wacht erop."""
     from . import route_evidence
     try:
         sources = route_evidence.pack_status()
