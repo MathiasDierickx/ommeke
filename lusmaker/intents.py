@@ -18,6 +18,7 @@ from . import (
     config,
     coverage,
     draft,
+    funnel,
     geocode,
     gpx,
     heat,
@@ -655,6 +656,7 @@ def _set_water_via(d: dict, request: dict, water_fn) -> bool:
     return True
 
 
+@funnel.tracked_plan
 @quotas.metered("route")
 def plan_route(
     start: str,
@@ -965,9 +967,11 @@ def apply_answers(
         goal = "toeren"
     save_fn(d)
     adjust = adjust_fn or adjust_route
-    return adjust(draft_id, doel=goal, check_readiness=True)
+    with funnel.adjust_kind("answers"):
+        return adjust(draft_id, doel=goal, check_readiness=True)
 
 
+@funnel.tracked_adjust
 @quotas.metered("route")
 def adjust_route(
     draft_id: str,

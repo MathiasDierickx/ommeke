@@ -24,6 +24,7 @@ from . import (
     aws_state,
     climbs,
     config,
+    funnel,
     coverage,
     draft,
     geocode as geocode_mod,
@@ -381,7 +382,8 @@ def _structured_errors(fn):
     """Zet ``buiten_gebied`` om in een JSON-foutmelding met code en dekking."""
     def call(*args, **kwargs):
         try:
-            return fn(*args, **kwargs)
+            with funnel.channel('mcp'):
+                return fn(*args, **kwargs)
         except coverage.OutOfCoverage as exc:
             raise ValueError(json.dumps(exc.payload(), ensure_ascii=False)) from exc
     return call

@@ -12,7 +12,7 @@ from typing import Any
 
 from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA
 
-from . import draft, intents, tenant, quotas, requests, telemetry, progress
+from . import draft, funnel, intents, tenant, quotas, requests, telemetry, progress
 
 
 MAX_PROMPT_CHARS = 4000
@@ -369,6 +369,12 @@ class RouteToolExecutor:
     """Whitelist rond de bestaande domeinfuncties voor Bedrock tool use."""
 
     def execute(
+        self, name: str, arguments: dict[str, Any], *, request_id: str
+    ) -> dict[str, Any]:
+        with funnel.channel("chat"):
+            return self._execute(name, arguments, request_id=request_id)
+
+    def _execute(
         self, name: str, arguments: dict[str, Any], *, request_id: str
     ) -> dict[str, Any]:
         from .chat_contracts import validate_arguments
