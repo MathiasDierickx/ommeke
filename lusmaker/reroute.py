@@ -9,7 +9,7 @@ def _route_memory(item, db):
     return draft._route(item, db, save_fn=lambda *a, **kw: None)
 
 
-def reroute_from(draft_id, lat, lon, rest_km='kortste', *, expected_revision=None, closure=None,
+def reroute_from(draft_id, lat, lon, rest_km='kortste', *, expected_revision=None, closure=None, request_id=None,
                  load_fn=draft.load, save_fn=draft.save, route_fn=_route_memory,
                  climbs_fn=climbs.all_climbs, export_fn=intents._export_files):
     if any(isinstance(x,bool) or not isinstance(x,(int,float)) or not math.isfinite(x) for x in (lat,lon)) or not -90<=lat<=90 or not -180<=lon<=180:
@@ -21,7 +21,7 @@ def reroute_from(draft_id, lat, lon, rest_km='kortste', *, expected_revision=Non
     points=[p for leg in original.get('_geometry',[]) for p in leg]
     offset,progress,index,t=project((lat,lon),points)
     if offset>2000: raise ValueError('Je locatie ligt meer dan 2 km van de route. Kies een nieuwe route vanaf hier.')
-    quotas.consume('route')
+    quotas.consume('route', request_id=f'{request_id}:route' if request_id else None)
     item=deepcopy(original)
     destination=original.get('return_destination') or original['start']
     item.update(start={'lat':lat,'lon':lon,'label':'Huidige positie'},end=deepcopy(destination),

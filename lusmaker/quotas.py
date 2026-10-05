@@ -93,7 +93,8 @@ def metered(kind):
     def decorate(fn):
         @wraps(fn)
         def call(*args, **kwargs):
-            consume(kind)
+            rid = kwargs.get("request_id")
+            consume(kind, request_id=f"{rid}:{kind}" if isinstance(rid, str) and rid else None)
             return fn(*args, **kwargs)
         return call
     return decorate
