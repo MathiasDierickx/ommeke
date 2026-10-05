@@ -228,6 +228,7 @@ class CompactRouteResult(TypedDict):
     vervolg: list[str]
     artifacts: NotRequired[list[ArtifactDescriptor]]
     constraints: dict[str, Any]
+    voorstellen: NotRequired[list[dict[str, Any]]]
 
 
 class RouteWorkflowResult(TypedDict, total=False):
@@ -246,6 +247,7 @@ class RouteWorkflowResult(TypedDict, total=False):
     vervolg: list[str]
     artifacts: list[ArtifactDescriptor]
     constraints: dict[str, Any]
+    voorstellen: list[dict[str, Any]]
     profiel: str
     onbekend: list[str]
     vragen: list[dict[str, Any]]
