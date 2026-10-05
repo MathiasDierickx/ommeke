@@ -261,6 +261,9 @@ jobs:
           API=$(terraform -chdir=infra/terraform output -raw api_endpoint)
           curl --fail --show-error --max-time 900 "$HEALTH" > "$RUNNER_TEMP/health.json"
           cat "$RUNNER_TEMP/health.json"
+          # De API start vóór GraphHopper; controleer dat de router echt opkomt.
+          curl --fail --show-error --max-time 900 "$HEALTH?router=1" > "$RUNNER_TEMP/router.json"
+          jq -e '.status == "ok"' "$RUNNER_TEMP/router.json" >/dev/null
           if [ "$REGION_SLUG" = vlaanderen ] && [ -z "$ROLLBACK_DIGEST" ]; then
             jq -e --arg build "${{ steps.sources.outputs.id }}" \
               '.route_sources.build_id == $build and .route_sources.features > 0' "$RUNNER_TEMP/health.json"

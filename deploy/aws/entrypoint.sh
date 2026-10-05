@@ -22,12 +22,18 @@ rm -f "$GRAPH_FAILED"
 # GraphHopper start op de achtergrond. De API is meteen bereikbaar: lezen van
 # routes, gesprekken en downloads heeft geen router nodig. Routeringsaanroepen
 # wachten in lusmaker.gh tot /health slaagt of dit merkteken verschijnt.
+# De graph staat als MMAP in plaats van RAM_STORE in het geheugen: de kernel
+# kan die pagina's terugwinnen, terwijl een volle Java-heap naast Python de
+# Lambda-geheugenlimiet (3008 MB) overschreed (Runtime.OutOfMemory).
+RUNTIME_CONFIG="$WRITABLE_HOME/gh/config.yml"
 (
   mkdir -p "$GRAPH_TARGET"
+  awk '{ print } /^graphhopper:[[:space:]]*$/ { print "  graph.dataaccess.default_type: MMAP" }' \
+    "$GRAPH_CONFIG" > "$RUNTIME_CONFIG"
   if cp -a "$GRAPH_SOURCE/." "$GRAPH_TARGET/"; then
-    JAR="$GRAPH_JAR" JAVA_OPTS="${JAVA_OPTS:--Xms256m -Xmx2g}" \
+    JAR="$GRAPH_JAR" JAVA_OPTS="${JAVA_OPTS:--Xms256m -Xmx1536m}" \
       /opt/graphhopper/graphhopper.sh \
-      -c "$GRAPH_CONFIG" \
+      -c "$RUNTIME_CONFIG" \
       -o "$GRAPH_TARGET" \
       --host 127.0.0.1 || true
   fi

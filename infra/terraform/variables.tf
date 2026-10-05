@@ -81,7 +81,7 @@ variable "max_concurrency" {
 variable "java_opts" {
   description = "JVM heapinstellingen binnen het Lambda-geheugen."
   type        = string
-  default     = "-Xms256m -Xmx2g"
+  default     = "-Xms256m -Xmx1536m"
 }
 
 variable "oauth_callback_urls" {

@@ -187,9 +187,19 @@ class CognitoAuthMiddleware:
             await self.app(scope, receive, send)
 
 
-async def health(_request: Request) -> JSONResponse:
-    """Lichte readiness check; GraphHopper start parallel en routering wacht erop."""
+async def health(request: Request) -> JSONResponse:
+    """Lichte readiness check; GraphHopper start parallel en routering wacht erop.
+
+    Met ``?router=1`` wacht de check ook op een werkende GraphHopper; de
+    deploy-smoketest gebruikt dat om een router die niet start te betrappen.
+    """
     from . import route_evidence
+    if request.query_params.get("router") == "1":
+        from . import gh
+        try:
+            await asyncio.to_thread(gh.info)
+        except gh.GhError as exc:
+            return JSONResponse({"status": "error", "error": str(exc)}, status_code=503)
     try:
         sources = route_evidence.pack_status()
     except (OSError, ValueError, KeyError):

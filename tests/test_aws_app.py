@@ -32,7 +32,7 @@ def _access_token(client_id: str, scope: str) -> str:
     return f"header.{encoded}.signature"
 
 
-async def _invoke(app, path="/", *, headers=None, method="GET"):
+async def _invoke(app, path="/", *, headers=None, method="GET", query=""):
     messages = []
     request_sent = False
 
@@ -60,7 +60,7 @@ async def _invoke(app, path="/", *, headers=None, method="GET"):
             "method": method,
             "path": path,
             "raw_path": path.encode(),
-            "query_string": b"",
+            "query_string": query.encode(),
             "headers": encoded_headers,
             "client": ("127.0.0.1", 1234),
             "server": ("routes.example", 443),
@@ -266,3 +266,17 @@ def test_token_accepts_one_of_multiple_configured_clients():
             os.environ.pop("LUSMAKER_OAUTH_CLIENT_IDS", None)
         else:
             os.environ["LUSMAKER_OAUTH_CLIENT_IDS"] = previous
+
+
+def test_health_can_require_a_working_router_for_the_deploy_smoke_test():
+    from unittest import mock
+    from lusmaker import gh
+    app = create_app(cognito_client=FakeCognito(), auth_mode="cognito")
+    with mock.patch.object(gh, "info", side_effect=gh.GhError("De router kon niet starten.")):
+        start, body = _json_response(app, "/health", query="router=1")
+        assert start["status"] == 503 and "router" in body["error"]
+        light, _ = _json_response(app, "/health")
+        assert light["status"] == 200  # zonder router=1 blijft de readiness-check licht
+    with mock.patch.object(gh, "info", return_value={"bbox": [2.5, 50.6, 5.9, 51.5]}):
+        start, body = _json_response(app, "/health", query="router=1")
+        assert start["status"] == 200 and body["status"] == "ok"
