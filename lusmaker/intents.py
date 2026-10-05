@@ -26,6 +26,7 @@ from . import (
     profiles,
     readiness,
 )
+from . import proposals as proposals_mod
 
 
 class IntentError(RuntimeError):
@@ -322,6 +323,7 @@ def compact_result(
     request: dict | None = None,
     *,
     feature_selector=heat.features_near_route,
+    proposals_fn=None,
 ) -> dict:
     computed = d.get("computed")
     if not computed:
@@ -353,6 +355,12 @@ def compact_result(
     underway = underway_label(_route_poi_counts(d, feature_selector))
     if underway:
         result["onderweg"] = underway
+    proposals = (proposals_fn or proposals_mod.build)(d, climb_db, request)
+    if proposals:
+        result["voorstellen"] = proposals
+        result["vervolg"].append(
+            "bied de voorstellen aan; elk voorstel bevat de adjust_route-argumenten"
+        )
     return result
 
 
@@ -427,10 +435,26 @@ def _route_request(
     }
 
 
+def _tour_objective(request: dict, default: str = "toeren") -> str:
+    """'vlak' als de rit expliciet vlak moet zijn, anders het gegeven doel."""
+    explicit = request.get("expliciete_voorkeuren") or {}
+    if explicit.get("heuvels") == "vlak" and default in ("toeren", "vlak"):
+        return draft.FLAT
+    return default
+
+
 def _profile_for_request(request: dict, profile_load_fn) -> dict:
     profile = copy.deepcopy(profile_load_fn(request["profiel_naam"]))
     profile["activiteit"] = request["activiteit"]
-    profile["voorkeuren"].update(request.get("expliciete_voorkeuren") or {})
+    # Antwoorden gelden voor deze rit en deze activiteit: ze gaan in de
+    # per-activiteit-laag zodat ze ook bij wandelen (zonder terugval op de
+    # top-level fietsvoorkeuren) en boven profielwaarden winnen.
+    explicit = request.get("expliciete_voorkeuren") or {}
+    profile["voorkeuren"].update(explicit)
+    if explicit:
+        activity = activities.canonical(request["activiteit"]) or activities.DEFAULT
+        per_activity = profile.setdefault("voorkeuren_per_activiteit", {})
+        per_activity[activity] = {**(per_activity.get(activity) or {}), **explicit}
     return profile
 
 
@@ -524,7 +548,7 @@ def _route_for_request(
                 max_km=ceiling,
                 fill=True,
                 fill_target_km=fill_target,
-                objective="toeren",
+                objective=_tour_objective(request),
             )
             actual = (d.get("computed") or {}).get("total_km") or 0.0
             if actual < 0.3:
@@ -555,10 +579,11 @@ def _route_for_request(
     }
     if request.get("rond_plaats") and not d.get("climbs"):
         optimize_kwargs["objective"] = (
-            "offroad" if request.get("activiteit") == "trail" else "toeren"
+            "offroad" if request.get("activiteit") == "trail"
+            else _tour_objective(request)
         )
     elif goal == "toeren":
-        optimize_kwargs["objective"] = "toeren"
+        optimize_kwargs["objective"] = _tour_objective(request)
     elif goal == "offroad":
         optimize_kwargs["objective"] = "offroad"
     if target_km is not None:
@@ -582,7 +607,7 @@ def _route_for_request(
             max_km=max(optimize_ceiling, (fill_target or 0.0) * 1.6),
             fill=True,
             fill_target_km=fill_target,
-            objective="toeren",
+            objective=_tour_objective(request),
         )
 
 

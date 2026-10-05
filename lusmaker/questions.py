@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from . import activities
+from . import activities, profiles
 
 # Een doel dat de gebruiker al koos hoeft niet opnieuw bevraagd te worden.
 _EXPLICIT_GOALS = {"hoogtemeters", "offroad", "kort"}
@@ -69,7 +69,7 @@ def context(d: dict, profiel: dict, probe: dict) -> Context:
         cobble_m=_metric(probe, "kassei_aanwezig_m", "kassei_m"),
         unpaved_m=_metric(probe, "onverhard_m", "onverhard_m"),
         goal=(d.get("route_request") or {}).get("doel"),
-        preferences=profiel.get("voorkeuren") or {},
+        preferences=profiles.effective_preferences(profiel, activity),
     )
 
 

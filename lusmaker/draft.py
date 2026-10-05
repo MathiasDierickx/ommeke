@@ -18,6 +18,9 @@ class DraftError(RuntimeError):
 PROFILES = ("quiet", "trail")
 _DRAFT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _LEGACY_HM = "__legacy_hm__"
+# Vlak: een toer die niet naar klimmen zoekt en bij het opvullen de rondrit
+# met de laagste stijging per km kiest (afstandsdoel blijft voorgaan).
+FLAT = "vlak"
 _LOAD_HEAT = object()
 
 
@@ -651,7 +654,10 @@ def routing_preferences(d: dict) -> dict:
         "avoid_busy": False,
     }
     if d.get("profile_doc"):
-        effective.update(profiles.routing_prefs(profiles.load(d["profile_doc"])))
+        effective.update(profiles.routing_prefs(
+            profiles.load(d["profile_doc"]),
+            (d.get("route_request") or {}).get("activiteit"),
+        ))
         # Het opgeslagen sportprofiel is bij creatie al van het document
         # afgeleid; een expliciet afwijkend draftprofiel blijft leidend.
         if d.get("profile_override", False):
@@ -678,6 +684,14 @@ def _activity_kwargs(d: dict) -> dict:
     """Routeerargumenten voor de activiteit; leeg bij oudere drafts."""
     activity = (d.get("route_request") or {}).get("activiteit")
     return {"activity": activity} if activity else {}
+
+
+def _prefers_cobbles(d: dict, profile_document: dict) -> bool:
+    request = d.get("route_request") or {}
+    activity = request.get("activiteit")
+    preferences = profiles.effective_preferences(profile_document, activity)
+    explicit = (request.get("expliciete_voorkeuren") or {}).get("kasseien")
+    return (explicit or preferences["kasseien"]) == "graag"
 
 
 def objective_for_draft(d: dict, objective):
@@ -1223,7 +1237,7 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
             weighted=True,
         )
         weights = profile_document["gewichten"]
-        prefer_cobbles = profile_document["voorkeuren"]["kasseien"] == "graag"
+        prefer_cobbles = _prefers_cobbles(d, profile_document)
         for candidate in candidates:
             components = _score_components(candidate, max_detour_km)
             score = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
@@ -1271,7 +1285,7 @@ def _eligible_candidates(candidates: list[dict], budget_km: float,
 
 
 def _objective_weights(objective) -> dict | None:
-    if objective in ("hm-per-km", "toeren", _LEGACY_HM):
+    if objective in ("hm-per-km", "toeren", FLAT, _LEGACY_HM):
         return None
     if objective == "hm":
         objective = {"hoogtemeters": 1.0}
@@ -1279,7 +1293,7 @@ def _objective_weights(objective) -> dict | None:
         objective = {"offroad": 1.0}
     if not isinstance(objective, dict):
         raise DraftError(
-            "objective moet 'hm', 'hm-per-km', 'offroad', 'toeren' "
+            "objective moet 'hm', 'hm-per-km', 'offroad', 'toeren', 'vlak' "
             "of een gewichten-dict zijn"
         )
     try:
@@ -1316,6 +1330,9 @@ def _select_candidate(candidates: list[dict], objective, budget_km: float | None
         extra_km = candidate["extra_km"]
         gain = candidate["extra_hoogtemeters"]
         ratio = gain / max(extra_km, 0.3)
+        if objective == FLAT:
+            # Laagste stijging per km wint; bij gelijkspel de kleinste stijging.
+            return (ratio, gain, extra_km, candidate["climb"]["id"])
         if weights is None:
             primary = gain if objective == _LEGACY_HM else ratio
         else:
@@ -1433,7 +1450,9 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             geo.retrace_m(list(reversed(coords)), existing),
         ) > 300.0:
             continue
-        if weights is None:
+        if objective == FLAT:
+            score = -candidate.get("ascend_m", 0) / max(candidate["distance_m"] / 1000.0, 0.3)
+        elif weights is None:
             # Ook hm-per-km koos vóór T11 de rondritlob op absolute stijging.
             score = candidate.get("ascend_m", 0)
         else:
@@ -1566,13 +1585,10 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
     # Valideer ook als er door max_rounds=0 geen kandidaat gekozen wordt.
     weights = _objective_weights(objective)
     profile_document = profiles.load(d["profile_doc"]) if d.get("profile_doc") else None
-    prefer_cobbles = bool(
-        profile_document
-        and profile_document["voorkeuren"]["kasseien"] == "graag"
-    )
+    prefer_cobbles = bool(profile_document and _prefers_cobbles(d, profile_document))
     _select_candidate([], objective, prefer_cobbles=prefer_cobbles)
     pure_offroad = weights is not None and weights["offroad"] == 1.0
-    tour_only = objective == "toeren"
+    tour_only = objective in ("toeren", FLAT)
 
     if not d["climbs"] and d.get("loop"):
         # Offroad en een gewone toer jagen niet op klimmen: meteen opvullen.
