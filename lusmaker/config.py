@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+# Eén User-Agent mét contactadres voor alle uitgaande verzoeken naar derden.
+USER_AGENT = "Ommeke/0.1 (https://github.com/MathiasDierickx/ommeke; contact: mathias.dierickx@gmail.com)"
+
 LEGACY_SLUG = "vlaanderen"
 LEGACY_BBOX = (50.68, 3.35, 51.10, 4.20)
 LEGACY_GEOFABRIK = "europe/belgium"

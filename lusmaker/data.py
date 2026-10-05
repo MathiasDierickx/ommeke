@@ -12,7 +12,7 @@ def _download(url: str, dest, label: str) -> None:
         return
     print(f"[setup] download {label} ...", file=sys.stderr)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "lusmaker/0.1"})
+    req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
     with urllib.request.urlopen(req) as resp, open(tmp, "wb") as f:
         total = int(resp.headers.get("Content-Length") or 0)
         done = 0

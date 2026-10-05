@@ -9,8 +9,9 @@
 
 ## Wie we zijn
 
-Lusmaker ("wij") is een dienst van [BEDRIJFSNAAM / Mathias Dierickx],
-[adres], België — contact: [e-mail]. Lusmaker stelt fiets- en looproutes
+Lusmaker ("wij") is een dienst van Ommeke (in pilotfase), beheerd door
+Mathias Dierickx, België. Postadres: [POSTADRES — nog in te vullen door de
+eigenaar]. Contact: mathias.dierickx@gmail.com (zoals in de User-Agent van de dienst). Lusmaker stelt fiets- en looproutes
 samen op basis van jouw voorkeuren, via AI-assistenten (zoals Claude en
 ChatGPT) die met onze dienst verbinden.
 
@@ -20,8 +21,8 @@ ChatGPT) die met onze dienst verbinden.
 |---|---|---|---|
 | Accountgegevens | e-mailadres, gebruikers-ID van je AI-assistent-login (OAuth) | authenticatie, jouw routes aan jou koppelen | tot verwijdering van je account |
 | Voorkeurenprofiel | gewichten (klimmen/offroad), voorkeuren (kasseien, autovrij), antwoordhistoriek | betere routes voorstellen | tot je ze wist of je account verwijdert |
-| Routes en concepten | startpunten (adres!), routes, GPX-exports | de kerndienst | tot je ze wist; exports max. [30] dagen |
-| Technische logs | IP-adres, tijdstippen, foutmeldingen | beveiliging, misbruikpreventie | max. [90] dagen |
+| Routes en concepten | startpunten (adres!), routes, GPX-exports | de kerndienst | tot je ze wist of je account verwijdert; GPX-exports horen bij de route en worden samen met die route gewist |
+| Technische logs | IP-adres, tijdstippen, foutmeldingen | beveiliging, misbruikpreventie | 7 dagen in CloudWatch (instelling `log_retention_days`) |
 
 Startpunten kunnen je woonadres onthullen; we behandelen route- en
 profielgegevens daarom als persoonsgegevens onder de AVG/GDPR.
@@ -29,19 +30,24 @@ profielgegevens daarom als persoonsgegevens onder de AVG/GDPR.
 ## Eigen webapp en modelverwerking
 
 De eigen chat bewaart berichten, assistentantwoorden en gekoppelde routes in
-DynamoDB en verstuurt context naar AWS Bedrock. De MCP-connector ontvangt
- tool-aanroepen; deze beperking geldt niet voor onze eigen chat. Tenantopslag
+DynamoDB en verstuurt context (maximaal twintig recente berichten) naar AWS
+Bedrock in eu-west-1; het productiemodel is momenteel `openai.gpt-oss-120b-1:0`.
+De Claude-connector (MCP) ontvangt alleen tool-aanroepen, geen gesprekstekst;
+deze beperking geldt niet voor onze eigen chat. Tenantopslag
 bevat ook feedback, quota en requestreceipts. Vercel host de frontend en AWS
 Cognito verzorgt authenticatie. Optionele Google-geocoding verstuurt zoektermen;
 externe kaarttiles kunnen IP-adres en gevraagde kaartregio aan de provider tonen.
-Concrete regio's, verwerkers en doorgiftegrondslagen moeten worden bevestigd.
+AWS Bedrock gebruikt invoer en uitvoer niet om modellen te trainen. De
+eventuele doorgiftegrondslagen voor Vercel en Google moeten nog worden bevestigd.
 
 Delen is opt-in: iedereen met de link ziet routegeometrie inclusief startpunt.
 De link kan worden ingetrokken. Account-export downloadt actieve gegevens.
 Wissing blokkeert nieuw werk en vraagt na 16 minuten opnieuw bevestiging; dan
 verdwijnen actieve chats, routes, deelverwijzingen en het Cognito-account.
-Een blokkeermarker blijft staan. Historische S3-versies, backups en logs vallen
-onder afzonderlijke, vóór lancering vast te leggen retentie. Zie OPERATIONS.md.
+Een blokkeermarker blijft staan. Historische S3-versies van verwijderde
+objecten verdwijnen na 30 dagen, technische logs na 7 dagen. DynamoDB
+point-in-time recovery staat standaard uit, dus er zijn geen extra
+DynamoDB-back-ups. Zie `docs/OPERATIONS.md`.
 
 ## Wat we NIET doen
 
@@ -57,9 +63,9 @@ gerechtvaardigd belang (art. 6.1.f) voor beveiligingslogs.
 
 ## Verwerkers en doorgifte
 
-Hosting bij Amazon Web Services ([regio, bv. eu-west-1 — EU]); routing- en
+Hosting bij Amazon Web Services (regio eu-west-1, Ierland — EU); routing- en
 kaartdata op onze eigen infrastructuur. Volledige verwerkerslijst op
-aanvraag. De concrete modelregio en eventuele doorgiften moeten vóór publicatie worden bevestigd.
+aanvraag. Bedrock-inferentie draait in dezelfde regio; bevestig vóór publicatie of het gekozen model geen regio-overschrijdende inferentie gebruikt.
 
 ## Open data
 
@@ -69,15 +75,27 @@ Vlaanderen open data, open hoogtedata). De server gebruikt vooraf ingelezen data
 ## Jouw rechten
 
 Inzage, rectificatie, wissing, beperking, overdraagbaarheid en bezwaar:
-mail [e-mail]. Je kunt je profiel en routes ook rechtstreeks via de
+mail mathias.dierickx@gmail.com. Je kunt je profiel en routes ook rechtstreeks via de
 assistent wissen. Klachten: Gegevensbeschermingsautoriteit (België),
 www.gegevensbeschermingsautoriteit.be.
 
 ## Beveiliging
 
 Versleuteld transport (TLS), OAuth 2.1-authenticatie, gegevens per gebruiker
-gescheiden opgeslagen, toegang beperkt tot [wie].
+gescheiden opgeslagen, toegang tot de productieomgeving beperkt tot de beheerder (Mathias Dierickx).
 
 ## Wijzigingen
 
 Wezenlijke wijzigingen kondigen we aan op deze pagina met nieuwe datum.
+
+## Nog te beslissen door de eigenaar
+
+- Postadres (nergens in de repo vastgelegd) en bevestiging dat mathias.dierickx@gmail.com het publieke contactadres is (nu enkel in de User-Agent).
+- Juridische entiteit: blijft het "Ommeke (in pilotfase), beheerd door Mathias
+  Dierickx", of komt er een bedrijfsnaam/ondernemingsnummer?
+- Bevestigen dat het gekozen Bedrock-model geen inferentie buiten de EU doet en
+  dat het niet op klantdata traint (huidig model: `openai.gpt-oss-120b-1:0`).
+- Doorgiftegrondslagen voor Vercel (frontend) en optionele Google-geocoding.
+- Of logretentie van 7 dagen en S3-versieretentie van 30 dagen definitief zijn,
+  en of DynamoDB point-in-time recovery (`chat_point_in_time_recovery`) aan moet.
+- Juridische review en publicatie op `https://<domein>/privacy`.

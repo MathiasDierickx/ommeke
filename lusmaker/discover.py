@@ -14,7 +14,7 @@ from . import config, geo
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 GEOFABRIK_INDEX_URL = "https://download.geofabrik.de/index-v1.json"
-USER_AGENT = "Ommeke/0.1 (https://github.com/MathiasDierickx/ommeke; contact: mathias.dierickx@gmail.com)"
+USER_AGENT = config.USER_AGENT
 DEFAULT_MAX_PBF_MB = 700
 
 _last_nominatim_request = 0.0

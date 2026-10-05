@@ -17,7 +17,7 @@ FILTERS = {"parking": '["amenity"="parking"]', "hotel": '["tourism"="hotel"]',
 def _fetch(query, hour):
     endpoint = os.environ.get("LUSMAKER_OVERPASS_URL", "https://overpass-api.de/api/interpreter")
     request = Request(endpoint, data=urlencode({"data": query}).encode(),
-                      headers={"User-Agent": "Ommeke/0.1 (https://github.com/MathiasDierickx/ommeke; contact: mathias.dierickx@gmail.com)"})
+                      headers={"User-Agent": config.USER_AGENT})
     with urlopen(request, timeout=30) as response:
         payload = response.read(2_000_001)
     if len(payload) > 2_000_000:

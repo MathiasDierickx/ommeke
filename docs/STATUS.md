@@ -1,132 +1,88 @@
-# Inventaris en voortgang
+# Status
 
-## Actuele uitvoering — 2 oktober 2026, avond
+Stand 5 oktober 2026. Bord: [GitHub-project](https://github.com/users/MathiasDierickx/projects/2).
+Dit is de enige statusmatrix; PRODUCT.md beschrijft richting, niet voortgang.
 
-De expliciete opdracht om te deployen vervangt voor deze sessie het eerdere
-pushverbod. AWS SSO naar `ommeke-prod` werkt nu voor account `384268138628`
-(`meander-prod`). GitHub Actions deployt naar dat account; de frontend staat op
-https://ommeke.vercel.app. Het publieke brondatapack is actief. De lokale
-GraphHopper-runtime en `~/.lusmaker` zijn tijdens deze uitbreiding niet gewijzigd.
+Betekenis van de kolommen:
 
-Nieuwe onderdelen zijn ingecheckt en worden in echte Chrome-proeven gecontroleerd:
-modelvrij routeformulier, lokale plaatsnaam bij GPS-coördinaten, terugweg met
-budget/revisiecontrole, FIT-course-export, GPX-cues, POI-filter, kandidaatcache,
-CLI-intent-evals, SSE-voortgang en een expliciet lokaal bewaarde offline route.
-De offline kaart bevat een routelijn en hoogteprofiel, nog geen achtergrondtegels.
+- **Gebouwd**: code staat op `main` en is gedeployd (AWS Lambda `ommeke-prod`,
+  account `384268138628`; frontend https://ommeke.vercel.app).
+- **Lokaal geverifieerd**: offline tests, cassettes, build of lokale GraphHopper.
+- **Live geverifieerd**: aantoonbaar gecontroleerd op de productieomgeving, met
+  de aangegeven meting. Leeg = nog niet gedaan.
+- **Gepland**: nog te doen of externe acceptatie.
 
-Offline bewijs: 295 Python-tests inclusief drie bestaande regressiecassettes,
-9 frontendtests, TypeScript en productiebuild. De eerste browsertest vond een
-ontbrekend standaardprofiel in de snelplanner; daarvoor bestaat nu ook een
-integratietest door de echte intentielaag. De eerste SSE-proef vond een race
-bij het lezen van de POST-body; de reparatie leest die body vóór streaming en
-heeft een aparte regressietest. Een groene deployment alleen is geen E2E-bewijs.
+Offline bewijs: Python-suite (`.venv/bin/python -m tests.run`), frontendtests,
+TypeScript, productiebuild en Terraform-validatie. Een groene deployment alleen
+is geen E2E-bewijs.
 
-| Issue | Nieuwe implementatie | Resterend bewijs / werk |
-|---|---|---|
-| #12 | SSE-stappen uit backend/engine, heartbeats, werkelijk eindresultaat; antwoord blijft zichtbaar | Snelplanner (39,320 km), chatroute (app 19,9 km), eindantwoord/kaart/download en ongeldige-invoerproef live geslaagd; chat duurde 61,716 s |
-| #19 | Cache van kandidaatroutering per optimize-run; hit/miss-tellers | Losse warme GH-service, LM-import en p50/p95-doel nog niet gerealiseerd |
-| #20 | Bredene op geïsoleerde kustdata getest; coördinatenvalidatie verbeterd | Volledig Vlaanderen-pack en gestructureerde dekkingsfout nog niet afgerond |
-| #21 | FIT-encoder met CRC/parserproeven, GPX-cues, API/CLI/webdownload | Live nieuw gegenereerde cues en echt Garmin-toestel nog controleren; directe providerpush uitgesteld |
-| #22 | Snelplanner met GPS, afstand, activiteit, doel, quota/receipts, vraagknoppen | Browserproef na standaardprofielfix geslaagd; nieuwe mobiele layout nog controleren |
-| #23 | `lus eval-model`, eerste-toolscoring, verbruik/latentie/optionele kosten | Suite bevat ook synthetische cases en MCP-only gevallen; geen modelmigratiebesluit op ruwe score; Claude-betaling nog extern |
-| #24 | Budgetrollbackteller toegevoegd | Hints/richting en kandidaatpariteit nog niet gewijzigd; cassettes onveranderd |
-| #25 | `reroute_from` in CLI/MCP/chat/API/web; oorspronkelijke draft behouden bij budgetfout | Live omleidingsproef en toestemming voor GPS op toestel |
-| #26 | Service worker met offline shell; 10 expliciet bewaarde routes, routelijn/GPS/hoogteprofiel; wissen bij logout | Achtergrondtegels ontbreken; vliegtuigmodus nog niet live geverifieerd |
-| #27 | OSM-extractie, afstand tot/langs route, kaartfilter en export-POI's | Productiepack moet nieuwe OSM-POI's bevatten; café-via-wens nog niet geïmplementeerd |
-| #28 | Contact in user-agent, bronvermelding in webkaart/gedeelde kaart/HTML | Geen lokale graafherimport of verwijdering van legacy-seeds uitgevoerd |
+## Matrix per capability
 
-Pilotgebruikers (#7), platformreview (#17), echte fietscomputer (#21) en juridische
-acceptatie (#6) blijven externe acceptatie. Die worden niet als voltooid gemarkeerd.
+| Capability (issue) | Gebouwd | Lokaal geverifieerd | Live geverifieerd | Gepland |
+|---|---|---|---|---|
+| Engine, CLI, MCP, AWS-API, Cognito/OAuth, webapp, GPX/delen, regiopacks (basis) | Alles aanwezig; hosted multi-tenant met S3-state en DynamoDB-historiek | Python-suite, 3 echte GraphHopper-cassettes, scenario's | Frontend en API live; zie rijen hieronder | Verdere extractie uit `draft.py`/`aws_chat.py` (#16) |
+| CI vóór deploy (#3) | Herbruikbare CI als deployvereiste, SHA-check, Vercel-ignore | Workflowvalidatie | Deploy van `774ba76`: CI 37059502388 en AWS-deploy 37059502680 geslaagd | Rollbackprocedure live oefenen |
+| Routekwaliteit-acceptatie (#4) | Tien scenario's, geometrie-evaluator | Scenario's groen | | Verse water-/landmarkroutes en reviewerproef |
+| Quota en kostenlimieten (#5) | Atomaire quota, tokenreservering, MCP-routebewerkingen | Unit-tests | | Echte kosten en concurrentie in AWS |
+| Privacy en accountlevenscyclus (#6) | Export, wissing met 16-min wachttijd, Cognito-verwijdering, deelwaarschuwing; beleid ingevuld | Tests met injecteerbare opslag | | Cognito-wissing live; contactgegevens, juridische review en publicatie door de eigenaar |
+| Pilot en feedback (#7) | Feedbackendpoint/UI, meetprotocol | Unit-tests | | Echte 5-10 gebruikers; geen resultaten verzonnen |
+| Metrics en alarmen (#8) | JSON-metrieken, lokale samenvatter, Terraform-dashboard/alarmen | Terraform-validatie | | Alarmbestemming, salt, kostbaseline |
+| Mobiele flows (#9) | Lokale fixture, mobiele controle | Unit-tests | Eerste browserproeven in Chrome (zie snelformulier) | Volledige login/GPX-acceptatie met browserautomatisering |
+| Docs en productstatus (#10) | Deze matrix, PRODUCT.md, acceptatie-/beheer-/pilotdocs | n.v.t. | n.v.t. | Juridische publicatie |
+| Contractpariteit CLI/MCP/chat/web (#11) | Gedeelde chatschema's, offroad/water/landmark-pariteit | Contracttests | | Client-specifieke live acceptatie |
+| Wachtflow en herstel (#12) | SSE-voortgang, heartbeats, persistente receipts, dubbelklikslot | Regressietest op POST-body-race | Snelplanner 39,320 km, chatroute 19,9 km, eindantwoord/kaart/download; chat 61,716 s | Trage/afgebroken Lambda |
+| Nieuwe route via snelformulier | Modelvrij formulier met GPS, afstand, activiteit, doel | Integratietest door echte intentielaag | Wandeling Gent 4,8 km; Bredene 5 km | Nieuwe mobiele layout controleren |
+| Situationele vragen | Vragen na probe, antwoorden verwerkt zonder taalmodel; deterministisch `answers`-endpoint (answers-endpoint (`route_answers` in `lusmaker/aws_api.py`)) | Tests voor `intents.apply_answers` | Oudenaarde: probe vond 6,0 km onverhard en 142 hm op 11,6 km; vragen beantwoord | |
+| Activiteiten (#29) | 8 activiteiten: wandelen, trail, wegloop, stadsfiets, toerfiets, koersfiets, gravel, mtb | Catalogus- en intenttests | Wandeling Gent via het formulier | Live proef per overige activiteit |
+| Heat en persoonlijke ritten (#13, #18) | Hosted heat-writes geblokkeerd; private packs geweigerd | Tests | | Besluit GPX/providerintegratie na pilot |
+| Packprovenance (#14) | Manifest, hashes, versievalidatie | Pack-tests | `/health` toont `region_pack` | Reviewer herbouwt legacy packs |
+| Pagineren routebibliotheek (#15) | Keysetpagina's, `order=updated` met S3-metadata, zoeken/filter in UI | 248+ tests, I/O-proef 100 routes: 20 HEAD-reads | | Zoekindex over alle routes |
+| MCP-distributie (#17) | Lite- en full-toolset, submissionchecklist, ChatGPT-component | Protocoltests | | Echte Claude/ChatGPT-review en directorysubmission |
+| Latentie (#19) | Kandidaatcache per optimize-run, hit/miss-tellers; MMAP-fix tegen Lambda-OOM | Unit-tests | Koude start API 3,5 s (was 19 s); Lambda-OOM opgelost via MMAP | Warme GraphHopper-service, p50/p95-doel |
+| Dekking en packs (#20) | Bredene op geïsoleerde kustdata; coördinatenvalidatie | Bredene-test | Bredene 5 km live | Volledig Vlaanderen-pack, gestructureerde dekkingsfout |
+| Fietscomputer-export (#21) | FIT-course-encoder, GPX-cues, API/CLI/webdownload | CRC- en parserproeven | FIT-download in Chrome: CRC ok, sport `walking`; GPX 1007 trackpunten, 199 aanwijzingen | Echt Garmin-toestel; providerpush uitgesteld |
+| Snelplanner (#22) | GPS, afstand, activiteit, doel, quota/receipts, vraagknoppen | Browserproef na standaardprofielfix | Zie "Nieuwe route via snelformulier" | Mobiele layout |
+| Modelkeuze en evals (#23) | `lus eval-model`, eerste-toolscoring, hosted suite met 10 echte gesprekcases, CI-poort voor modelwissels | 23/31 eerste-toolcases (6/10 echte gesprekken) | Productiemodel `openai.gpt-oss-120b-1:0` draait | Claude blokkeert op Marketplace-betaling (`INVALID_PAYMENT_INSTRUMENT`); geen migratiebesluit op ruwe score |
+| Klimhints en kandidaten (#24) | `point_hints` en `headings` in finale routering; rollbackteller | Cassettes ongewijzigd (hash negeert hints) | | `_candidates` met dezelfde via-punten/corridors; cassettes herrecorden; JSON-`null` in `headings` live |
+| Omleiden onderweg (#25) | `reroute_from` in CLI/MCP/chat/API/web | Tests incl. budgetrollback | | Live omleidingsproef, GPS-toestemming |
+| Offline route (#26) | Service worker, 10 bewaarde routes, routelijn/GPS/hoogteprofiel | Frontendtests | | Achtergrondtegels; vliegtuigmodus live |
+| POI's onderweg (#27) | OSM-extractie, kaartfilter, export-POI's | Tests | | Productiepack met OSM-POI's; café-via-wens |
+| Routedata en attributie (#28) | Contact in user-agent (alle uitgaande calls), bronvermelding in kaart | Offline UA-test | | Graafherimport en verwijdering legacy-seeds |
 
-### Issue #24: klimhints, rijrichting en kandidaten
+## Tools en model
 
-Gedaan: de finale routering (`draft._route`) geeft per leg `point_hints`
-(straatnaam van de klim) en `headings` (klim-leg vertrekt bergop; andere legs
-in de aankomstrichting van de vorige leg) door aan `gh.route`, met exact
-evenveel items als punten. Per `optimize`-run wordt het aantal
-budget-rollbacks als telemetry-event `optimize` gelogd. `recording.hash_body`
-negeert `point_hints` en `headings`, zodat de drie bestaande cassettes geldig
-blijven zonder herrecord; de replay bewijst dus niet dat de hints de
-GraphHopper-keuze verbeteren.
+- `lus-mcp --lite` (en de hosted `/mcp`) biedt 12 tools (`LITE_TOOLS` in
+  `lusmaker/mcp_server.py`): `plan_route`, `adjust_route`, `reroute_from`,
+  `suggest_climbs`, `route_details`, `download_gpx`, `route_readiness`,
+  `get_profile`, `update_profile`, `ensure_region`, `region_status`,
+  `list_drafts`. De hosted MCP exposeert `ensure_region` niet (immutable image).
+- Productiemodel van de eigen chat: `openai.gpt-oss-120b-1:0` op Bedrock
+  (`bedrock_model_id` in `infra/terraform/variables.tf`). Claude
+  (`eu.anthropic.claude-sonnet-4-6`) is geblokkeerd door de AWS
+  Marketplace-betaalinstrument-fout; terug te zetten zodra die case is opgelost.
 
-Nog open: (1) `_candidates` routeert een klim nog als `[foot, mid, top]` zonder
-corridors en klimvia-punten; dat moet dezelfde via-punten, hints, headings en
-corridors als de finale route gebruiken. (2) Daarna cassettes opnieuw opnemen
-met `tests/record_fixtures.py` (hash-negering dan weer verwijderen) en
-controleren dat `heen_en_weer_m` daalt, of het besluit om terug te draaien
-documenteren. (3) Live controleren dat GraphHopper JSON-`null` in `headings`
-accepteert voor punten zonder richting.
+## Externe acceptatie (niet voltooid)
 
-## Vervolg: afronding en modelevaluatie
+Pilotgebruikers (#7), platformreview (#17), echte fietscomputer (#21) en
+juridische acceptatie (#6) blijven open tot ze aantoonbaar zijn gedaan.
 
-Commit `774ba76` is via CI 37059502388 en AWS-deploy 37059502680 geslaagd;
-Vercel rapporteerde eveneens success. In persoonlijke Chrome is route `c008b6`
-via de snelplanner gemaakt: 39,3 km / 416 m, echte tussenstappen, een blijvende
-eindstatus en een werkende knop naar de kaart. De GPX-download bevat 1007
-trackpunten, 199 routeaanwijzingen en identieke start- en eindcoördinaten.
-Een afzonderlijke chatvraag over deze route eindigde met het juiste antwoord,
-de routeknop en “Antwoord klaar — Afgerond in 2 sec”.
+## Taakbriefs
 
-De feedbackronde verwijdert de hernieuwde startsuggesties onder een voltooide
-snelplanroute en ververst ook de bibliotheek na het resultaat. Offline controles:
-303 Python-tests, 9 frontendtests, TypeScript en productiebuild.
+De historische briefs in `docs/tasks/` verwijzen naar issues waar de koppeling
+evident is: T14, T15, T16 -> #28 (Toerisme Vlaanderen-data); T17, T18 -> #17
+(MCP-distributie); T21 -> #9 (mobiele flows). De overige briefs (T1-T13, T19,
+T20, T22-T25) zijn afgerond voorwerk zonder eigen issue.
 
-Issue #23 heeft nu een hosted suite met 10 afgeleide echte gesprekcases erbij,
-gesprekscontext en een offline CI-poort voor Terraform-modelwissels. De laatste
-modelproef haalt 23/31 eerste-toolcases (6/10 echte gesprekcases), dus dit issue
-blijft open. Claude-toegang en kosten per volledig gesprek zijn niet aangetoond.
-De bedragen, beperkingen en ruwe meetrapporten staan in `evals/README.md`.
+## Detail per recente wijziging
 
-## Historische inventaris vóór de uitrol
+**#24.** De finale routering (`draft._route`) geeft per leg `point_hints`
+(straatnaam van de klim) en `headings` door aan `gh.route`, met evenveel items
+als punten. `recording.hash_body` negeert beide, zodat de drie cassettes
+geldig blijven; de replay bewijst dus niet dat de hints de keuze verbeteren.
+Voor `tests/record_fixtures.py`-herrecording moet die negering weer weg.
 
-Stand 2 oktober 2026, lokale main. [Bord](https://github.com/users/MathiasDierickx/projects/2).
-De bestaande engine, CLI, MCP, AWS API, Bedrock-chat, OAuth/Cognito, webapp,
-GPX/delen, regionale packs en drie regressiecassettes vormen de basis.
+**#15.** Nieuwe drafts bevatten compacte S3-metadata, atomair met de
+revisiewrite; legacy drafts blijven werken. De sleutellijst wordt nog per
+pagina gescand. Een paginacursor hoort bij één tenant en een levende lijst.
 
-| Issue | Uitgevoerd | Openstaande acceptatie / werk |
-|---|---|---|
-| #3 | Herbruikbare CI als deployvereiste, SHA-check | GitHub-workflow en rollback live controleren |
-| #4 | Tien scenario's, vier regressiefixes, geometrie-evaluator | Verse water-/landmarkroutes en reviewerproef |
-| #5 | Atomaire quota, modelreservering, MCP-routebewerkingen | Werkelijke kosten en concurrentie in AWS |
-| #6 | Account-export/wissing, deelwaarschuwing/intrekken, privacyinventaris | Juridische gegevens, backups/versiesretentie, Cognito live |
-| #7 | Feedbackendpoint/UI, meetprotocol | Echte 5–10 gebruikers, geen resultaten verzonnen |
-| #8 | JSON-metrieken, lokale samenvatter, Terraform-dashboard/alarmen | Alarmbestemming, salt, kostbaseline en live timing |
-| #9 | Lokale fixture, mobiele controle, unit-tests | Volledige login/GPX/backend-acceptatie en browserautomatisering |
-| #10 | Productstatus, merkrelatie, acceptatie-/beheer-/pilotdocs | Juridische publicatie en actuele deploymentgegevens |
-| #11 | Gedeelde chatschema's, offroad/water/landmark-pariteit | Client-specifieke live contractacceptatie |
-| #12 | Dubbelklikslot, persistente receipts, timeout/onderbrekingsherstel | Trage/afgebroken echte Lambda controleren |
-| #13 | Hosted heat-writes geblokkeerd, private packs geweigerd bij gedeelde uitrol | Persoonlijke import bewust niet geactiveerd |
-| #14 | Packprovenance, hashes, versievalidatie | Reviewer herbouwt legacy packs; geen data herimporteerd |
-| #15 | Begrensde keysetpagina's, routebibliotheek laadt bij | S3-pagina leest nog draftgeometrie; nieuwste-eerst index ontbreekt |
-| #16 | Chatschema's en nieuwe verantwoordelijkheden in aparte modules | Verdere extractie uit draft.py/aws_chat.py stapsgewijs |
-| #17 | Bestaande protocoltests en submissionchecklist behouden | Echte Claude/ChatGPT-review en directorysubmission |
-| #18 | Besliscriteria en privacyvoorwaarden voor eigen ritten | Pilotbewijs vóór keuze GPX/providerintegratie |
-
-Issues blijven open zolang acceptatie ontbreekt. Er is niet gepusht of gedeployd,
-conform AGENTS.md. De documentatie beschrijft code en beperkingen, geen claim
-dat alle backlogitems of de volledige productlancering voltooid zijn.
-
-## Tweede iteratie en uitrol
-
-De eerste iteratie t/m eaa1e48 is inmiddels gepusht. Vercel is bijgewerkt en
-AWS heeft de Lambda en Function URL gewijzigd. Run 37038453941 faalde vervolgens
-op ontbrekende CloudWatch-rechten: alarmen en dashboard ontbreken nog en de
-smoke-stap is niet uitgevoerd. De gerichte bootstrapfix staat in cfb6b2e.
-De persoonlijke SSO-sessie geeft momenteel alleen account 120569634535 vrij,
-niet het deploymentaccount 384268138628; er is geen wijziging in het andere
-account uitgevoerd.
-
-Vervolg op #15: nieuwe drafts bevatten compacte S3-metadata, atomair met de
-revisiewrite. De opt-in routepagina `order=updated` leest HEAD-samenvattingen,
-geeft recent gewijzigde routes eerst en blijft compatibel met legacy drafts.
-Zonder metadata wordt alleen voor de geselecteerde pagina de volledige draft
-gelezen. De sleutellijst wordt nog wel per pagina gescand; dit is geen volledige
-zoekindex. Een paginacursor hoort bij één tenant en een levende lijst.
-
-De frontend biedt zoeken binnen geladen routes, een activiteitsfilter,
-laadstatus en bescherming tegen dubbele/verouderde pagina-antwoorden. Het
-routedetail toont nu harde maxima, streefafstand en expliciet gemiste wensen.
-Offline gecontroleerd: 248 Python-tests, 5 frontendtests, TypeScript en build.
-I/O-proef met 100 routes en twee pagina's van 10: 20 HEAD-reads, nul volledige
-routebestanden gelezen. Legacy, CAS-conflicten, gelijke timestamps, verwijdering
-tijdens paginering en tenantvreemde cursors zijn afzonderlijk getest.
+**#23.** Bedragen, beperkingen en ruwe meetrapporten staan in `evals/README.md`.

@@ -4,12 +4,12 @@
 
 ## Huidige uitvoering
 
-De eerste verbeteriteratie bevat componentcontroles, strengere routeacceptatie,
-CI vóór deployment, quota, requestherstel, accountacties, pilotfeedback en
-observability. Zie [ACCEPTANCE](docs/ACCEPTANCE.md) voor gemeten offline resultaten,
-[OPERATIONS](docs/OPERATIONS.md) voor grenzen en [PILOT](docs/PILOT.md) voor de
-nog uit te voeren gebruikerstest. Er zijn geen pilotgebruikers gemeten en geen
-nieuwe productie-uitrol of directorysubmission uitgevoerd.
+De hosted app draait in productie (AWS Lambda + Vercel). De actuele
+voortgang per capability staat in één matrix in [STATUS](docs/STATUS.md);
+[ACCEPTANCE](docs/ACCEPTANCE.md) bevat gemeten resultaten,
+[OPERATIONS](docs/OPERATIONS.md) grenzen en beheer en [PILOT](docs/PILOT.md) de
+nog uit te voeren gebruikerstest. Er zijn nog geen pilotgebruikers gemeten en
+er is nog geen directorysubmission gedaan.
 
 ## Wat dit is (generiek geformuleerd)
 
@@ -67,8 +67,8 @@ draait pollbaar op de achtergrond en kan vooraf gebouwde packs uit lokale,
 HTTP(S)- of S3-caches hergebruiken.
 
 **Noot bij M5:** trail-lopen gebruikt een afzonderlijk GraphHopper-profiel dat
-paden en onverhard opzoekt. Run, gravel en MTB volgen later als extra custom
-models.
+paden en onverhard opzoekt. Inmiddels zijn er acht activiteiten (wandelen, trail, wegloop,
+stadsfiets, toerfiets, koersfiets, gravel, mtb; zie `lusmaker/activities.py`).
 
 ## Go-to-market (klein en toetsbaar)
 
@@ -101,8 +101,8 @@ systeemprompt. Daarom handelen `plan_route` en `adjust_route` het normale pad
 in één call af en geven ze een compact resultaat zonder legs, coördinaten of
 geneste berekeningen. Detailinformatie blijft opt-in via `route_details`.
 
-`lus-mcp --lite` beperkt bovendien de schema-overhead tot elf tools:
-`plan_route`, `adjust_route`, `suggest_climbs`, `route_details`,
+`lus-mcp --lite` beperkt bovendien de schema-overhead tot twaalf tools:
+`plan_route`, `adjust_route`, `reroute_from`, `suggest_climbs`, `route_details`,
 `download_gpx`, `route_readiness`, `get_profile`, `update_profile`,
 `ensure_region`, `region_status` en `list_drafts`. Self-hosted en
 ontwikkelomgevingen houden zonder die vlag de volledige toolset.

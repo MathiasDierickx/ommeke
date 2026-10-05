@@ -92,7 +92,7 @@ def _atomic_json(path: Path, value):
 
 def fetch_url(url: str) -> bytes:
     """Alleen publieke WFS-GET's; begrensde retries buiten de testsuite."""
-    request = urllib.request.Request(url, headers={"User-Agent": "Ommeke-Lusmaker/0.1 (open route data import)"})
+    request = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
     for attempt in range(4):
         try:
             with urllib.request.urlopen(request, timeout=90) as response:

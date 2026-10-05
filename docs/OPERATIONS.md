@@ -122,6 +122,20 @@ blijft staan om oude tokens te blokkeren. S3-versies, backups en technische logs
 vallen niet onder deze actieve-objectwissing: leg retentie en afhandeling vast
 vóór publieke lancering. Er is geen account verwijderd tijdens ontwikkeling.
 
+### Gegevenslevenscyclus en retentie
+
+| Gegeven | Levenscyclus |
+|---|---|
+| Export | `GET` account-export: ZIP met `conversations.json` en alle tenantobjecten, maximaal 64 MB (`lusmaker/account.py`). |
+| Wissing | Vraagt `VERWIJDER`, schrijft marker `account/deleting.json` en blokkeert nieuw werk. Pas na 960 s (`DRAIN_SECONDS`, langer dan de maximale Lambda-run van 900 s) wordt gewist; tot dan antwoordt de API 202 met `Retry-After`. Volgorde: deelverwijzingen, chats, tenantobjecten, daarna Cognito-account (`delete_user`). De marker blijft staan. |
+| S3-versies | Bucketversiebeheer aan; niet-actuele versies verlopen na 30 dagen (`noncurrent_version_expiration`, `infra/terraform/main.tf`). Na wissing blijven oude versies dus maximaal 30 dagen bestaan. |
+| CloudWatch-logs | Standaard 7 dagen (`log_retention_days`, `infra/terraform/variables.tf`); logs bevatten geen prompts of routegeometrie. |
+| DynamoDB-back-ups | Point-in-time recovery staat standaard uit (`chat_point_in_time_recovery = false`); zet aan voor 35 dagen herstel (extra kosten, dan blijven gewiste chats tot 35 dagen herstelbaar). |
+| Bedrock | Geen opslag of training op onze data door de dienst; modelconfig via `bedrock_model_id`. |
+| ECR | Vijf recentste releases; ongetagde lagen na één dag. |
+
+Wijzig je een van deze waarden, werk dan `docs/legal/privacy-policy.md` mee bij.
+
 ## Packs en persoonlijke ritten
 
 Nieuwe packs beschrijven formaat, extractversie, engine, modelhashes,
