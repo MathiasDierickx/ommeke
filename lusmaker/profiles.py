@@ -19,6 +19,11 @@ ONDERGROND_VALUES = {None, "verhard", "ok", "onverhard"}
 # Nullable situationele voorkeuren: null = onbekend (mag gevraagd worden),
 # "ok" = expliciet onverschillig (nooit meer vragen, niets wijzigen).
 OPTIONAL_PREFERENCES = ("heuvels", "ondergrond")
+# Sleutels van ``voorkeuren`` die per activiteit kunnen verschillen
+# (``vermijd_plaatsen`` is activiteitsneutraal en blijft bovenaan staan).
+ACTIVITY_PREFERENCE_KEYS = (
+    "kasseien", "beton", "steenwegen", "autovrij", "heuvels", "ondergrond",
+)
 _NAME_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
 
@@ -53,6 +58,7 @@ def default_document(name: str = "standaard") -> dict:
             "ondergrond": None,
             "vermijd_plaatsen": [],
         },
+        "voorkeuren_per_activiteit": {},
         "historiek": [],
     }
 
@@ -83,6 +89,63 @@ def normalize_weights(weights: dict) -> dict:
     return {key: value / total for key, value in values.items()}
 
 
+def _check_preference_value(key: str, value) -> None:
+    if key in ("kasseien", "beton", "steenwegen"):
+        if key == "steenwegen" and value == "graag":
+            raise ProfileError("steenwegen ondersteunt 'graag' niet")
+        if value not in PREFERENCE_VALUES:
+            raise ProfileError(f"{key}: ongeldige waarde {value!r}")
+    elif key == "autovrij":
+        if value not in AUTOVRIJ_VALUES:
+            raise ProfileError(f"autovrij: ongeldige waarde {value!r}")
+    elif key == "heuvels":
+        if value not in HEUVELS_VALUES:
+            raise ProfileError(f"heuvels: ongeldige waarde {value!r}")
+    elif key == "ondergrond":
+        if value not in ONDERGROND_VALUES:
+            raise ProfileError(f"ondergrond: ongeldige waarde {value!r}")
+
+
+def _validate_per_activity(raw) -> dict:
+    """Valideer {activiteit: {voorkeur: waarde}} en zet namen om naar catalogussleutels."""
+    if not isinstance(raw, dict):
+        raise ProfileError("voorkeuren_per_activiteit moet een object zijn")
+    result: dict = {}
+    for activity, preferences in raw.items():
+        key = activities.canonical(activity)
+        if key is None:
+            raise ProfileError(f"onbekende activiteit in voorkeuren_per_activiteit: {activity}")
+        if not isinstance(preferences, dict):
+            raise ProfileError(f"voorkeuren voor {activity} moeten een object zijn")
+        unknown = set(preferences) - set(ACTIVITY_PREFERENCE_KEYS)
+        if unknown:
+            raise ProfileError(f"onbekende voorkeur voor {activity}: {sorted(unknown)[0]}")
+        for name, value in preferences.items():
+            _check_preference_value(name, value)
+        result.setdefault(key, {}).update(preferences)
+    return result
+
+
+def effective_preferences(profile: dict, activity: str | None = None) -> dict:
+    """Voorkeuren die voor ``activity`` gelden.
+
+    De top-level ``voorkeuren`` zijn de terugval voor fietsactiviteiten
+    (zo werkten bestaande profielen altijd); voor wandelen en lopen lekken
+    ze niet door. ``voorkeuren_per_activiteit`` wint altijd. Plaatsen om te
+    vermijden zijn activiteitsneutraal en blijven altijd gelden.
+    """
+    key = activities.canonical(activity or profile.get("activiteit")) or activities.DEFAULT
+    base = profile["voorkeuren"]
+    if activities.is_foot(key):
+        effective = {name: None for name in ACTIVITY_PREFERENCE_KEYS}
+        effective["vermijd_plaatsen"] = list(base.get("vermijd_plaatsen", []))
+    else:
+        effective = copy.deepcopy(base)
+    overrides = (profile.get("voorkeuren_per_activiteit") or {}).get(key) or {}
+    effective.update(overrides)
+    return effective
+
+
 def _validate(profile: dict, expected_name: str | None = None) -> dict:
     if not isinstance(profile, dict):
         raise ProfileError("profiel moet een object zijn")
@@ -95,7 +158,12 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
         profile["voorkeuren"].setdefault("autovrij", None)
         for key in OPTIONAL_PREFERENCES:
             profile["voorkeuren"].setdefault(key, None)
-    required = {"naam", "activiteit", "gewichten", "voorkeuren", "historiek"}
+    # Optioneel in oudere bestanden: ontbrekend betekent geen overrides.
+    profile.setdefault("voorkeuren_per_activiteit", {})
+    required = {
+        "naam", "activiteit", "gewichten", "voorkeuren",
+        "voorkeuren_per_activiteit", "historiek",
+    }
     if set(profile) != required:
         raise ProfileError("profiel bevat ontbrekende of onbekende velden")
     name = profile["naam"]
@@ -124,6 +192,7 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
         raise ProfileError("heuvels moet null, 'zoek', 'ok' of 'vlak' zijn")
     if preferences["ondergrond"] not in ONDERGROND_VALUES:
         raise ProfileError("ondergrond moet null, 'verhard', 'ok' of 'onverhard' zijn")
+    per_activity = _validate_per_activity(profile["voorkeuren_per_activiteit"])
     places = preferences["vermijd_plaatsen"]
     if not isinstance(places, list) or not all(
         isinstance(place, str) and place.strip() for place in places
@@ -133,6 +202,7 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
         raise ProfileError("historiek moet een lijst zijn")
     checked = copy.deepcopy(profile)
     checked["gewichten"] = normalized
+    checked["voorkeuren_per_activiteit"] = per_activity
     checked["voorkeuren"]["vermijd_plaatsen"] = [place.strip() for place in places]
     return checked
 
@@ -199,7 +269,9 @@ def list_all() -> list[dict]:
 def apply_patch(name: str, patch: dict, bron: str) -> dict:
     if not isinstance(patch, dict):
         raise ProfileError("patch moet een object zijn")
-    unknown = set(patch) - {"activiteit", "gewichten", "voorkeuren"}
+    unknown = set(patch) - {
+        "activiteit", "gewichten", "voorkeuren", "voorkeuren_per_activiteit",
+    }
     if unknown:
         raise ProfileError(f"onbekend profielveld: {sorted(unknown)[0]}")
     if not isinstance(bron, str) or not bron.strip():
@@ -222,6 +294,14 @@ def apply_patch(name: str, patch: dict, bron: str) -> dict:
         if unknown_preferences:
             raise ProfileError(f"onbekende voorkeur: {sorted(unknown_preferences)[0]}")
         updated["voorkeuren"].update(patch["voorkeuren"])
+    if "voorkeuren_per_activiteit" in patch:
+        extra = patch["voorkeuren_per_activiteit"]
+        if not isinstance(extra, dict):
+            raise ProfileError("voorkeuren_per_activiteit-patch moet een object zijn")
+        merged = copy.deepcopy(updated.get("voorkeuren_per_activiteit") or {})
+        for activity, preferences in _validate_per_activity(extra).items():
+            merged.setdefault(activity, {}).update(preferences)
+        updated["voorkeuren_per_activiteit"] = merged
     updated["historiek"].append(
         {
             "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -238,9 +318,9 @@ def apply_patch(name: str, patch: dict, bron: str) -> dict:
     return saved
 
 
-def routing_prefs(profile: dict) -> dict:
+def routing_prefs(profile: dict, activity: str | None = None) -> dict:
     checked = _validate(profile)
-    preferences = checked["voorkeuren"]
+    preferences = effective_preferences(checked, activity)
     return {
         "avoid_cobbles": preferences["kasseien"] == "vermijd",
         "avoid_concrete": preferences["beton"] == "vermijd",

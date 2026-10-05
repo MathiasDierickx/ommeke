@@ -142,7 +142,9 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
     if not isinstance(probe, dict):
         raise ValueError("draft heeft nog geen probe")
 
-    preferences = profiel["voorkeuren"]
+    from . import profiles
+
+    preferences = profiles.effective_preferences(profiel, profiel["activiteit"])
     questions = []
     # Situationele vragen (kasseien, heuvels, ondergrond): zie questions.py.
     questions.extend(situational.ask(d, profiel, probe))

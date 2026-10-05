@@ -282,14 +282,14 @@ def test_profile_patch_invalidates_computed_route_and_probe_on_linked_drafts():
 def test_preference_validation_and_routing_mapping_keep_graag_scoring_only():
     profile = profiles.default_document("trailfan")
     profile["activiteit"] = "trail"
-    profile["voorkeuren"].update(
-        {
+    profile["voorkeuren_per_activiteit"] = {
+        "trail": {
             "kasseien": "graag",
             "beton": "vermijd",
             "steenwegen": "vermijd",
             "autovrij": "belangrijk",
         }
-    )
+    }
 
     assert profiles.routing_prefs(profile) == {
         "avoid_cobbles": False,
@@ -299,7 +299,7 @@ def test_preference_validation_and_routing_mapping_keep_graag_scoring_only():
         "profile": "trail",
     }
 
-    profile["voorkeuren"]["steenwegen"] = "graag"
+    profile["voorkeuren_per_activiteit"]["trail"]["steenwegen"] = "graag"
     try:
         profiles.routing_prefs(profile)
     except profiles.ProfileError as exc:
@@ -315,9 +315,8 @@ def test_draft_profile_preferences_apply_and_explicit_true_flags_override():
                 "trailfan",
                 {
                     "activiteit": "trail",
-                    "voorkeuren": {
-                        "beton": "vermijd",
-                        "autovrij": "belangrijk",
+                    "voorkeuren_per_activiteit": {
+                        "trail": {"beton": "vermijd", "autovrij": "belangrijk"},
                     },
                 },
                 bron="test",
