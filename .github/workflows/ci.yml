@@ -98,5 +98,11 @@ jobs:
       - name: Test frontendgedrag offline
         run: npm run test:unit
 
+      - name: Installeer Chromium voor browsertests
+        run: npx playwright install --with-deps chromium
+
+      - name: Draai offline browserregressie (390 en 1280 px)
+        run: npm run test:e2e
+
       - name: Bouw Next.js-app
         run: npm run build
