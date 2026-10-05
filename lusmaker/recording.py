@@ -12,8 +12,17 @@ REPLAY_MISS = (
 )
 
 
+HASH_IGNORED_KEYS = frozenset({"point_hints", "headings"})
+
+
 def hash_body(body: dict) -> str:
-    """Hash een requestbody als canonieke JSON."""
+    """Hash een requestbody als canonieke JSON.
+
+    `point_hints` en `headings` zijn snap-hints die de keuze van het
+    GraphHopper-antwoord in de cassettes niet hoeven te veranderen; ze tellen
+    niet mee, zodat bestaande cassettes geldig blijven (zie issue #24).
+    """
+    body = {k: v for k, v in body.items() if k not in HASH_IGNORED_KEYS}
     canonical = json.dumps(
         body,
         sort_keys=True,

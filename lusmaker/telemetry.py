@@ -19,7 +19,7 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter('%(message)s'))
     logger.addHandler(handler)
 logger.propagate = False
-ALLOWED = {'event', 'request_id', 'operation', 'status', 'seconds', 'input_tokens', 'output_tokens', 'iterations', 'success', 'cold_start', 'actor', 'date'}
+ALLOWED = {'event', 'request_id', 'operation', 'status', 'seconds', 'input_tokens', 'output_tokens', 'iterations', 'success', 'cold_start', 'actor', 'date', 'budget_rollbacks', 'rounds'}
 
 
 def actor_id():

@@ -712,6 +712,33 @@ def route(
         )
 
 
+def _leg_hints_headings(leg: dict, prev_heading: float | None):
+    """Bepaal point_hints en headings voor de finale routering van één leg.
+
+    Beide lijsten hebben exact evenveel items als `leg["points"]` (GraphHopper
+    weigert een mismatch) of zijn None. Hints: straatnaam per punt, "" =
+    geen hint. Headings: None = geen voorkeur. Een klim-leg vertrekt in de
+    klimrichting (bergop); andere legs vertrekken in de aankomstrichting van
+    de vorige leg.
+    """
+    points = leg["points"]
+    n = len(points)
+    hints = leg.get("hints")
+    if not hints or len(hints) != n or not any(hints):
+        hints = None
+    else:
+        hints = list(hints)
+    start_heading = None
+    if "climb" in leg and n >= 2:
+        start_heading = _bearing(tuple(points[0]), tuple(points[1]))
+    elif prev_heading is not None:
+        start_heading = prev_heading
+    headings = None
+    if start_heading is not None and n >= 2:
+        headings = [round(start_heading, 1)] + [None] * (n - 1)
+    return hints, headings
+
+
 def _route(
     d: dict,
     climb_db: dict,
@@ -743,6 +770,7 @@ def _route(
     computed_legs = []
     total_m = ascend = descend = 0.0
     preferences = routing_preferences(d)
+    prev_heading: float | None = None
 
     for leg in legs:
         is_climb = "climb" in leg or "climb_segment" in leg
@@ -759,6 +787,11 @@ def _route(
         }
         if router is gh.route:
             route_kwargs["instructions"] = True
+        hints, headings = _leg_hints_headings(leg, prev_heading)
+        if hints is not None:
+            route_kwargs["point_hints"] = hints
+        if headings is not None:
+            route_kwargs["headings"] = headings
         if post_fn is not None:
             route_kwargs["post_fn"] = post_fn
         if area_evs is not None:
@@ -1486,6 +1519,13 @@ def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         )
         result["router_cache"] = {"hits": cache.hits, "misses": cache.misses}
         result["budget_rollbacks"] = sum(r.get("status") == "teruggedraaid (budget)" for r in result["rondes"])
+        from . import telemetry
+        telemetry.emit(
+            "optimize",
+            operation="draft.optimize",
+            budget_rollbacks=result["budget_rollbacks"],
+            rounds=len(result["rondes"]),
+        )
         return result
 
 
