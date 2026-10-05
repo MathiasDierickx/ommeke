@@ -929,3 +929,26 @@ def test_route_details_exposes_revision_for_safe_updates_including_unrouted_conc
     state['computed']={'total_km':20,'ascend_m':100}
     result=intents.route_details('abc123',load_fn=lambda _:state)
     assert result['revision']==7 and result['km']==20 and result['status']=='ready'
+
+
+def test_plan_route_names_a_coordinate_start_after_the_nearest_place():
+    state = {
+        "id": "loc123", "name": "x",
+        "start": {"label": "Nabij Bredene-Bad (51.25097, 2.97303)", "lat": 51.25097, "lon": 2.97303},
+        "loop": True, "climbs": [], "computed": None,
+    }
+    saved = []
+
+    def route_fn(d, _db):
+        d["computed"] = _routed_draft()["computed"]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        intents.plan_route(
+            "51.25097,2.97303", target_km=3, doel="toeren", activiteit="trail",
+            create_fn=lambda **_k: {"id": "loc123"}, load_fn=lambda _id: state,
+            climbs_fn=_climbs, route_fn=route_fn, optimize_fn=lambda d, _db, **_k: route_fn(d, _db),
+            export_gpx_fn=lambda *_a: {}, export_preview_fn=lambda *_a: {},
+            save_fn=lambda d: saved.append(d["name"]), exports_root=Path(temp_dir),
+        )
+    assert state["name"] == "Wandellus rond Bredene-Bad · 3 km"
+    assert intents._nearby_place({"label": "Wetteren"}) is None

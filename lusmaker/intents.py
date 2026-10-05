@@ -92,6 +92,12 @@ def suggest_route_name(
     return f"{kind} rond {place}{suffix}"[:80].rstrip()
 
 
+def _nearby_place(start) -> str | None:
+    label = start.get("label") if isinstance(start, dict) else None
+    match = re.fullmatch(r"Nabij (.+?) \([-\d.]+, [-\d.]+\)", label or "")
+    return match.group(1).strip() if match else None
+
+
 def _normalise(value: str) -> str:
     value = unicodedata.normalize("NFKD", value.casefold())
     value = "".join(char for char in value if not unicodedata.combining(char))
@@ -814,6 +820,11 @@ def plan_route(
     created = create_fn(**create_kwargs)
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)
+    nearby = _nearby_place(d.get("start"))
+    if not naam and nearby and "rond je startpunt" in route_name:
+        # Een start uit coördinaten (Mijn locatie) krijgt de dichtste plaatsnaam.
+        d["name"] = route_name.replace("rond je startpunt", f"rond {nearby}", 1)[:80]
+        save_fn(d)
     with draft.region_scope(d):
         climb_db = climbs_fn()
         for place in vermijd_plaatsen:
