@@ -65,6 +65,51 @@ herbouw door de reviewer is nodig om die garanties te verkrijgen.
 Persoonlijke heat vereist expliciete private packaging; de gedeelde AWS-pack
 weigert zulke packs. Hosted gebruikers kunnen niet de gedeelde heat opbouwen.
 
+### Datastroom per ingangspunt (lokaal versus hosted)
+
+| Ingangspunt | Lokaal (CLI, `~/.lusmaker`) | Hosted (Lambda, S3-state per tenant) |
+|---|---|---|
+| `lus heat seed` / `heat build` (persoonlijke GPX-ritten) | Leest `~/.lusmaker/heat/`, schrijft heat-cache en heeft effect op de lokale GraphHopper na herimport. Alleen voor gebruiker `local`. | Geweigerd: `_require_local_admin` (`lusmaker/heat.py`) blokkeert zodra `LUSMAKER_STATE_BUCKET` staat of de tenant niet `local` is. Persoonlijke ritten verlaten nooit de lokale machine en komen niet in een gedeeld pack. |
+| `lus heat fetch-vlaanderen` (Toerisme Vlaanderen, TVL) | Downloadt open fiets- en wandelroutelagen naar de lokale cache; wordt bij `heat build` gebruikt. | Niet beschikbaar voor gebruikers. Open TVL-data bereikt hosted uitsluitend via het routedatapack hieronder. |
+| `lus heat sync-vlaanderen` / `verify-sources` | Bouwt een geïsoleerd, gechecksumd routedatapack buiten de actieve runtime (`--output`). | Draait niet in Lambda. Het resultaat gaat via `deploy/aws/prepare_sources.py` de buildcontext in; die weigert elk pack waarvan `contains_personal_heat` niet expliciet `false` is. |
+| `lus region pack` | Maakt `<slug>.tar.gz` uit de lokale regio. Persoonlijke heat alleen met `--include-personal-heat` (privépack); anders weigert `create_pack`. | Workflow `build-region-pack.yml` bouwt een open-data pack op een CI-runner en uploadt het naar `s3://<tf-state>/region-packs/`. |
+| `deploy/aws/prepare_region.py` | Niet bedoeld voor lokaal gebruik. | Pakt het pack uit in de Docker-context. Weigert `contains_personal_heat=true`, een afwijkende `gh_image`, ontbrekende graph-cache/modellen en graph-cache zonder de geconfigureerde encoded values (test: `tests/test_pack_features.py`). |
+| `lus region info <slug>` / `--pack <bestand>` | Toont features en versies (brondatadatum, profielconfig, modelhashes) van een lokale regio of alleen `pack.json` van een pack. | `/health` geeft het geïnstalleerde pack onder `region_pack` (`null` bij ontbrekend `pack.json`; oudere packs hebben `null`-velden). |
+
+### Pack herbouwen (reviewerprocedure)
+
+Doe dit wanneer `lus region info --pack <bestand>` of de validatie meldt:
+incompatibel extractformaat, andere `profile_config_version`, andere
+GraphHopper-image, of wanneer `brondata_datum` te oud is. Legacy packs
+(`legacy: true`, geen provenance) herbouw je op dezelfde manier.
+
+1. Controleer eerst de toestand: `lus region info --pack <oud-pack.tar.gz>` en
+   `/health` (`region_pack`). Noteer `brondata_datum`, `profielconfig_versie`
+   en `graphhopper_image`.
+2. Verhoog `PROFILE_CONFIG_VERSION` (`lusmaker/pack_manifest.py`) alleen als
+   routingprofielen, custom models of `config.yml` inhoudelijk veranderd zijn;
+   dat is een codewijziging met review, geen operatie.
+3. Bouw op een CI-runner, nooit op de actieve runtime: start workflow
+   *Build region pack* vanaf `main` met `slug`, `geofabrik` en `bbox`. Dat roept
+   `python -m lusmaker.provision` aan: verse PBF-download, extract, GraphHopper-
+   import en packupload. Geen persoonlijke heat in de build-omgeving (`LUSMAKER_HOME`
+   is een lege tijdelijke map).
+4. Verifieer het resultaat: download of kopieer het pack en draai
+   `lus region info --pack <nieuw.tar.gz>`. Eisen: `compatibel: true`,
+   `brondata_datum` recent, `persoonlijke_heat: false`, `legacy: false`,
+   `graphhopper_image` gelijk aan `LUSMAKER_GH_IMAGE`.
+5. Controleer de buildcontext lokaal: `python -m deploy.aws.prepare_region
+   <pack> <slug> <tijdelijke-map>`. Faalt dit, dan blijft de bestaande
+   deployment ongemoeid.
+6. Rol uit via de gewone deploymentworkflow (die de CI-workflow en main-SHA
+   controleert). Controleer daarna `/health`: `region_pack.brondata_datum` en
+   `profielconfig_versie` moeten het nieuwe pack tonen.
+7. Rollback: zet het vorige pack terug onder dezelfde S3-sleutel (S3-versies)
+   en rol de vorige image-digest uit. Wis geen actieve graaf om dit te forceren.
+
+Een herbouw herimporteert de graaf pas bij uitrol; doe dat niet zonder aparte
+opdracht van de reviewer.
+
 ## Nog te valideren
 
 Productie-CI, echte quota/concurrentie, Cognito-export/wissing, CloudWatch-
