@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pendingPrompt, errorMessage, mergeById, chatReply } from '../lib/interaction.ts';
+import { pendingPrompt, errorMessage, mergeById, chatReply, unansweredPrompt, orphanState } from '../lib/interaction.ts';
 
 test('retry en refresh behouden hetzelfde verzoeknummer, nieuwe inhoud niet', () => {
   const first = pendingPrompt(null, 'chat1', '  50 km  ', () => 'id-1');
@@ -28,4 +28,15 @@ test('onvolledig chatantwoord geeft herstelmelding in plaats van rendercrash', (
   for (const payload of [null, {}, {route_ids:[]}, {message:{id:'a'},route_ids:[]}]) assert.throws(() => chatReply(payload), /geen volledig chatantwoord/);
   const payload = {message:{id:'a',conversation_id:'c',role:'assistant',content:'Klaar',created_at:'2026-10-02'},route_ids:['route']};
   assert.equal(chatReply(payload),payload);
+});
+
+test('een onbeantwoorde vraag na herladen krijgt een herstelstatus', () => {
+  assert.equal(unansweredPrompt([{role:'user',content:'a'},{role:'assistant',content:'b'}]), null);
+  assert.equal(unansweredPrompt([{role:'assistant',content:'b'},{role:'user',content:' 35 km '}]), '35 km');
+  assert.equal(unansweredPrompt([]), null);
+  assert.equal(orphanState('running', true), 'running');
+  assert.equal(orphanState('complete', true), 'complete');
+  assert.equal(orphanState('interrupted', true), 'interrupted');
+  assert.equal(orphanState('unknown', true), 'interrupted');
+  assert.equal(orphanState('running', false), 'interrupted');
 });

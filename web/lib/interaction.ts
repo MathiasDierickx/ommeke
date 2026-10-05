@@ -7,6 +7,22 @@ export function pendingPrompt(previous: PendingPrompt | null, conversationId: st
     ? previous : { id: id(), conversationId, content: clean };
 }
 
+/** Tekst van een laatste gebruikersbericht dat nog geen antwoord kreeg. */
+export function unansweredPrompt(messages: { role: string; content: string }[]): string | null {
+  const last = messages[messages.length - 1];
+  return last?.role === "user" ? last.content.trim() || null : null;
+}
+
+export type OrphanState = "running" | "interrupted" | "complete";
+
+/** Vertaal de serverstatus van een opdracht naar wat de UI moet tonen. */
+export function orphanState(receipt: string | null | undefined, sameDevice: boolean): OrphanState {
+  if (!sameDevice) return "interrupted";
+  if (receipt === "complete") return "complete";
+  if (receipt === "running") return "running";
+  return "interrupted";
+}
+
 export function errorMessage(status: number, message?: string, retryAfter?: string | null, code?: string): string {
   if (status === 401) return "Je sessie is verlopen. Herlaad de app om opnieuw in te loggen; je routes blijven bewaard.";
   if (status === 429) {

@@ -389,3 +389,8 @@ button:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px soli
 .distance-form button { cursor: pointer; font-weight: 700; }
 .distance-form :disabled { opacity: .5; cursor: wait; }
 .quick-plan-outside { border-left: 4px solid #b45309; padding: .6rem .8rem; background: #fef3e2; color: #5b2f00; border-radius: 6px; }
+
+.orphan-notice { margin: .5rem auto; max-width: 40rem; padding: .9rem 1rem; border: 1px solid var(--line); border-left: 4px solid #b7791f; border-radius: .9rem; background: #fff8eb; }
+.orphan-notice p { margin: 0 0 .6rem; }
+.orphan-notice p:last-child { margin-bottom: 0; }
+.orphan-notice button { padding: .5rem .9rem; border-radius: 999px; border: 1px solid var(--green); color: var(--green); background: white; font-weight: 600; }

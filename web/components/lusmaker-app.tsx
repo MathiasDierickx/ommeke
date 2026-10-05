@@ -12,7 +12,7 @@ import { RouteDetail } from "@/components/route-detail";
 import { RouteProgress } from "./route-progress";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
-import { chatReply, mergeById, pendingPrompt, type PendingPrompt } from "@/lib/interaction";
+import { chatReply, mergeById, orphanState, pendingPrompt, unansweredPrompt, type PendingPrompt } from "@/lib/interaction";
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { clearStored, currentSession, signOut } from "@/lib/cognito";
@@ -56,6 +56,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const libraryVersion = useRef(0);
   const routeLoadVersion = useRef(0);
   const [routeCursor, setRouteCursor] = useState<string | null>(null);
+  // Een vraag zonder antwoord na herladen: nog bezig op de server of afgebroken.
+  const [orphan, setOrphan] = useState<{ content: string; state: "running" | "interrupted" } | null>(null);
 
   useEffect(() => {
     if (authStarted.current) return;
@@ -123,14 +125,41 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     } catch { /* Browseropslag is optioneel. */ }
     setSelectedRoute(null);
     setError(undefined);
-    apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${encodeURIComponent(view.id)}/messages`, session.accessToken)
+    setOrphan(null);
+    const loadMessages = () => apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${encodeURIComponent(view.id)}/messages`, session.accessToken);
+    let poll: number | undefined;
+    const inspectOrphan = async (current: ChatMessage[]) => {
+      const content = unansweredPrompt(current);
+      if (!content || !active) { if (active) setOrphan(null); return; }
+      let pending: PendingPrompt | null = null;
+      try { pending = JSON.parse(sessionStorage.getItem(`ommeke-pending:${view.id}`) || "null"); } catch { /* opslag is optioneel */ }
+      const sameDevice = pending?.content === content && pending.conversationId === view.id;
+      const receipt = sameDevice && pending
+        ? await apiRequest<{ status: string }>(`/api/conversations/${encodeURIComponent(view.id)}/requests/${encodeURIComponent(pending.id)}`, session.accessToken).catch(() => ({ status: "unknown" }))
+        : null;
+      if (!active) return;
+      const state = orphanState(receipt?.status, sameDevice);
+      if (state === "complete") {
+        const fresh = await loadMessages().catch(() => null);
+        if (!active) return;
+        if (fresh) setMessages(fresh.messages);
+        try { sessionStorage.removeItem(`ommeke-pending:${view.id}`); } catch { /* opslag is optioneel */ }
+        setOrphan(null);
+        return;
+      }
+      setOrphan({ content, state });
+      // Een lopende opdracht kan nog afronden; kijk geregeld opnieuw.
+      if (state === "running") poll = window.setTimeout(() => { void loadMessages().then(data => { if (active) { setMessages(data.messages); void inspectOrphan(data.messages); } }).catch(() => undefined); }, 15_000);
+    };
+    loadMessages()
       .then((data) => {
         if (!active) return;
         setMessages(data.messages);
+        void inspectOrphan(data.messages);
         setConversations((current) => current.some((item) => item.id === data.conversation.id) ? current.map((item) => item.id === data.conversation.id ? data.conversation : item) : [data.conversation, ...current]);
       })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Gesprek laden mislukt."); });
-    return () => { active = false; };
+    return () => { active = false; window.clearTimeout(poll); };
   }, [session, view]);
 
   useEffect(() => {
@@ -193,6 +222,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setProgress(null);
     setAnswerComplete(false);
     setError(undefined);
+    setOrphan(null);
     setPrompt("");
     let id = conversationId;
     if (!id) id = await newConversation();
@@ -231,6 +261,14 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       setError(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "Dit duurt langer dan verwacht. Herlaad het gesprek; dezelfde vraag opnieuw verzenden maakt geen dubbele route.");
     }
     finally { setBusy(false); sendLock.current = false; }
+  };
+
+  const retryOrphan = () => {
+    if (!orphan || !conversationId) return;
+    try { sessionStorage.removeItem(`ommeke-pending:${conversationId}`); } catch { /* opslag is optioneel */ }
+    const content = orphan.content;
+    setOrphan(null);
+    void sendPrompt(content);
   };
 
   const downloadRoute = async (format: "gpx" | "fit" = "gpx") => {
@@ -379,6 +417,11 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
           {!messages.length && !busy && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
           {!messages.length && !busy && !quickBusy && !quickHasResult ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {orphan && !busy ? <div className="orphan-notice" role="status">
+            {orphan.state === "running"
+              ? <p>Je laatste vraag wordt nog verwerkt. Het antwoord verschijnt hier vanzelf; je hoeft niets opnieuw te versturen.</p>
+              : <><p>Je laatste vraag kreeg geen antwoord: de verbinding werd onderbroken. Kijk eerst in Mijn routes of er al een route bij is gekomen.</p><button onClick={retryOrphan}>Vraag opnieuw stellen</button></>}
+          </div> : null}
           {busy || answerComplete ? <RouteProgress event={progress} complete={answerComplete} /> : null}
           <div ref={messageEnd} />
         </div>
