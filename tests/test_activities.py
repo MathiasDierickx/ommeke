@@ -85,6 +85,14 @@ def test_quick_plan_accepts_new_and_legacy_activities():
         raise AssertionError("onbekende activiteit moet falen")
 
 
+def test_hosted_evals_cover_every_activity():
+    from lusmaker import mcp_evals
+
+    cases = mcp_evals.load("evals/hosted_intents.json")
+    covered = {c.get("expected_arguments", {}).get("activiteit") for c in cases}
+    assert set(activities.KEYS) <= covered
+
+
 def test_plan_route_rejects_unknown_activity_and_names_walks_and_runs():
     try:
         intents.plan_route("Gent", target_km=5, activiteit="kajak")
