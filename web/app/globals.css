@@ -420,7 +420,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .quick-plan-outside { border-left: 4px solid #b45309; color: #5b2f00; background: #fef3e2; }
 .quick-plan-again { min-height: 44px; margin-top: .6rem; padding: 0 .4rem; border: 0; color: var(--green); background: transparent; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .planner-followup { margin: 1.4rem 0 .5rem; font: 400 1.5rem/1.2 var(--font-serif), Georgia, serif; }
-.planner-question { margin-top: .8rem; }
+.planner-questions { display: grid; gap: 1.1rem; margin-top: .4rem; padding: 1.15rem; border: 1px solid var(--line); border-radius: 1.1rem; background: var(--white); }
+.planner-questions .planner-submit { justify-self: start; }
+.planner-question { margin: 0; }
 .planner-question p { margin: 0 0 .5rem; line-height: 1.5; }
 .option-button { min-height: 44px; padding: .5rem .95rem; border: 1px solid var(--green); border-radius: 999px; color: var(--green-deep); background: white; font-weight: 600; cursor: pointer; }
 .quick-result { margin-top: .5rem; padding: 1.2rem; border-radius: 1.1rem; background: #edf4eb; }

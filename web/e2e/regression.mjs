@@ -431,6 +431,38 @@ test("snelle planner: validatie, voortgang en buiten_gebied (422)", async ({ pag
   expectNoStrays(state, "planner");
 });
 
+test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async ({ page, url }) => {
+  const conversation = { id: "c9", title: "Routewensen aanvullen", created_at: "2026-10-05T21:00:00Z" };
+  const vragen = [
+    { id: "ondergrond", vraag: "6,0 km van je verkenningsroute is onverhard. Blijf je liever op verharde wegen?", opties: { verhard: {}, ok: {}, onverhard: {} } },
+    { id: "heuvels", vraag: "Het is hier heuvelachtig. Zoek je de heuvels op?", opties: { zoek: {}, ok: {}, vlak: {} } },
+  ];
+  let sent = null;
+  const state = await installBackend(page, {
+    handlers: {
+      "POST /api/routes/stream": () => sse([["result", { status: "needs_input", draft: "d1", conversation_id: "c9", vragen }]]),
+      "GET /api/conversations/c9/messages": () => json(200, { conversation, messages: sent ? [{ id: "m1", conversation_id: "c9", role: "user", content: sent, created_at: "2026-10-05T21:01:00Z" }, { id: "m2", conversation_id: "c9", role: "assistant", content: "Komt eraan.", created_at: "2026-10-05T21:01:05Z" }] : [] }),
+      "POST /api/conversations/c9/messages/stream": ({ body }) => { sent = body.content; return sse([["result", { message: { id: "m2", conversation_id: "c9", role: "assistant", content: "Komt eraan.", created_at: "2026-10-05T21:01:05Z" }, route_ids: [] }]]); },
+    },
+  });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByRole("heading", { name: "Nog even je wensen aanvullen" }).waitFor();
+  const go = page.getByRole("button", { name: "Maak mijn route met deze keuzes" });
+  assert.equal(await go.isDisabled(), true, "pas actief als alle vragen beantwoord zijn");
+  await page.getByRole("radio", { name: "Liever verhard" }).check();
+  assert.equal(await go.isDisabled(), true);
+  await page.getByRole("radio", { name: "Liever vlak" }).check();
+  await go.click();
+  await page.waitForURL(/\/chats\/c9\/?$/);
+  await page.getByText("Komt eraan.").first().waitFor();
+  assert.match(sent, /Liever verhard \(verhard\)/);
+  assert.match(sent, /Liever vlak \(vlak\)/);
+  assert.match(sent, /routeconcept d1/);
+  expectNoStrays(state, "vragen");
+});
+
 test("snelle planner: streamfout met buiten_gebied-code", async ({ page, url }) => {
   const state = await installBackend(page, {
     handlers: { "POST /api/routes/stream": () => sse([["error", { error: "Start ligt buiten het gedekte gebied.", code: "buiten_gebied" }]]) },

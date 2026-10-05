@@ -6,7 +6,22 @@ import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
 import { isOutOfCoverage } from "@/lib/interaction";
 
-type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: { vraag: string; opties: Record<string, unknown> }[] };
+type Question = { id?: string; vraag: string; opties: Record<string, unknown> };
+type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
+
+// Leesbare knoppen voor de situationele vragen (sleutels uit lusmaker/questions.py).
+const OPTION_LABELS: Record<string, Record<string, string>> = {
+  kasseien: { graag: "Graag kasseien", vermijd: "Liever geen kasseien" },
+  heuvels: { zoek: "Graag heuvels", vlak: "Liever vlak" },
+  ondergrond: { verhard: "Liever verhard", onverhard: "Graag onverhard" },
+};
+function optionLabel(question: Question, option: string): string {
+  if (option === "ok") return "Maakt niet uit";
+  const label = question.id ? OPTION_LABELS[question.id]?.[option] : undefined;
+  if (label) return label;
+  const text = option.replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 type Activity = { value: string; label: string; verb: string; km: number; max: number };
 
 // Waarden volgen lusmaker/activities.py; afstanden zijn een redelijke start per activiteit.
@@ -45,10 +60,18 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   const [canRestart,setCanRestart]=useState(false);
   const [outside, setOutside] = useState(false);
   const [result, setResult] = useState<Result>();
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const resultHeading = useRef<HTMLHeadingElement>(null);
+  const progressBox = useRef<HTMLDivElement>(null);
   const startId = useId();
   const distanceId = useId();
-  useEffect(() => { if (result) resultHeading.current?.focus(); }, [result]);
+  useEffect(() => {
+    if (!result) return;
+    resultHeading.current?.focus({ preventScroll: true });
+    resultHeading.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [result]);
+  // Op een laptopscherm valt de voortgang anders onder de vouw.
+  useEffect(() => { if (busy) progressBox.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [busy]);
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const lock = useRef(false);
 
@@ -76,7 +99,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     const values = { start, target_km: km, activiteit: activity, doel: goal };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setOutside(false); setResult(undefined); onResultChange?.(false);
+    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setOutside(false); setResult(undefined); setAnswers({}); onResultChange?.(false);
     try {
       const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
@@ -145,9 +168,9 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
         </div>
       </fieldset>
     </form>
-    {busy && <RouteProgress event={progress} />}
+    {busy && <div ref={progressBox}><RouteProgress event={progress} /></div>}
     {result?.status === "ready" && <div className="quick-result">
-      <h3 role="status" tabIndex={-1} ref={resultHeading}>{result.constraints?.voldaan === false ? "Route gevonden — controleer je wensen" : "Je route is klaar"}</h3>
+      <div role="status"><h3 tabIndex={-1} ref={resultHeading}>{result.constraints?.voldaan === false ? "Route gevonden — controleer je wensen" : "Je route is klaar"}</h3></div>
       <p>{typeof result.km === "number" ? `${result.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
       {result.constraints?.waarschuwingen.map(warning => <p className="route-result-warning" key={warning}>{warning}</p>)}
       <div className="quick-result-actions">
@@ -155,10 +178,23 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
         <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>
       </div>
     </div>}
-    {result && result.status !== "ready" && <h3 className="planner-followup" role="status" tabIndex={-1} ref={resultHeading}>Nog even je wensen aanvullen</h3>}
+    {result && result.status !== "ready" && <div role="status"><h3 className="planner-followup" tabIndex={-1} ref={resultHeading}>Nog even je wensen aanvullen</h3></div>}
     {error && <p role="alert" className={outside ? "planner-error quick-plan-outside" : "planner-error"}>{error}{outside ? " Pas je startplaats aan en probeer opnieuw." : ""}</p>}
     {canRestart && <button className="quick-plan-again" onClick={()=>{pending.current=null;setCanRestart(false);setError("De vorige poging is gestopt. Controleer Mijn routes: er kan al een concept bestaan. Met Maak mijn route start je bewust een nieuwe poging.");}}>Nieuwe poging voorbereiden</button>}
-    {result?.vragen?.map(q => <div className="planner-question" key={q.vraag}><p>{q.vraag}</p><div className="goal-options">{Object.keys(q.opties).map(option => <button key={option} className="option-button" onClick={() => { if (result.conversation_id) { try { sessionStorage.setItem(`ommeke-answer:${result.conversation_id}`, `${q.vraag} Mijn keuze: ${option}. Ga verder met routeconcept ${result.draft}.`); } catch { /* Antwoord kan in het gesprek worden ingevuld. */ } onConversation(result.conversation_id); } }}>{option.replaceAll("_", " ")}</button>)}</div></div>)}
-    {result?.conversation_id && <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}
+    {result?.vragen?.length ? <div className="planner-questions">
+      {result.vragen.map(q => <div className="planner-question" role="radiogroup" aria-label={q.vraag} key={q.vraag}>
+        <p>{q.vraag}</p>
+        <div className="goal-options">{Object.keys(q.opties).map(option => <label key={option} className="choice-chip choice-chip-quiet">
+          <input type="radio" name={`vraag-${q.id || q.vraag}`} value={option} checked={answers[q.vraag] === option} onChange={() => setAnswers(current => ({ ...current, [q.vraag]: option }))} />
+          <span>{optionLabel(q, option)}</span>
+        </label>)}</div>
+      </div>)}
+      {result.conversation_id ? <button className="planner-submit" disabled={result.vragen.some(q => !answers[q.vraag])} onClick={() => {
+        const choices = result.vragen!.map(q => `${q.vraag} Mijn keuze: ${optionLabel(q, answers[q.vraag])} (${answers[q.vraag]}).`).join("\n");
+        try { sessionStorage.setItem(`ommeke-answer:${result.conversation_id}`, `${choices}\nGa verder met routeconcept ${result.draft}.`); } catch { /* Antwoord kan in het gesprek worden ingevuld. */ }
+        onConversation(result.conversation_id!);
+      }}>Maak mijn route met deze keuzes</button> : null}
+    </div> : null}
+    {result?.conversation_id && !result.vragen?.length && <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}
   </section>;
 }

@@ -58,6 +58,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const [routeCursor, setRouteCursor] = useState<string | null>(null);
   // Een vraag zonder antwoord na herladen: nog bezig op de server of afgebroken.
   const [orphan, setOrphan] = useState<{ content: string; state: "running" | "interrupted" } | null>(null);
+  // Antwoorden uit het startscherm worden verstuurd zodra dit gesprek geladen is.
+  const [autoSend, setAutoSend] = useState<{ conversationId: string; content: string } | null>(null);
+  const [loadedConversation, setLoadedConversation] = useState<string>();
 
   useEffect(() => {
     if (authStarted.current) return;
@@ -123,7 +126,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setConversationId(view.id);
     try {
       const answer = sessionStorage.getItem(`ommeke-answer:${view.id}`);
-      if (answer) { setPrompt(answer); sessionStorage.removeItem(`ommeke-answer:${view.id}`); }
+      if (answer) { setAutoSend({ conversationId: view.id, content: answer }); sessionStorage.removeItem(`ommeke-answer:${view.id}`); }
     } catch { /* Browseropslag is optioneel. */ }
     setSelectedRoute(null);
     setError(undefined);
@@ -157,6 +160,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       .then((data) => {
         if (!active) return;
         setMessages(data.messages);
+        setLoadedConversation(view.id);
         void inspectOrphan(data.messages);
         setConversations((current) => current.some((item) => item.id === data.conversation.id) ? current.map((item) => item.id === data.conversation.id ? data.conversation : item) : [data.conversation, ...current]);
       })
@@ -265,6 +269,13 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     }
     finally { setBusy(false); sendLock.current = false; }
   };
+
+  useEffect(() => {
+    if (!autoSend || busy || autoSend.conversationId !== conversationId || loadedConversation !== conversationId) return;
+    const content = autoSend.content;
+    setAutoSend(null);
+    void sendPrompt(content);
+  });
 
   const retryOrphan = () => {
     if (!orphan || !conversationId) return;
