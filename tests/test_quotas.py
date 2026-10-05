@@ -55,3 +55,17 @@ def test_provision_is_disabled_by_default_for_hosted_users():
             pass
         else:
             raise AssertionError('onbeperkte provisioning')
+
+
+def test_quota_error_names_the_limit_reset_time_and_what_still_works():
+    # 2 oktober 2026 21:00 UTC = 23:00 in Brussel; reset om 00:00 UTC = 02:00.
+    now = 1790974800
+    error = quotas.QuotaExceeded(86400 - now % 86400, 'chat', 40, now=now)
+    message = str(error)
+    assert 'chatberichten (40)' in message
+    assert 'vannacht om 02:00' in message
+    assert 'snelle routeformulier' in message
+    route = str(quotas.QuotaExceeded(3600, 'route', 80, now=now))
+    assert 'routeberekeningen' in route and 'downloaden' in route
+    tokens = str(quotas.QuotaExceeded(3600, 'tokens', 200000, now=now))
+    assert 'AI-budget' in tokens and '200000' not in tokens

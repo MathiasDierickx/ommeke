@@ -90,7 +90,8 @@ async def route_reroute(request: Request) -> JSONResponse:
             return requests.once("reroute", rid, values, lambda: reroute_from(**values))
         return JSONResponse(await asyncio.to_thread(execute))
     except quotas.QuotaExceeded as exc:
-        return JSONResponse({"error": str(exc)}, status_code=429, headers={"Retry-After": str(exc.retry_after)})
+        return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
+                            headers={"Retry-After": str(exc.retry_after)})
     except (requests.RequestConflict, draft.DraftError) as exc:
         return _error(str(exc), 409)
     except (ValueError, ChatError) as exc:
@@ -635,7 +636,8 @@ async def route_feedback(request: Request) -> JSONResponse:
         result = await asyncio.to_thread(pilot.feedback, _draft_id(request), body.get('category'), body.get('comment', ''))
         return JSONResponse(result, status_code=201)
     except quotas.QuotaExceeded as exc:
-        return JSONResponse({"error": str(exc)}, status_code=429, headers={"Retry-After": str(exc.retry_after)})
+        return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
+                            headers={"Retry-After": str(exc.retry_after)})
     except (ValueError, ChatError) as exc:
         return _error(str(exc))
     except draft.DraftError as exc:

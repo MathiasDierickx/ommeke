@@ -18,7 +18,7 @@ export class ApiError extends Error {
 async function responseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new ApiError(errorMessage(response.status, payload.error, response.headers.get("Retry-After")), response.status);
+    throw new ApiError(errorMessage(response.status, payload.error, response.headers.get("Retry-After"), payload.code), response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

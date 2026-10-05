@@ -7,12 +7,17 @@ export function pendingPrompt(previous: PendingPrompt | null, conversationId: st
     ? previous : { id: id(), conversationId, content: clean };
 }
 
-export function errorMessage(status: number, message?: string, retryAfter?: string | null): string {
+export function errorMessage(status: number, message?: string, retryAfter?: string | null, code?: string): string {
   if (status === 401) return "Je sessie is verlopen. Herlaad de app om opnieuw in te loggen; je routes blijven bewaard.";
   if (status === 429) {
+    // Eigen quotumteksten noemen de limiet en het resetmoment; andere 429's
+    // (bv. een drukke modelprovider) tonen we generiek.
+    if (code === "quota_exceeded" && message) return message;
     const seconds = Number(retryAfter);
     const minutes = Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : null;
-    return minutes ? `Je limiet is bereikt. Probeer over ${minutes} minuten opnieuw.` : "Je limiet is bereikt. Probeer later opnieuw.";
+    if (!minutes) return "Het is even te druk. Probeer later opnieuw.";
+    const wait = minutes >= 90 ? `${Math.round(minutes / 60)} uur` : `${minutes} minuten`;
+    return `Het is even te druk. Probeer over ${wait} opnieuw.`;
   }
   return message || `Verzoek mislukt (${status}).`;
 }

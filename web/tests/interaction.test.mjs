@@ -14,6 +14,10 @@ test('quota en revision-fouten bieden begrijpelijk herstel', () => {
   assert.match(errorMessage(429, 'provider', '61'), /2 minuten/);
   assert.equal(errorMessage(409, 'Route gewijzigd; laad opnieuw.'), 'Route gewijzigd; laad opnieuw.');
   assert.doesNotMatch(errorMessage(429, 'secret', null), /secret/);
+  assert.match(errorMessage(429, 'provider', '7200'), /2 uur/);
+  const quota='Je daglimiet voor chatberichten (40) is bereikt. De teller start opnieuw vannacht om 02:00 (Belgische tijd).';
+  assert.equal(errorMessage(429, quota, '10800', 'quota_exceeded'), quota);
+  assert.doesNotMatch(errorMessage(429, 'secret', '60', 'other'), /secret/);
 });
 test('paginering en herhaalde antwoorden dupliceren geen routes of berichten', () => {
   const result = mergeById([{id: 'a', revision: 1}], [{id:'a', revision:2}, {id:'b', revision:1}]);
