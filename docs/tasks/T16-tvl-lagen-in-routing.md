@@ -1,5 +1,7 @@
 # T16 — Wegdek- en verkeerslagen effectief in de routing
 
+*Gerelateerd issue: #28 (zie [docs/STATUS.md](../STATUS.md)).*
+
 ## Waarom
 
 T15 haalde officiële kassei- en verkeersdata binnen maar gebruikt ze alleen

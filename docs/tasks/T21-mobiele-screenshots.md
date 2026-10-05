@@ -1,5 +1,7 @@
 # T21 — Mobiele screenshots via Playwright (CI-artefact)
 
+*Gerelateerd issue: #9 (zie [docs/STATUS.md](../STATUS.md)).*
+
 ## Waarom
 
 De browser-emulatie in de reviewsessie kan het venster niet naar

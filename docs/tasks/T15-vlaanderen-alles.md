@@ -1,5 +1,7 @@
 # T15 — Alle bruikbare Toerisme Vlaanderen-lagen binnenhalen
 
+*Gerelateerd issue: #28 (zie [docs/STATUS.md](../STATUS.md)).*
+
 ## Waarom
 
 Naast de netwerken (T14) publiceert geodata.toerismevlaanderen.be per-segment

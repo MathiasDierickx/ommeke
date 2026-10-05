@@ -1,5 +1,7 @@
 # T18 — ChatGPT Apps-component: kaartpreview inline in de chat
 
+*Gerelateerd issue: #17 (zie [docs/STATUS.md](../STATUS.md)).*
+
 ## Waarom
 
 De Apps SDK laat een MCP-tool een UI-component meegeven die ChatGPT inline

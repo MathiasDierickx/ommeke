@@ -1,5 +1,7 @@
 # T14 — Toerisme Vlaanderen open-data-routelagen (fiets + wandel)
 
+*Gerelateerd issue: #28 (zie [docs/STATUS.md](../STATUS.md)).*
+
 ## Waarom
 
 Legale, gecureerde "goede routes"-data: de knooppuntnetwerken en icoonroutes

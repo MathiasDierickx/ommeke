@@ -1,5 +1,7 @@
 # T17 — Remote MCP-fundament (Claude-app + ChatGPT-app)
 
+*Gerelateerd issue: #17 (zie [docs/STATUS.md](../STATUS.md)).*
+
 Zie docs/platforms-plan.md voor de context. Dit is het gedeelde fundament;
 IdP/domein/hosting komen uit het AWS-spoor (interface via env-vars).
 

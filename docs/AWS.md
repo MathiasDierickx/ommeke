@@ -316,11 +316,13 @@ verloren updates door gelijktijdige calls te voorkomen.
 
 ## 7. Bedrock-modeltoegang
 
-De runtime gebruikt standaard het EU inference profile
-`eu.anthropic.claude-sonnet-4-6`. Controleer vóór de eerste chat in de Bedrock-
-console van `eu-west-1` of Anthropic model access en de use-casegegevens voor
-het account voltooid zijn. De Lambda-rol kan alleen dit inference profile en
-het bijbehorende foundation model aanroepen. Het Converse-contract en tool use
+De productiedefault (`bedrock_model_id` in Terraform) is
+`openai.gpt-oss-120b-1:0`. Claude (`eu.anthropic.claude-sonnet-4-6`) is
+geblokkeerd door een AWS Marketplace-betaalfout (`INVALID_PAYMENT_INSTRUMENT`)
+en kan terug zodra die billing-case is opgelost; controleer dan in de Bedrock-
+console van `eu-west-1` of Anthropic model access en de use-casegegevens
+voltooid zijn. De Lambda-rol kan alleen het gekozen model of inference profile
+aanroepen. Het Converse-contract en tool use
 volgen de [officiële Bedrock Converse API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
 
 ## 8. Koppel Claude, ChatGPT of een API-client
