@@ -432,6 +432,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .quick-result { margin-top: .5rem; padding: 1.2rem; border-radius: 1.1rem; background: #edf4eb; }
 .quick-result h3 { margin: 0 0 .3rem; font: 400 1.6rem/1.15 var(--font-serif), Georgia, serif; }
 .quick-result p { margin: 0 0 .8rem; line-height: 1.5; }
+.quick-result-applied { color: var(--green-deep); font-weight: 600; }
+.quick-proposals { margin: 0 0 1rem; padding: .9rem 0 .2rem; border-top: 1px solid rgba(36, 90, 67, .18); display: grid; gap: .6rem; }
+.quick-proposals .quick-proposals-title { margin: 0; font-weight: 600; }
+.quick-proposal { display: grid; justify-items: start; gap: .25rem; }
+.quick-proposal small { color: var(--muted); font-size: .82rem; line-height: 1.4; }
+.quick-proposal-button { min-height: 44px; padding: .5rem 1rem; border: 1px solid var(--green); border-radius: 999px; color: var(--green-deep); background: var(--white); font-weight: 600; cursor: pointer; }
+.quick-proposal-button:hover:not(:disabled) { background: #e6efe2; }
+.quick-proposal-button:disabled { opacity: .6; cursor: progress; }
+.quick-proposal-button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .quick-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
 .quick-result-actions .quick-plan-again { margin-top: 0; }
 /* Vrije vraag: bewust stiller dan de planner */

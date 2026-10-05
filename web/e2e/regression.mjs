@@ -449,6 +449,45 @@ test("planner houdt invoer vast terwijl de bibliotheek nog laadt", async ({ page
   expectNoStrays(state, "laden");
 });
 
+test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async ({ page, url }) => {
+  const voorstellen = [
+    { titel: "Voeg Molenberg toe", uitleg: "Ongeveer 2,0 km extra voor 60 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["molenberg"], target_km: 43 } },
+    { titel: "Voeg Kapelmuur toe", uitleg: "Ongeveer 4,0 km extra voor 70 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["kapelmuur"], target_km: 45 } },
+  ];
+  const state = await installBackend(page, {
+    handlers: {
+      "POST /api/routes/stream": () => sse([["result", { status: "ready", draft: "d1", km: 40.4, voorstellen, constraints: { voldaan: true, waarschuwingen: [] } }]]),
+      "POST /api/routes/d1/adjust": () => json(200, { route: { id: "d1", total_km: 42.6 } }),
+    },
+  });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  const group = page.getByRole("group", { name: "Voorstellen voor je route" });
+  assert.equal(await group.getByRole("button").count(), 2, "hooguit twee voorstellen");
+  assert.match(await group.innerText(), /60 hoogtemeters/);
+  await group.getByRole("button", { name: "Voeg Molenberg toe" }).click();
+  await page.getByText("Aangepast: Voeg Molenberg toe.").waitFor();
+  assert.match(await page.locator(".quick-result").innerText(), /42,6 km/);
+  assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0, "oude voorstellen vervallen na aanpassing");
+  const call = state.calls.find((c) => c.key === "POST /api/routes/d1/adjust");
+  assert.deepEqual(call.body, { voeg_klimmen_toe: ["molenberg"], target_km: 43 });
+  expectNoStrays(state, "voorstellen");
+});
+
+test("snelle planner: zonder voorstellen blijft het resultaat zoals het was", async ({ page, url }) => {
+  const state = await installBackend(page, {
+    handlers: { "POST /api/routes/stream": () => sse([["result", { status: "ready", draft: "d1", km: 6.2, constraints: { voldaan: true, waarschuwingen: [] } }]]) },
+  });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  assert.equal(await page.locator(".quick-proposals").count(), 0);
+  expectNoStrays(state, "geen voorstellen");
+});
+
 test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async ({ page, url }) => {
   const vragen = [
     { id: "ondergrond", vraag: "6,0 km van je verkenningsroute is onverhard. Blijf je liever op verharde wegen?", opties: { verhard: {}, ok: {}, onverhard: {} } },

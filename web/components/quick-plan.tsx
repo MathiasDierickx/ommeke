@@ -3,11 +3,13 @@ import { Bike, Footprints, LocateFixed, Minus, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
-import { apiStream } from "@/lib/api";
+import { apiRequest, apiStream } from "@/lib/api";
 import { isOutOfCoverage } from "@/lib/interaction";
 
 type Question = { id?: string; vraag: string; opties: Record<string, unknown> };
-type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
+// Kant-en-klaar voorstel van de backend (lusmaker/proposals.py): de argumenten gaan ongewijzigd naar /adjust.
+type Proposal = { titel: string; uitleg: string; adjust_route: { voeg_klimmen_toe?: string[]; rond_plaats?: string; langs_water?: string; target_km?: number } };
+type Result = { voorstellen?: Proposal[]; aangepast?: string; km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
 
 // Leesbare knoppen voor de situationele vragen (sleutels uit lusmaker/questions.py).
 const OPTION_LABELS: Record<string, Record<string, string>> = {
@@ -135,6 +137,20 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
+  async function applyProposal(proposal: Proposal) {
+    if (!result || lock.current) return;
+    lock.current = true; onBusyChange?.(true); setProgress(null); setBusy(true); setError("");
+    try {
+      const data = await apiRequest<{ route: { total_km?: number | null } }>(`/api/routes/${encodeURIComponent(result.draft)}/adjust`, token, { method: "POST", body: JSON.stringify(proposal.adjust_route) });
+      // De overige voorstellen horen bij de oude route en vervallen.
+      setResult({ ...result, km: data.route.total_km ?? result.km, voorstellen: [], aangepast: proposal.titel });
+      onResultChange?.(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Het voorstel kon niet worden toegepast.");
+    }
+    finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
+  }
+
   const coordinates = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(start.trim());
   return <section className="planner" aria-labelledby="planner-title">
     <h2 id="planner-title" className="planner-title">Waar wil je {current.verb}?</h2>
@@ -191,7 +207,15 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     {result?.status === "ready" && <div className="quick-result">
       <div role="status"><h3 tabIndex={-1} ref={resultHeading}>{result.constraints?.voldaan === false ? "Route gevonden — controleer je wensen" : "Je route is klaar"}</h3></div>
       <p>{typeof result.km === "number" ? `${result.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
+      {result.aangepast ? <p className="quick-result-applied" role="status">Aangepast: {result.aangepast}.</p> : null}
       {result.constraints?.waarschuwingen.map(warning => <p className="route-result-warning" key={warning}>{warning}</p>)}
+      {result.voorstellen?.length ? <div className="quick-proposals" role="group" aria-label="Voorstellen voor je route">
+        <p className="quick-proposals-title">Zin om er iets aan toe te voegen?</p>
+        {result.voorstellen.map(proposal => <div className="quick-proposal" key={proposal.titel}>
+          <button className="quick-proposal-button" disabled={busy} onClick={() => void applyProposal(proposal)}>{proposal.titel}</button>
+          <small>{proposal.uitleg}</small>
+        </div>)}
+      </div> : null}
       <div className="quick-result-actions">
         <button className="planner-submit" onClick={() => onRoute(result.draft)}>Bekijk mijn route</button>
         <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>

@@ -72,6 +72,8 @@ export type RouteAdjustment = {
   verwijder_klimmen?: string[];
   vermijd_plaatsen?: string[];
   sta_plaatsen_toe?: string[];
+  rond_plaats?: string;
+  langs_water?: string;
   doel?: "hm" | "offroad" | "toeren" | "kort";
 };
 
