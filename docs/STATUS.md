@@ -1,6 +1,6 @@
 # Status
 
-Stand 5 oktober 2026. Bord: [GitHub-project](https://github.com/users/MathiasDierickx/projects/2).
+Stand 6 oktober 2026. Bord: [GitHub-project](https://github.com/users/MathiasDierickx/projects/2).
 Dit is de enige statusmatrix; PRODUCT.md beschrijft richting, niet voortgang.
 
 Betekenis van de kolommen:
@@ -24,8 +24,8 @@ is geen E2E-bewijs.
 | CI vóór deploy (#3) | Herbruikbare CI als deployvereiste, SHA-check, Vercel-ignore | Workflowvalidatie | Deploy van `774ba76`: CI 37059502388 en AWS-deploy 37059502680 geslaagd | Rollbackprocedure live oefenen |
 | Routekwaliteit-acceptatie (#4) | Tien scenario's, geometrie-evaluator | Scenario's groen | | Verse water-/landmarkroutes en reviewerproef |
 | Quota en kostenlimieten (#5) | Atomaire quota, tokenreservering, MCP-routebewerkingen | Unit-tests | | Echte kosten en concurrentie in AWS |
-| Privacy en accountlevenscyclus (#6) | Export, wissing met 16-min wachttijd, Cognito-verwijdering, deelwaarschuwing; beleid ingevuld | Tests met injecteerbare opslag | | Cognito-wissing live; contactgegevens, juridische review en publicatie door de eigenaar |
-| Pilot en feedback (#7) | Feedbackendpoint/UI, meetprotocol | Unit-tests | | Echte 5-10 gebruikers; geen resultaten verzonnen |
+| Privacy en accountlevenscyclus (#6) | Export, wissing met 16-min wachttijd, Cognito-verwijdering, deelwaarschuwing; beleid ingevuld | Tests met injecteerbare opslag | | Cognito-wissing live; postadres, juridische review en publicatie door de eigenaar |
+| Pilot en feedback (#7) | Feedbackendpoint/UI, meetprotocol en pilotplan voor 8 Vlaamse deelnemers (13 okt–9 nov 2026) | Unit-tests | | Pilot uitvoeren; geen resultaten verzonnen |
 | Metrics en alarmen (#8) | JSON-metrieken, lokale samenvatter, Terraform-dashboard/alarmen | Terraform-validatie | | Alarmbestemming, salt, kostbaseline |
 | Mobiele flows (#9) | Lokale fixture, mobiele controle | Unit-tests | Eerste browserproeven in Chrome (zie snelformulier) | Volledige login/GPX-acceptatie met browserautomatisering |
 | Docs en productstatus (#10) | Deze matrix, PRODUCT.md, acceptatie-/beheer-/pilotdocs | n.v.t. | n.v.t. | Juridische publicatie |
@@ -42,7 +42,7 @@ is geen E2E-bewijs.
 | Dekking en packs (#20) | Bredene op geïsoleerde kustdata; coördinatenvalidatie | Bredene-test | Bredene 5 km live | Volledig Vlaanderen-pack, gestructureerde dekkingsfout |
 | Fietscomputer-export (#21) | FIT-course-encoder, GPX-cues, API/CLI/webdownload | CRC- en parserproeven | FIT-download in Chrome: CRC ok, sport `walking`; GPX 1007 trackpunten, 199 aanwijzingen | Echt Garmin-toestel; providerpush uitgesteld |
 | Snelplanner (#22) | GPS, afstand, activiteit, doel, quota/receipts, vraagknoppen | Browserproef na standaardprofielfix | Zie "Nieuwe route via snelformulier" | Mobiele layout |
-| Modelkeuze en evals (#23) | `lus eval-model`, eerste-toolscoring, hosted suite met 10 echte gesprekcases, CI-poort voor modelwissels | 23/31 eerste-toolcases (6/10 echte gesprekken) | Productiemodel `openai.gpt-oss-120b-1:0` draait | Claude blokkeert op Marketplace-betaling (`INVALID_PAYMENT_INSTRUMENT`); geen migratiebesluit op ruwe score |
+| Modelkeuze en evals (#23) | `lus eval-model`, eerste-toolscoring, hosted suite met 10 echte gesprekcases, CI-poort voor modelwissels | 23/31 eerste-toolcases (6/10 echte gesprekken) | Productiemodel `openai.gpt-oss-120b-1:0` draait | Bij opgeloste Marketplace-betaling dezelfde hosted eval op Claude Sonnet; wissel via model_gate en approved-model |
 | Klimhints en kandidaten (#24) | `point_hints` en `headings` in finale routering; rollbackteller | Cassettes ongewijzigd (hash negeert hints) | | `_candidates` met dezelfde via-punten/corridors; cassettes herrecorden; JSON-`null` in `headings` live |
 | Omleiden onderweg (#25) | `reroute_from` in CLI/MCP/chat/API/web | Tests incl. budgetrollback | | Live omleidingsproef, GPS-toestemming |
 | Offline route (#26) | Service worker, 10 bewaarde routes, routelijn/GPS/hoogteprofiel | Frontendtests | | Achtergrondtegels; vliegtuigmodus live |
@@ -56,7 +56,7 @@ is geen E2E-bewijs.
   `suggest_climbs`, `route_details`, `download_gpx`, `route_readiness`,
   `get_profile`, `update_profile`, `ensure_region`, `region_status`,
   `list_drafts`. De hosted MCP exposeert `ensure_region` niet (immutable image).
-- Productiemodel van de eigen chat: `openai.gpt-oss-120b-1:0` op Bedrock
+- Pilotmodel van de eigen chat: `openai.gpt-oss-120b-1:0` op Bedrock
   (`bedrock_model_id` in `infra/terraform/variables.tf`). Claude
   (`eu.anthropic.claude-sonnet-4-6`) is geblokkeerd door de AWS
   Marketplace-betaalinstrument-fout; terug te zetten zodra die case is opgelost.

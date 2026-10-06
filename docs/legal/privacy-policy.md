@@ -11,7 +11,8 @@
 
 Lusmaker ("wij") is een dienst van Ommeke (in pilotfase), beheerd door
 Mathias Dierickx, België. Postadres: [POSTADRES — nog in te vullen door de
-eigenaar]. Contact: mathias.dierickx@gmail.com (zoals in de User-Agent van de dienst). Lusmaker stelt fiets- en looproutes
+eigenaar]. Contact: mathias.dierickx@gmail.com (publiek contactadres, bevestigd
+door de eigenaar op 6 oktober 2026). Lusmaker stelt fiets- en looproutes
 samen op basis van jouw voorkeuren, via AI-assistenten (zoals Claude en
 ChatGPT) die met onze dienst verbinden.
 
@@ -90,12 +91,5 @@ Wezenlijke wijzigingen kondigen we aan op deze pagina met nieuwe datum.
 
 ## Nog te beslissen door de eigenaar
 
-- Postadres (nergens in de repo vastgelegd) en bevestiging dat mathias.dierickx@gmail.com het publieke contactadres is (nu enkel in de User-Agent).
-- Juridische entiteit: blijft het "Ommeke (in pilotfase), beheerd door Mathias
-  Dierickx", of komt er een bedrijfsnaam/ondernemingsnummer?
-- Bevestigen dat het gekozen Bedrock-model geen inferentie buiten de EU doet en
-  dat het niet op klantdata traint (huidig model: `openai.gpt-oss-120b-1:0`).
-- Doorgiftegrondslagen voor Vercel (frontend) en optionele Google-geocoding.
-- Of logretentie van 7 dagen en S3-versieretentie van 30 dagen definitief zijn,
-  en of DynamoDB point-in-time recovery (`chat_point_in_time_recovery`) aan moet.
+- Postadres invullen.
 - Juridische review en publicatie op `https://<domein>/privacy`.
