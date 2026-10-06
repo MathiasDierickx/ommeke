@@ -197,7 +197,7 @@ variable "log_retention_days" {
 variable "monthly_budget_usd" {
   description = "Maandelijks AWS-budget; alarm alleen wanneer billing_email is gezet."
   type        = number
-  default     = 10
+  default     = 50
 }
 
 variable "billing_email" {
@@ -233,7 +233,7 @@ variable "daily_quotas" {
     provision = number
     feedback  = number
   })
-  default = { chat = 40, route = 80, tokens = 200000, provision = 0, feedback = 20 }
+  default = { chat = 40, route = 80, tokens = 300000, provision = 0, feedback = 20 }
   validation {
     condition     = alltrue([for value in values(var.daily_quotas) : value >= 0 && floor(value) == value])
     error_message = "Quota moeten niet-negatieve gehele getallen zijn."

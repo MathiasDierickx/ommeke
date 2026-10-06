@@ -58,7 +58,7 @@ Geen data of runtime wissen om een rollback te forceren.
 ## Limieten en metingen
 
 Terraform `daily_quotas`: per gebruiker per UTC-dag standaard 40 chatopdrachten,
-80 routebewerkingen, 200.000 conservatief gereserveerde modeltokens, 20
+80 routebewerkingen, 300.000 conservatief gereserveerde modeltokens, 20
 feedbackmeldingen en 0 nieuwe regioprovisioneringen. Bestaande gezonde regio's
 blijven bruikbaar. Limieten zijn atomair opgeslagen; een herhaald requestnummer
 wordt niet dubbel verbruikt. Mislukte pogingen tellen mee. Tokenreserveringen zijn
