@@ -38,6 +38,32 @@ def _route_share(routes: list[dict], detail_name: str, wanted: set) -> float:
     return min(1.0, matched / max(total, 1.0))
 
 
+def _unpaved_m(routes: list[dict]) -> float:
+    """Onverharde meters uit GH-details; bekende verharde paden tellen niet mee."""
+    from . import analysis
+
+    total = 0.0
+    unpaved = {"gravel", "dirt", "grass", "sand", "ground", "unpaved", "compacted", "fine_gravel"}
+    for routed in routes:
+        if "onverhard_m" in routed:
+            total += routed["onverhard_m"]
+            continue
+        coords = routed.get("coords", [])
+        details = routed.get("details") or {}
+        surfaces = analysis._detail_values(coords, details.get("surface", []))
+        roads = analysis._detail_values(coords, details.get("road_class", []))
+        for i, surface in enumerate(surfaces):
+            if surface in unpaved or (surface in {None, "missing", "unknown"} and roads[i] in analysis.OFFROAD_CLASSES):
+                total += geo.haversine(*coords[i][:2], *coords[i + 1][:2])
+    return total
+
+
+def _paved_candidates(candidates, share):
+    """Vermijd >5% onverhard als een verharde variant beschikbaar is."""
+    paved = [candidate for candidate in candidates if share(candidate) <= 0.05]
+    return paved or candidates
+
+
 def _popular_share(routes: list[dict], cells=_LOAD_HEAT, *, profile="quiet") -> float:
     if cells is _LOAD_HEAT:
         from . import heat
@@ -192,7 +218,7 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
                 "heat_activity": _draft()._heat_activity(d),
                 **_draft()._activity_kwargs(d),
             }
-            if weighted:
+            if weighted or _draft().prefers_paved(d):
                 preferences["details"] = True
             r1 = router(
                 [a, tuple(c["foot"])],
@@ -251,6 +277,9 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             "pos": pos,
             "voorstel": f"lus draft add-climb {d['id']} {cid} --at {pos}",
         }
+        if _draft().prefers_paved(d):
+            suggestion["onverhard_m"] = round(_unpaved_m([r1, r2, r3]))
+            suggestion["onverhard_aandeel"] = suggestion["onverhard_m"] / max(1.0, sum(r["distance_m"] for r in (r1, r2, r3)))
         if weighted:
             suggestion["score_componenten"] = _candidate_surface_components(
                 [r1, r2, r3], popular_cells, profile=routing["profile"]
@@ -358,11 +387,13 @@ def _score_components(candidate: dict, budget_km: float) -> dict:
 
 
 def _select_candidate(candidates: list[dict], objective, budget_km: float | None = None,
-                      prefer_cobbles: bool = False) -> dict | None:
+                      prefer_cobbles: bool = False, prefer_paved: bool = False) -> dict | None:
     """Kies deterministisch de beste kandidaat voor het gevraagde doel."""
     weights = _objective_weights(objective)
     if not candidates:
         return None
+    if prefer_paved:
+        candidates = _paved_candidates(candidates, lambda c: c.get("onverhard_aandeel", 0.0))
     budget_km = budget_km if budget_km is not None else max(
         candidate["extra_km"] for candidate in candidates
     )
@@ -371,9 +402,10 @@ def _select_candidate(candidates: list[dict], objective, budget_km: float | None
         extra_km = candidate["extra_km"]
         gain = candidate["extra_hoogtemeters"]
         ratio = gain / max(extra_km, 0.3)
+        surface_tie = (candidate.get("onverhard_m", 0),) if prefer_paved else ()
         if objective == FLAT:
             # Laagste stijging per km wint; bij gelijkspel de kleinste stijging.
-            return (ratio, gain, extra_km, candidate["climb"]["id"])
+            return (ratio, gain, *surface_tie, extra_km, candidate["climb"]["id"])
         if weights is None:
             primary = gain if objective == _LEGACY_HM else ratio
         else:
@@ -383,7 +415,7 @@ def _select_candidate(candidates: list[dict], objective, budget_km: float | None
                 primary += 0.15 * components["kassei"]
             candidate["score"] = round(primary, 6)
             candidate["score_componenten"] = components
-        return (-primary, -gain, extra_km, candidate["climb"]["id"])
+        return (-primary, -gain, *surface_tie, extra_km, candidate["climb"]["id"])
 
     return sorted(candidates, key=key)[0]
 
@@ -476,6 +508,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         for point in leg
     ]
     weights = _objective_weights(objective)
+    prefer_paved = _draft().prefers_paved(d)
     preferences = {
         **_draft().routing_preferences(d),
         "avoid_polygons": _draft().place_areas(d),
@@ -512,7 +545,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                 anchor,
                 requested_m,
                 seed,
-                details=(weights is not None),
+                details=(weights is not None or prefer_paved),
                 **preferences,
             )
         except (gh.GhError, DraftError):
@@ -565,13 +598,17 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     if not candidates:
         return exhausted("geen extra lus gevonden die niet over dezelfde wegen terugkeert")
 
+    if prefer_paved:
+        candidates = _paved_candidates(candidates, lambda item: _unpaved_m([item[3]]) / max(item[3]["distance_m"], 1.0))
     before = copy.deepcopy(d)
     tolerance_m = _target_tolerance_m(d, target_total_m or 0.0)
     # A requested distance comes before soft surface/popularity preferences.
     # Without a distance target, preserve the existing objective ordering.
     ordered = sorted(candidates, key=lambda item: (
         -abs(current_m + item[3]["distance_m"] - target_total_m) if target_total_m is not None else 0,
-        item[0], item[1]), reverse=True)
+        item[0],
+        -_unpaved_m([item[3]]) if prefer_paved else 0,
+        item[1]), reverse=True)
     best = None
     best_error = float("inf")
     for _ascend, _seed_order, seed, candidate, coords in ordered:
@@ -786,6 +823,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
                 objective,
                 budget_km=budget_km,
                 prefer_cobbles=prefer_cobbles,
+                prefer_paved=_draft().prefers_paved(d),
             )
             if selected is None:
                 stopped_because = "geen kandidaten boven min-ratio binnen budget"

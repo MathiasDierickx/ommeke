@@ -311,3 +311,25 @@ def test_avoid_factors_cannot_make_a_landmark_incompatible_boost():
                 pass
             else:
                 raise AssertionError(f"ongeldige LM-factor aanvaard: {factor}")
+
+
+def test_explicit_paved_answer_reaches_both_gh_request_models():
+    from lusmaker import activities, draft
+
+    state = {'route_request': {'activiteit': 'koersfiets',
+                              'expliciete_voorkeuren': {'ondergrond': 'verhard'}}}
+    preferences = draft._activity_kwargs(state)
+    captured = []
+
+    def post(path, body):
+        captured.append(body)
+        return {'paths': [{'distance': 1000, 'time': 60000,
+                          'points': {'coordinates': [[4, 50], [4.01, 50]]}}]}
+
+    gh.route([(50, 4), (50, 4.01)], area_evs=set(), post_fn=post, **preferences)
+    gh.round_trip((50, 4), 1000, 0, area_evs=set(), post_fn=post, **preferences)
+    for body in captured:
+        for rule in activities.PREFER_PAVED_PRIORITY:
+            assert rule in body['custom_model']['priority']
+    state['route_request']['expliciete_voorkeuren']['ondergrond'] = 'ok'
+    assert 'prefer_paved' not in draft._activity_kwargs(state)

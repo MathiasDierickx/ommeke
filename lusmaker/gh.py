@@ -260,6 +260,7 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   profile: str = "", area_evs: set[str] | frozenset[str] | None = None,
                   heat_activity: str | None = None,
                   activity: str | None = None,
+                  prefer_paved: bool = False,
                   prefer_cycleways: bool = False) -> dict:
     """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes.
 
@@ -272,6 +273,8 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
         custom["priority"] = custom["priority"] + activities.priority_fragment(activity)
     elif profile == "trail":
         custom["priority"] = custom["priority"] + list(TRAIL_OFFROAD_PRIORITY)
+    if prefer_paved:
+        custom["priority"] += [dict(r) for r in activities.PREFER_PAVED_PRIORITY]
     if prefer_cycleways:
         custom["priority"] = custom["priority"] + [dict(r) for r in PREFER_CYCLEWAYS_PRIORITY]
     if avoid_cobbles:
@@ -354,6 +357,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           instructions: bool = False,
           heat_activity: str | None = None,
           activity: str | None = None,
+          prefer_paved: bool = False,
           prefer_cycleways: bool = False,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
@@ -369,6 +373,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
     profile: GraphHopper-profiel, standaard het bestaande fietsprofiel.
     heat_activity: activiteit voor de request-side populariteitsvoorkeur.
     activity: activiteit (zie ``activities``) voor de request-side modelregels.
+    prefer_paved: extra zachte straffen voor een expliciet verharde rit.
     point_hints: één straatnaam per punt ("" = geen hint); lengte moet gelijk
     zijn aan het aantal punten, anders wordt de hint genegeerd.
     headings: één kompasrichting per punt (None = geen voorkeur, als JSON
@@ -417,7 +422,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
         avoid_busy, profile=profile, area_evs=area_evs,
         heat_activity=heat_activity, activity=activity,
-        prefer_cycleways=prefer_cycleways,
+        prefer_cycleways=prefer_cycleways, prefer_paved=prefer_paved,
     )
 
     data = post_fn("/route", body)
@@ -431,6 +436,7 @@ def round_trip(point, distance_m: float, seed: int,
                avoid_busy: bool = False, details: bool = False, *,
                heat_activity: str | None = None,
                activity: str | None = None,
+               prefer_paved: bool = False,
                prefer_cycleways: bool = False,
                area_evs: set[str] | frozenset[str] | None = None,
                post_fn=_post) -> dict:
@@ -451,7 +457,7 @@ def round_trip(point, distance_m: float, seed: int,
             avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
             avoid_busy, profile=profile, area_evs=area_evs,
             heat_activity=heat_activity, activity=activity,
-            prefer_cycleways=prefer_cycleways,
+            prefer_cycleways=prefer_cycleways, prefer_paved=prefer_paved,
         ),
     }
     if details:

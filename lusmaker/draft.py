@@ -706,6 +706,12 @@ def prefers_cycleways(d: dict) -> bool:
     return preferences.get("fietspaden") == "belangrijk"
 
 
+def prefers_paved(d: dict) -> bool:
+    """Alleen een expliciet verhard antwoord activeert de extra ritvoorkeur."""
+    request = d.get("route_request") or {}
+    return (request.get("expliciete_voorkeuren") or {}).get("ondergrond") == "verhard"
+
+
 def _heat_activity(d: dict) -> str | None:
     request = d.get("route_request") or {}
     if "heat_activity" in request:
@@ -722,6 +728,8 @@ def _activity_kwargs(d: dict) -> dict:
     """Routeerargumenten voor de activiteit; leeg bij oudere drafts."""
     activity = (d.get("route_request") or {}).get("activiteit")
     kwargs = {"activity": activity} if activity else {}
+    if prefers_paved(d):
+        kwargs["prefer_paved"] = True
     if prefers_cycleways(d):
         kwargs["prefer_cycleways"] = True
     return kwargs

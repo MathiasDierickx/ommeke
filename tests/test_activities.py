@@ -103,3 +103,11 @@ def test_plan_route_rejects_unknown_activity_and_names_walks_and_runs():
     name = intents.suggest_route_name
     assert name("Gent", target_km=5, max_km=None, doel="toeren", activiteit="wegloop").startswith("Looplus")
     assert name("Gent", target_km=5, max_km=None, doel="toeren", activiteit="wandelen").startswith("Wandellus")
+
+
+def test_explicit_paved_fragment_uses_allowed_penalties():
+    for rule in activities.PREFER_PAVED_PRIORITY:
+        assert activities.MIN_FACTOR <= float(rule['multiply_by']) <= 1.0
+        assert set(re.findall(r'[a-z_]+(?= [=<>!])', rule['if'])) <= ALLOWED_VARIABLES
+    assert _body(activity='koersfiets', prefer_paved=True) == [
+        *activities.priority_fragment('koersfiets'), *activities.PREFER_PAVED_PRIORITY]

@@ -35,6 +35,14 @@ _UNPAVED = (
 _ROUGH = "smoothness == BAD || smoothness == VERY_BAD || smoothness == HORRIBLE"
 
 
+# Extra zachte straffen voor een expliciete verharde rit, naast de activiteit.
+PREFER_PAVED_PRIORITY = (
+    {"if": _UNPAVED, "multiply_by": "0.30"},
+    {"if": "track_type == GRADE2 || track_type == GRADE3 || track_type == GRADE4 || track_type == GRADE5", "multiply_by": "0.30"},
+    {"if": _ROUGH, "multiply_by": "0.50"},
+)
+
+
 @dataclass(frozen=True)
 class Activity:
     key: str

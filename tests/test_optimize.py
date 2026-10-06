@@ -1162,3 +1162,65 @@ def test_optimizer_distance_errors_use_plain_dutch_and_decimal_comma():
         assert str(exc) == "De gewenste afstand mag niet groter zijn dan je maximum."
     else:
         raise AssertionError("Afstandsdoel boven maximum werd aanvaard")
+
+
+def test_paved_climb_selection_prefers_less_unpaved_and_keeps_old_ties():
+    candidates = [_candidate('alpha', 4, 40), _candidate('beta', 4, 40)]
+    candidates[0].update(onverhard_m=1000, onverhard_aandeel=.25)
+    candidates[1].update(onverhard_m=100, onverhard_aandeel=.025)
+    assert draft._select_candidate(candidates, 'hm')['climb']['id'] == 'alpha'
+    assert draft._select_candidate(candidates, 'hm', prefer_paved=True)['climb']['id'] == 'beta'
+    candidates[1].update(onverhard_m=1000, onverhard_aandeel=.25)
+    assert draft._select_candidate(candidates, 'hm', prefer_paved=True)['climb']['id'] == 'alpha'
+
+
+def test_paved_round_trip_prefers_less_unpaved_at_equal_elevation():
+    def run(prefer):
+        state = _synthetic_routed_draft()
+        if prefer:
+            state['route_request'] = {'activiteit': 'koersfiets', 'expliciete_voorkeuren': {'ondergrond': 'verhard'}}
+
+        def round_trip(anchor, distance, seed, **kwargs):
+            if prefer:
+                assert kwargs['prefer_paved'] and kwargs['details']
+            coords = [anchor, (50.01, 4.02), (50.01, 4.04), anchor]
+            return {'distance_m': 4000, 'ascend_m': 100,
+                    'onverhard_m': 50 if seed == 2 else 1000, 'coords': coords}
+
+        def router(d, db):
+            d['computed'] = {'total_km': 9, 'ascend_m': 140, 'kwaliteit': {'heen_en_weer_m': 0}}
+
+        return draft._fill_with_round_trip(state, _synthetic_climb_db(), 10000,
+                                          router=router, round_trip_fn=round_trip,
+                                          popular_cells=set())['seed']
+    assert run(False) == 0
+    assert run(True) == 2
+
+
+def test_paved_climb_candidates_request_details_and_measure_unpaved():
+    from lusmaker import optimizer
+    state, db = _parallel_candidate_fixture()
+    state['route_request'] = {'activiteit': 'koersfiets', 'expliciete_voorkeuren': {'ondergrond': 'verhard'}}
+
+    def router(points, **kwargs):
+        assert kwargs['details'] and kwargs['prefer_paved']
+        return {'distance_m': 1000, 'ascend_m': 10,
+                'coords': [(50, 4), (50, 4.01)],
+                'details': {'surface': [[0, 1, 'gravel']]}}
+
+    # Alle routedelen overlappen in deze stub: laat de lus-toets buiten deze
+    # detailtest door geen geometrie voor de klimleg terug te geven.
+    def route_without_overlap(points, **kwargs):
+        result = router(points, **kwargs)
+        result.pop('coords')
+        result['onverhard_m'] = 100
+        return result
+
+    candidates = draft._candidates(state, db, 8, 10, router=route_without_overlap, max_eval=4)
+    assert candidates
+    for candidate in candidates:
+        assert candidate['onverhard_m'] == 300
+        assert candidate['onverhard_aandeel'] == .1
+    assert 700 < optimizer._unpaved_m([router([], details=True, prefer_paved=True)]) < 720
+    assert optimizer._unpaved_m([{'coords': [(50, 4), (50, 4.01)], 'details': {
+        'surface': [[0, 1, 'asphalt']], 'road_class': [[0, 1, 'path']]}}]) == 0

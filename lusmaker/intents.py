@@ -447,6 +447,51 @@ def _route_request(
     }
 
 
+def effective_goal(doel: str | None, explicit: dict) -> str:
+    """Laat ritvoorkeuren het standaarddoel verfijnen; andere doelen winnen."""
+    goal = doel or "toeren"
+    if explicit.get("heuvels") == "vlak" and goal == "hoogtemeters":
+        return "toeren"
+    if goal == "toeren":
+        if explicit.get("heuvels") == "zoek":
+            return "hoogtemeters"
+        if explicit.get("ondergrond") == "onverhard":
+            return "offroad"
+    return goal
+
+
+def _update_auto_name(d: dict, previous: dict, request: dict) -> None:
+    old_distance = previous.get("target_km")
+    if old_distance is None:
+        old_distance = previous.get("max_km")
+    new_distance = request.get("target_km")
+    if old_distance == new_distance or new_distance is None:
+        return
+    name = d.get("name", "")
+    auto = d.get("name_auto")
+    if auto is None:
+        # Legacy: alleen een herkenbare gegenereerde naam zonder opgegeven naam.
+        signature = previous.get("input_signature")
+        auto = False
+        if isinstance(signature, dict) and not signature.get("naam"):
+            place = previous.get("rond_plaats") or signature.get("start", "")
+            for goal in ("toeren", "hoogtemeters", "offroad", "kort"):
+                expected = suggest_route_name(
+                    place, target_km=old_distance, max_km=previous.get("max_km"),
+                    doel=goal, activiteit=previous.get("activiteit", activities.DEFAULT),
+                )
+                nearby = _nearby_place(d.get("start"))
+                if nearby:
+                    expected = expected.replace("rond je startpunt", f"rond {nearby}", 1)[:80]
+                auto = auto or name == expected
+        d["name_auto"] = auto
+    if auto and old_distance is not None:
+        suffix = f" · {old_distance:g} km"
+        if name.endswith(suffix):
+            new_suffix = f" · {new_distance:g} km"
+            d["name"] = name[:-len(suffix)][:80-len(new_suffix)].rstrip() + new_suffix
+
+
 def _tour_objective(request: dict, default: str = "toeren") -> str:
     """'vlak' als de rit expliciet vlak moet zijn, anders het gegeven doel."""
     explicit = request.get("expliciete_voorkeuren") or {}
@@ -715,7 +760,9 @@ def _route_for_request(
         "max_km": optimize_ceiling,
         "fill": True if request.get("rond_plaats") else not request["geen_opvulling"],
     }
-    if request.get("rond_plaats") and not d.get("climbs"):
+    if goal == "hoogtemeters" and (request.get("expliciete_voorkeuren") or {}).get("heuvels") == "zoek":
+        optimize_kwargs["objective"] = "hm"
+    elif request.get("rond_plaats") and not d.get("climbs"):
         optimize_kwargs["objective"] = (
             "offroad" if request.get("activiteit") == "trail"
             else _tour_objective(request)
@@ -951,6 +998,7 @@ def plan_route(
         heuvels=heuvels,
         ondergrond=ondergrond,
     )
+    request["doel"] = effective_goal(doel, request["expliciete_voorkeuren"])
     if stop_onderweg is not None:
         request['stop_onderweg'] = dict(stop_onderweg)
     existing = find_request_fn(request_id) if request_id is not None else None
@@ -983,6 +1031,8 @@ def plan_route(
                 f"request-id '{request_id}' is al gebruikt voor een andere routewens"
             )
         request = stored_request
+        request["doel"] = effective_goal(request.get("doel"),
+                                         request.get("expliciete_voorkeuren") or {})
         d = existing
         pending = _place_input(d, request)
         if pending is not None:
@@ -1025,7 +1075,7 @@ def plan_route(
         rond_plaats or start,
         target_km=target_km,
         max_km=max_km,
-        doel=doel,
+        doel=request["doel"],
         activiteit=activiteit,
     )
     if not route_name:
@@ -1045,6 +1095,8 @@ def plan_route(
     created = create_fn(**create_kwargs)
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)
+    d["name_auto"] = naam is None
+    save_fn(d)
     candidates = d["start"].pop("candidates", [])
     if candidates:
         d["pending_places"] = [{"query": start, "candidates": candidates, "target": "start"}]
@@ -1180,13 +1232,7 @@ def apply_answers(
         d["avoid_cobbles"] = antwoorden["kasseien"] == "vermijd"
     # fietspaden (custom-modelstraf) en oversteken (strict) volgen uit de
     # expliciete voorkeuren van de rit; draft.routing_preferences leest ze daar.
-    goal = request.get("doel") or "toeren"
-    if antwoorden.get("heuvels") == "zoek":
-        goal = "hoogtemeters"
-    elif antwoorden.get("ondergrond") == "onverhard":
-        goal = "offroad"
-    elif antwoorden.get("heuvels") == "vlak" and goal == "hoogtemeters":
-        goal = "toeren"
+    goal = effective_goal(request.get("doel"), request["expliciete_voorkeuren"])
     save_fn(d)
     adjust = adjust_fn or adjust_route
     with funnel.adjust_kind("answers"):
@@ -1343,7 +1389,8 @@ def adjust_route(
     else:
         effective_max = previous_request.get("max_km")
         max_is_explicit = previous_request.get("max_km_explicit", False)
-    effective_goal = doel or previous_request.get("doel", "toeren")
+    resolved_goal = effective_goal(doel or previous_request.get("doel"),
+                                   previous_request.get("expliciete_voorkeuren") or {})
     effective_profile = (
         profiel_naam
         if profiel_naam is not None
@@ -1359,13 +1406,13 @@ def adjust_route(
         max_km=effective_max,
         tolerance_km=effective_tolerance,
     )
-    if effective_goal not in {"hoogtemeters", "offroad", "kort", "toeren"}:
+    if resolved_goal not in {"hoogtemeters", "offroad", "kort", "toeren"}:
         raise IntentError(
             "doel moet 'hoogtemeters', 'offroad', 'kort' of 'toeren' zijn"
         )
     request = {
         **previous_request,
-        "doel": effective_goal,
+        "doel": resolved_goal,
         "target_km": effective_target,
         "max_km": effective_max,
         "max_km_explicit": max_is_explicit,
@@ -1423,6 +1470,7 @@ def adjust_route(
                 d["opvullingen"] = []
                 d["computed"] = None
                 d.pop("_geometry", None)
+        _update_auto_name(d, previous_request, request)
         d["route_request"] = request
         save_fn(d)
         pending = _place_input(d, request, save_fn)

@@ -1198,3 +1198,74 @@ def test_climb_adjustment_replaces_fill_and_retains_climb_choices():
             assert result["constraints"]["voldaan"] is True
             assert len(state["opvullingen"]) == 1
             assert all(abs(value - (target - base_km) * 1000) < 1 for value in requested)
+
+
+def test_explicit_hills_drive_plan_and_survive_distance_and_default_goal_changes():
+    state = _routed_draft()
+    state['climbs'] = []
+    state['computed'] = None
+    calls = []
+
+    def create(**kwargs):
+        state['name'] = kwargs['name']
+        return {'id': state['id']}
+
+    def optimize(d, db, **kwargs):
+        calls.append(kwargs['objective'])
+        d['computed'] = {**_routed_draft()['computed'], 'total_km': kwargs['fill_target_km']}
+
+    def route(d, db):
+        calls.append('kort')
+        d['computed'] = {**_routed_draft()['computed'], 'total_km': d['route_request']['target_km']}
+
+    with tempfile.TemporaryDirectory() as root:
+        kwargs = dict(load_fn=lambda _: state, save_fn=lambda _: None,
+                      climbs_fn=_climbs, optimize_fn=optimize, route_fn=route,
+                      export_gpx_fn=lambda *a: None, export_preview_fn=lambda *a: None,
+                      exports_root=Path(root))
+        intents.plan_route('Wetteren', target_km=50, heuvels='zoek',
+                           ondergrond='verhard', create_fn=create, **kwargs)
+        assert state['route_request']['doel'] == 'hoogtemeters'
+        assert state['name_auto'] is True
+        assert state['name'] == 'Heuvelrit rond Wetteren · 50 km'
+        intents.adjust_route(state['id'], target_km=40, **kwargs)
+        assert state['route_request']['doel'] == 'hoogtemeters'
+        assert state['name'] == 'Heuvelrit rond Wetteren · 40 km'
+        intents.adjust_route(state['id'], doel='toeren', **kwargs)
+        assert state['route_request']['doel'] == 'hoogtemeters'
+        intents.adjust_route(state['id'], doel='kort', **kwargs)
+        assert state['route_request']['doel'] == 'kort'
+        state['name'] = 'Mijn rit · 40 km'
+        state['name_auto'] = False
+        intents.adjust_route(state['id'], target_km=35, **kwargs)
+        assert state['name'] == 'Mijn rit · 40 km'
+    assert calls == ['hm', 'hm', 'hm', 'kort', 'kort']
+
+
+def test_goal_helper_preserves_other_goals_and_flat_answer():
+    for goal in ('kort', 'offroad', 'hoogtemeters'):
+        assert intents.effective_goal(goal, {'heuvels': 'zoek', 'ondergrond': 'onverhard'}) == goal
+    assert intents.effective_goal(None, {'heuvels': 'zoek'}) == 'hoogtemeters'
+    assert intents.effective_goal('toeren', {'ondergrond': 'onverhard'}) == 'offroad'
+    assert intents.effective_goal('hoogtemeters', {'heuvels': 'vlak'}) == 'toeren'
+    assert intents.effective_goal('kort', {'heuvels': 'vlak'}) == 'kort'
+    state = {'id': 'd', 'route_request': {'doel': 'kort'}}
+    calls = []
+    intents.apply_answers('d', {'heuvels': 'zoek'}, load_fn=lambda _: state,
+                          save_fn=lambda _: None,
+                          adjust_fn=lambda _, **kw: calls.append(kw['doel']) or {})
+    assert calls == ['kort']
+
+
+def test_legacy_auto_name_detection_is_conservative():
+    request = {'target_km': 50, 'activiteit': 'koersfiets', 'input_signature': {'start': 'Wetteren', 'naam': None}}
+    updated = {**request, 'target_km': 40}
+    auto = {'name': 'Rondrit rond Wetteren · 50 km'}
+    intents._update_auto_name(auto, request, updated)
+    assert auto == {'name': 'Rondrit rond Wetteren · 40 km', 'name_auto': True}
+    for state in ({'name': 'Mijn rit · 50 km'},
+                  {'name': 'Rondrit rond Wetteren · 50 km', 'name_auto': False},
+                  {'name': 'Rondrit rond Gent · 50 km'}):
+        original = state['name']
+        intents._update_auto_name(state, request, updated)
+        assert state['name'] == original

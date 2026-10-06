@@ -554,6 +554,7 @@ async def route_update(request: Request) -> JSONResponse:
             return _error("expected_revision is verplicht")
         draft.require_revision(item, expected_revision)
         item["name"] = name.strip()
+        item["name_auto"] = False
         await asyncio.to_thread(
             draft.save, item, expected_revision=expected_revision
         )
