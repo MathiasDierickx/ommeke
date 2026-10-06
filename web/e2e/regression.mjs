@@ -532,6 +532,8 @@ test("planner houdt invoer vast terwijl de bibliotheek nog laadt", async ({ page
 });
 
 test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async ({ page, url }) => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
   const voorstellen = [
     { titel: "Voeg Molenberg toe", uitleg: "Ongeveer 2,0 km extra voor 60 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["molenberg"], target_km: 43 } },
     { titel: "Voeg Kapelmuur toe", uitleg: "Ongeveer 4,0 km extra voor 70 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["kapelmuur"], target_km: 45 } },
@@ -540,11 +542,12 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
     handlers: {
       "POST /api/routes/stream": () => sse([["result", { status: "ready", draft: "d1", km: 40.4, voorstellen, constraints: { voldaan: true, waarschuwingen: [] } }]]),
       // Na de eerste aanpassing geeft de backend verse voorstellen voor de nieuwe route; na de tweede geen meer.
-      "POST /api/routes/d1/adjust": ({ state: s }) => {
+      "POST /api/routes/d1/adjust": async ({ state: s }) => {
+        await gate;
         const first = s.calls.filter((c) => c.key === "POST /api/routes/d1/adjust").length === 1;
         return json(200, first
           ? { route: { id: "d1", total_km: 42.6 }, voorstellen: [{ titel: "Voeg Paterberg toe", uitleg: "Ongeveer 1,5 km extra voor 50 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["paterberg"], target_km: 44 } }] }
-          : { route: { id: "d1", total_km: 44.1 } });
+          : { route: { id: "d1", total_km: 44.1, constraints: { voldaan: false, waarschuwingen: ["Er paste geen extra lus die bij je wensen past."] } } });
       },
     },
   });
@@ -556,6 +559,8 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
   assert.equal(await group.getByRole("button").count(), 2, "hooguit twee voorstellen");
   assert.match(await group.innerText(), /60 hoogtemeters/);
   await group.getByRole("button", { name: "Voeg Molenberg toe" }).click();
+  await page.getByRole("status").filter({ hasText: "Ik voeg Molenberg toe en bereken je route opnieuw." }).waitFor();
+  release();
   await page.getByText("Aangepast: Voeg Molenberg toe.").waitFor();
   assert.match(await page.locator(".quick-result").innerText(), /42,6 km/);
   const fresh = page.getByRole("group", { name: "Voorstellen voor je route" });
@@ -570,6 +575,8 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
   await page.getByText("Aangepast: Voeg Paterberg toe.").waitFor();
   assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0, "geen voorstellen meer als de backend er geen geeft");
   assert.match(await page.locator(".quick-result").innerText(), /44,1 km/);
+  await page.getByRole("heading", { name: "Route gevonden — controleer je wensen" }).waitFor();
+  assert.ok(await page.getByText("Er paste geen extra lus die bij je wensen past.").isVisible());
   expectNoStrays(state, "voorstellen");
 });
 

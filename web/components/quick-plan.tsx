@@ -131,12 +131,13 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     if (!result || lock.current) return;
     const signature = JSON.stringify([result.draft, proposal.adjust_route]);
     if (pendingProposal.current?.signature !== signature) pendingProposal.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; onBusyChange?.(true); setProgress(null); setBusy(true); setError("");
+    const action = proposal.titel.replace(/^Voeg\s+/i, "voeg ");
+    lock.current = true; onBusyChange?.(true); setProgress({ stage: "adjusting", message: `Ik ${action} en bereken je route opnieuw.` }); setBusy(true); setError("");
     try {
-      const data = await apiRequest<{ route: { total_km?: number | null }; voorstellen?: Proposal[] }>(`/api/routes/${encodeURIComponent(result.draft)}/adjust`, token, { method: "POST", body: JSON.stringify({ ...proposal.adjust_route, request_id: pendingProposal.current.id }) });
+      const data = await apiRequest<{ route: { total_km?: number | null; constraints?: Result["constraints"] }; voorstellen?: Proposal[] }>(`/api/routes/${encodeURIComponent(result.draft)}/adjust`, token, { method: "POST", body: JSON.stringify({ ...proposal.adjust_route, request_id: pendingProposal.current.id }) });
       pendingProposal.current = null;
       // De oude voorstellen horen bij de oude route; de backend geeft verse terug (router-vrij).
-      setResult({ ...result, km: data.route.total_km ?? result.km, voorstellen: data.voorstellen ?? [], aangepast: proposal.titel });
+      setResult({ ...result, km: data.route.total_km ?? result.km, constraints: data.route.constraints ?? result.constraints, voorstellen: data.voorstellen ?? [], aangepast: proposal.titel });
       onResultChange?.(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Het voorstel kon niet worden toegepast.");

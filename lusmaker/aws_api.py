@@ -332,8 +332,10 @@ async def route_adjust(request: Request) -> JSONResponse:
         current_km = (current.get("computed") or {}).get("total_km")
         effective_target = (
             float(target_km) if target_km is not None
-            else (float(current_km) if current_km is not None else None)
+            else (current.get("route_request") or {}).get("target_km")
         )
+        if effective_target is None and current_km is not None:
+            effective_target = float(current_km)
         effective_max = (effective_target + 3.0) if effective_target is not None else None
         adjust_values = dict(
             target_km=float(target_km) if target_km is not None else None,

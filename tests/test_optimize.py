@@ -559,7 +559,7 @@ def test_fill_target_must_fit_inside_hard_budget():
             fill_target_km=11,
         )
     except draft.DraftError as exc:
-        assert "afstandsbudget" in str(exc)
+        assert "je maximum" in str(exc)
     else:
         raise AssertionError("fill-target boven hard budget werd aanvaard")
 
@@ -1145,3 +1145,20 @@ def test_router_concurrency_defaults_and_invalid_values():
         for value, expected in [('1', 1), ('4', 4), ('0', 1), ('-2', 1), ('bad', 4)]:
             os.environ['LUSMAKER_ROUTER_CONCURRENCY'] = value
             assert draft._router_concurrency() == expected
+
+
+def test_optimizer_distance_errors_use_plain_dutch_and_decimal_comma():
+    routed = {"id": "test", "climbs": ["hill"], "loop": True,
+              "computed": {"total_km": 102.5}, "_geometry": [[[50, 4], [50.1, 4]]]}
+    try:
+        draft._optimize(routed, {}, max_km=65, objective="toeren")
+    except draft.DraftError as exc:
+        assert str(exc) == "De route wordt 102,5 km, langer dan je maximum van 65 km."
+    else:
+        raise AssertionError("Te lange basisroute werd aanvaard")
+    try:
+        draft._optimize(routed, {}, max_km=65, fill_target_km=70)
+    except draft.DraftError as exc:
+        assert str(exc) == "De gewenste afstand mag niet groter zijn dan je maximum."
+    else:
+        raise AssertionError("Afstandsdoel boven maximum werd aanvaard")

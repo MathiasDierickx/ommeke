@@ -555,15 +555,15 @@ def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn):
         persist_fn(d)
 
 
-def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None, pois_fn=None):
-    _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn)
+def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None, pois_fn=None, climb_adjustment=False):
+    _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn, climb_adjustment=climb_adjustment)
     from .route_pois import for_draft
     _plan_stop(d, climb_db, request, route_fn=route_fn, pois_fn=pois_fn or (lambda item: for_draft(item, limit=None)), persist_fn=persist_fn)
     actual = (d.get("computed") or {}).get("total_km")
     problem = None
     if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual < 0.1:
         problem = "De router leverde geen bruikbare routeafstand op. Kies een andere afstand of startplek."
-    elif request.get("max_km_explicit", True) and request.get("max_km") is not None and actual > request["max_km"]:
+    elif not climb_adjustment and request.get("max_km_explicit", True) and request.get("max_km") is not None and actual > request["max_km"]:
         problem = f"route is {actual:.1f} km en overschrijdt het harde maximum van {request['max_km']:.1f} km"
     if problem:
         d['computed'] = None
@@ -580,11 +580,28 @@ def _route_for_request(
     *,
     route_fn,
     optimize_fn,
+    climb_adjustment=False,
 ) -> None:
     goal = request["doel"]
     target_km = request.get("target_km")
     hard_max = request.get("max_km")
     max_explicit = request.get("max_km_explicit", True)
+    if climb_adjustment:
+        # Expliciete klimkeuzes behouden; alleen de vervangbare rondrit opnieuw
+        # opvullen. Geen greedy klimselectie die verwijderde klimmen terugzet.
+        route_fn(d, climb_db)
+        ceiling = target_km + request.get("tolerance_km", 2.5)
+        if hard_max is not None:
+            ceiling = min(hard_max, ceiling)
+        if d["computed"]["total_km"] > ceiling:
+            return  # constraint_report meldt de te lange route als waarschuwing
+        if not d.get("water_via"):
+            optimize_fn(
+                d, climb_db, max_km=ceiling, max_rounds=0,
+                fill=not request["geen_opvulling"], fill_target_km=target_km,
+                objective="offroad" if goal == "offroad" else _tour_objective(request),
+            )
+        return
     if d.get("water_via"):
         route_fn(d, climb_db)
         actual = (d.get("computed") or {}).get("total_km") or 0.0
@@ -1265,6 +1282,13 @@ def adjust_route(
         for place in niet_meer_vermijden:
             unavoid_place_fn(draft_id, place)
         d = load_fn(draft_id)
+        climb_adjustment = bool(voeg_klimmen_toe or verwijder_klimmen) and effective_target is not None
+        if climb_adjustment:
+            d["opvullingen"] = []
+            d["computed"] = None
+            d.pop("_geometry", None)
+            d.pop("fill_note", None)
+            d.pop("optimize_note", None)
         water_active = _set_water_via(d, request, water_fn)
         if effective_round_place and not water_active:
             anchor, _alternatives = resolve_fn(effective_round_place)
@@ -1299,6 +1323,7 @@ def adjust_route(
             route_fn=route_fn,
             optimize_fn=optimize_fn,
             persist_fn=save_fn,
+            climb_adjustment=climb_adjustment,
         )
         d = load_fn(draft_id)
         files = _export_files(

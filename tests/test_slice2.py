@@ -379,3 +379,25 @@ def test_climb_proposals_are_estimated_without_router_calls():
     assert [item["id"] for item in found][0] == "dichtbij"
     assert all(item["extra_km"] <= 8.0 for item in found)
     assert found[0]["extra_hoogtemeters"] == 70
+
+
+def test_climb_estimate_does_not_subtract_round_trip_length():
+    from copy import deepcopy
+    from lusmaker import proposals
+    d = {"loop": True, "climbs": [],
+         "computed": {"total_km": 60.6, "legs": [{"km": 2.0}, {"km": 56.6, "opvulling": True}, {"km": 2.0}]},
+         "_geometry": [[(50.0, 4.0), (50.018, 4.0)],
+                       [(50.018, 4.0), (50.2, 4.0), (50.018, 4.0)],
+                       [(50.018, 4.0), (50.0, 4.0)]]}
+    db = {"feelbosstraat": {"name": "Feelbosstraat", "foot": [50.018, 4.025],
+                            "top": [50.019, 4.025], "length_m": 500, "gain_m": 31}}
+    original = deepcopy(d)
+    estimates = proposals.estimate_climbs(d, db, 6, 4)
+    assert len(estimates) == 1
+    assert estimates[0]["extra_km"] > 1
+    assert "Minder dan 1 km" not in proposals.build(d, db)[0]["uitleg"]
+    assert d == original
+    # Een route met uitsluitend opvulling biedt geen misleidende klimprijs.
+    d["computed"]["legs"] = [d["computed"]["legs"][1]]
+    d["_geometry"] = [d["_geometry"][1]]
+    assert proposals.estimate_climbs(d, db, 6, 4) == []

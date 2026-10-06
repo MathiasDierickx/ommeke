@@ -118,8 +118,8 @@ def _candidate_prefilter(d: dict, climb_db: dict, max_detour_km: float,
         top = tuple(c["top"])
         ests = []
         for i, (meta, coords) in enumerate(zip(legs_meta, legs_geo)):
-            if meta.get("climb") or meta.get("climb_segment"):
-                continue  # niet invoegen midden in een andere klim
+            if meta.get("climb") or meta.get("climb_segment") or meta.get("opvulling"):
+                continue  # geen klimsegment of vervangbare rondrit als omweg schatten
             a = tuple(coords[0][:2])
             b = tuple(coords[-1][:2])
             est = (
@@ -429,6 +429,10 @@ def _target_tolerance_m(d: dict, target_total_m: float) -> float:
     return max(100.0, target_total_m * 0.1)
 
 
+def _format_km(value: float) -> str:
+    return f"{value:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
 def _friendly_stop_reason(reason: str) -> str:
     """Een technische stopreden als zin voor de gebruiker."""
     if "tijdslimiet" in reason:
@@ -672,15 +676,15 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         candidates_fn = _draft()._candidates
     deadline = clock() + time_budget_s
     if max_km <= 0:
-        raise DraftError("max-km moet groter dan 0 zijn")
+        raise DraftError("Je maximale afstand moet groter dan 0 km zijn.")
     if min_ratio < 0:
-        raise DraftError("min-ratio mag niet negatief zijn")
+        raise DraftError("Het minimum aan hoogtemeters per extra kilometer mag niet negatief zijn.")
     if max_rounds < 0:
-        raise DraftError("max-rounds mag niet negatief zijn")
+        raise DraftError("Het maximale aantal zoekrondes mag niet negatief zijn.")
     if fill_target_km is not None and fill_target_km <= 0:
-        raise DraftError("fill-target-km moet groter dan 0 zijn")
+        raise DraftError("Je gewenste afstand moet groter dan 0 km zijn.")
     if fill_target_km is not None and fill_target_km > max_km:
-        raise DraftError("fill-target-km mag het afstandsbudget niet overschrijden")
+        raise DraftError("De gewenste afstand mag niet groter zijn dan je maximum.")
     objective = _draft().objective_for_draft(d, objective)
     # Valideer ook als er door max_rounds=0 geen kandidaat gekozen wordt.
     weights = _objective_weights(objective)
@@ -699,7 +703,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         )
         if anchor is None:
             if not fill:
-                raise DraftError("geen klim bereikbaar binnen het budget")
+                raise DraftError("Er is geen klim bereikbaar binnen je maximale afstand.")
             # Een nieuwe afstandsoptimalisatie vervangt eerdere rondritlobben.
             # De heen- en terugweg naar een expliciete rond-plek telt mee
             # voordat we het resterende opvulbudget aan GraphHopper geven.
@@ -724,8 +728,8 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         route_fn(d, climb_db)
     if d["computed"]["total_km"] > max_km:
         raise DraftError(
-            f"huidige route is {d['computed']['total_km']:.1f} km en overschrijdt "
-            f"het budget van {max_km:.1f} km"
+            f"De route wordt {_format_km(d['computed']['total_km'])} km, "
+            f"langer dan je maximum van {_format_km(max_km)} km."
         )
 
     rounds = []

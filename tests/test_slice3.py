@@ -87,7 +87,7 @@ def test_agent_passes_the_latest_user_message_to_the_executor():
 
 # -- verse voorstellen na adjust ------------------------------------------
 
-def _adjust(item, proposals_fn):
+def _adjust(item, proposals_fn, adjust_fn=None):
     request = Request({
         "type": "http", "method": "POST", "path": "/api/routes/d1/adjust", "headers": [],
         "path_params": {"draft_id": "d1"},
@@ -98,7 +98,7 @@ def _adjust(item, proposals_fn):
 
     request.body = body
     with mock.patch.object(aws_api.draft, "load", lambda _id: item), \
-            mock.patch.object(aws_api.intents, "adjust_route", lambda *a, **k: {}), \
+            mock.patch.object(aws_api.intents, "adjust_route", adjust_fn or (lambda *a, **k: {})), \
             mock.patch.object(aws_api, "_quick", lambda fn: fn), \
             mock.patch.object(aws_api, "_route_detail_payload", lambda d: {"id": d["id"]}), \
             mock.patch.object(aws_api.climbs, "all_climbs", lambda: {}), \
@@ -132,3 +132,13 @@ def test_adjust_omits_voorstellen_when_empty_or_failing():
 
     status, payload = _adjust(item, boom)
     assert status == 200 and payload == {"route": {"id": "d1"}}
+
+
+def test_adjust_uses_existing_distance_goal_for_maximum_without_new_target():
+    item = {"id": "d1", "route_request": {"target_km": 60}, "computed": {"total_km": 60.6}}
+    seen = []
+    status, _ = _adjust(item, lambda *a: [], lambda *a, **k: seen.append(k))
+    assert status == 200
+    assert seen[0]["target_km"] is None  # intents gebruikt het opgeslagen doel
+    assert seen[0]["max_km"] == 63
+    assert seen[0]["voeg_klimmen_toe"] == ["molenberg"]

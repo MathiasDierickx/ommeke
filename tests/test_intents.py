@@ -1088,3 +1088,82 @@ def test_plan_route_validates_stop_before_side_effects():
         except intents.IntentError:
             continue
         raise AssertionError(f'Ongeldige stop aanvaard: {value}')
+
+
+def test_climb_adjustment_replaces_fill_and_retains_climb_choices():
+    import os
+    from lusmaker import optimizer
+    for remove, explicit_target, base_km, can_fill in (
+        (False, 62, 42.0, True), (False, None, 42.0, True),
+        (True, None, 30.0, True), (True, None, 30.0, False),
+        (False, 62, 102.5, True),
+    ):
+        state = _routed_draft()
+        state["climbs"] = ["diepestraat", "kampenheuvel"] if remove else ["diepestraat"]
+        state["opvullingen"] = [{"obsolete": True}]
+        state["_geometry"] = [[[50, 4], [50.1, 4]]]
+        state["route_request"] = {"doel": "hoogtemeters", "target_km": 60,
+                                  "max_km": 65, "max_km_explicit": True,
+                                  "tolerance_km": 2.5, "geen_opvulling": False}
+        target = explicit_target or 60
+        requested = []
+
+        def route_fn(d, _db):
+            assert not any(fill.get("obsolete") for fill in d["opvullingen"])
+            filled = bool(d["opvullingen"])
+            d["computed"] = {"total_km": target if filled else base_km,
+                             "ascend_m": 100, "descend_m": 100,
+                             "legs": [{"km": base_km, "from": "start", "to": "top"}],
+                             "kwaliteit": {"heen_en_weer_m": 0}}
+            d["_geometry"] = [[[50, 4, 0], [50.1, 4, 10]]]
+
+        def round_trip_fn(anchor, distance_m, seed, **kwargs):
+            requested.append(distance_m)
+            if not can_fill:
+                return {"distance_m": 100_000, "ascend_m": 0, "coords": []}
+            return {"distance_m": distance_m, "ascend_m": 30,
+                    "coords": [[*anchor, 0], [50.2, 4.1, 20], [*anchor, 0]]}
+
+        def optimize_fn(d, db, **kwargs):
+            return optimizer._optimize(d, db, route_fn=route_fn, round_trip_fn=round_trip_fn,
+                                       candidates_fn=lambda *a, **k: (_ for _ in ()).throw(AssertionError("Geen nieuwe klimselectie")), **kwargs)
+
+        db = _climbs()
+        for climb in db.values():
+            climb.update(foot=[50.05, 4.0], top=[50.1, 4.0], geom=[[50.05, 4.0, 0], [50.1, 4.0, 20]])
+        previous_home = os.environ.get("LUSMAKER_HOME")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["LUSMAKER_HOME"] = temp_dir
+            try:
+                result = intents.adjust_route(
+                    "abc123", target_km=explicit_target,
+                    voeg_klimmen_toe=[] if remove else ["kampenheuvel"],
+                    verwijder_klimmen=["kampenheuvel"] if remove else [],
+                    load_fn=lambda _: state,
+                    add_climb_fn=lambda _, cid: state["climbs"].append(cid),
+                    remove_climb_fn=lambda _, cid: state["climbs"].remove(cid),
+                    route_fn=route_fn, optimize_fn=optimize_fn, climbs_fn=lambda: db,
+                    save_fn=lambda _: None,
+                    export_gpx_fn=lambda *a: {}, export_preview_fn=lambda *a: {},
+                    exports_root=Path(temp_dir),
+                )
+            finally:
+                if previous_home is None:
+                    os.environ.pop("LUSMAKER_HOME", None)
+                else:
+                    os.environ["LUSMAKER_HOME"] = previous_home
+        assert state["climbs"] == (["diepestraat"] if remove else ["diepestraat", "kampenheuvel"])
+        if base_km > 65 or not can_fill:
+            assert result["constraints"]["voldaan"] is False
+            assert result["constraints"]["waarschuwingen"]
+            if base_km > 65:
+                assert any("102,5" in warning for warning in result["constraints"]["waarschuwingen"])
+                assert all("budget" not in warning for warning in result["constraints"]["waarschuwingen"])
+                assert requested == []
+            assert result["km"] == base_km
+            assert state["opvullingen"] == []
+        else:
+            assert result["km"] == target
+            assert result["constraints"]["voldaan"] is True
+            assert len(state["opvullingen"]) == 1
+            assert all(abs(value - (target - base_km) * 1000) < 1 for value in requested)
