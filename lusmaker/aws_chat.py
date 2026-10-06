@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import json
+import contextvars
 import time
 import uuid
 from datetime import UTC, datetime
@@ -12,7 +13,7 @@ from typing import Any
 
 from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA
 
-from . import draft, funnel, intents, tenant, quotas, requests, telemetry, progress
+from . import draft, funnel, intent_hints, intents, tenant, quotas, requests, telemetry, progress
 
 
 MAX_PROMPT_CHARS = 4000
@@ -366,17 +367,35 @@ Beslisregels die altijd voorgaan:
 Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een user-id."""
 
 
+# Laatste gebruikersbericht van de lopende beurt. De agent zet het; de
+# executor leest het voor de deterministische intent_hints. Een contextvar
+# houdt de bestaande ``execute(name, arguments, *, request_id)``-signatuur
+# (en de subklassen/fakes die erop leunen) ongewijzigd.
+_USER_TEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "lusmaker_chat_user_text", default=None
+)
+
+
+def _latest_user_text(history: list[dict[str, Any]]) -> str | None:
+    for item in reversed(history):
+        if item.get("role") == "user" and item.get("content"):
+            return str(item["content"])
+    return None
+
+
 class RouteToolExecutor:
     """Whitelist rond de bestaande domeinfuncties voor Bedrock tool use."""
 
     def execute(
-        self, name: str, arguments: dict[str, Any], *, request_id: str
+        self, name: str, arguments: dict[str, Any], *, request_id: str,
+        user_text: str | None = None,
     ) -> dict[str, Any]:
         with funnel.channel("chat"):
-            return self._execute(name, arguments, request_id=request_id)
+            return self._execute(name, arguments, request_id=request_id, user_text=user_text)
 
     def _execute(
-        self, name: str, arguments: dict[str, Any], *, request_id: str
+        self, name: str, arguments: dict[str, Any], *, request_id: str,
+        user_text: str | None = None,
     ) -> dict[str, Any]:
         from .chat_contracts import validate_arguments
         schemas = {t["toolSpec"]["name"]: t["toolSpec"]["inputSchema"]["json"] for t in TOOL_CONFIG["tools"]}
@@ -399,6 +418,14 @@ class RouteToolExecutor:
         if name == "plan_route":
             allowed = set(PLAN_ROUTE_SCHEMA["properties"])
             values = {key: value for key, value in arguments.items() if key in allowed}
+            # Backstop voor zwakkere modellen: vul uitsluitend ontbrekende of
+            # null-voorkeuren aan uit het gebruikersbericht ("vlak", "mtb", ...).
+            text = user_text if user_text is not None else _USER_TEXT.get()
+            if text:
+                values = {
+                    key: value for key, value in intent_hints.apply(values, text).items()
+                    if key in allowed
+                }
             values.setdefault("tolerance_km", 2.5)
             values.setdefault("doel", "toeren")
             values.setdefault("via_klimmen", [])
@@ -518,6 +545,14 @@ class BedrockRouteAgent:
 
     def _reply(self, history: list[dict[str, Any]], request_id: str,
                usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:
+        token = _USER_TEXT.set(_latest_user_text(history))
+        try:
+            return self._reply_inner(history, request_id, usage, state)
+        finally:
+            _USER_TEXT.reset(token)
+
+    def _reply_inner(self, history: list[dict[str, Any]], request_id: str,
+                     usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:
         # Bedrock vereist strikt afwisselende user/assistant-rollen die met
         # 'user' beginnen. Mislukte turns laten soms twee user-berichten na
         # elkaar staan (assistant-antwoord werd niet opgeslagen); zonder
