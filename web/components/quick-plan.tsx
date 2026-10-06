@@ -16,6 +16,8 @@ const OPTION_LABELS: Record<string, Record<string, string>> = {
   kasseien: { graag: "Graag kasseien", vermijd: "Liever geen kasseien" },
   heuvels: { zoek: "Graag heuvels", vlak: "Liever vlak" },
   ondergrond: { verhard: "Liever verhard", onverhard: "Graag onverhard" },
+  fietspaden: { belangrijk: "Liefst op fietspaden" },
+  oversteken: { vermijd: "Liever weinig oversteken" },
 };
 function optionLabel(question: Question, option: string): string {
   if (option === "ok") return "Maakt niet uit";
@@ -141,9 +143,9 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     if (!result || lock.current) return;
     lock.current = true; onBusyChange?.(true); setProgress(null); setBusy(true); setError("");
     try {
-      const data = await apiRequest<{ route: { total_km?: number | null } }>(`/api/routes/${encodeURIComponent(result.draft)}/adjust`, token, { method: "POST", body: JSON.stringify(proposal.adjust_route) });
-      // De overige voorstellen horen bij de oude route en vervallen.
-      setResult({ ...result, km: data.route.total_km ?? result.km, voorstellen: [], aangepast: proposal.titel });
+      const data = await apiRequest<{ route: { total_km?: number | null }; voorstellen?: Proposal[] }>(`/api/routes/${encodeURIComponent(result.draft)}/adjust`, token, { method: "POST", body: JSON.stringify(proposal.adjust_route) });
+      // De oude voorstellen horen bij de oude route; de backend geeft verse terug (router-vrij).
+      setResult({ ...result, km: data.route.total_km ?? result.km, voorstellen: data.voorstellen ?? [], aangepast: proposal.titel });
       onResultChange?.(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Het voorstel kon niet worden toegepast.");
