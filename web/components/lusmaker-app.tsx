@@ -323,14 +323,20 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Route verwijderen mislukt."); }
   };
 
+  // Stabiel verzoeknummer per aanpassing: een retry van dezelfde wijziging op dezelfde revisie hervat het receipt.
+  const pendingAdjust = useRef<{ signature: string; id: string } | null>(null);
   const adjustRoute = async (adjustment: RouteAdjustment) => {
     if (!session || !selectedRoute) return;
     setError(undefined);
+    const body = { ...adjustment, expected_revision: selectedRoute.revision };
+    const signature = JSON.stringify([selectedRoute.id, body]);
+    if (pendingAdjust.current?.signature !== signature) pendingAdjust.current = { signature, id: crypto.randomUUID() };
     try {
       const data = await apiRequest<{ route: Route }>(`/api/routes/${selectedRoute.id}/adjust`, session.accessToken, {
         method: "POST",
-        body: JSON.stringify({ ...adjustment, expected_revision: selectedRoute.revision }),
+        body: JSON.stringify({ ...body, request_id: pendingAdjust.current.id }),
       });
+      pendingAdjust.current = null;
       setSelectedRoute(data.route);
       setRoutes((current) => current.map((item) => item.id === data.route.id ? { ...item, ...data.route } : item));
     } catch (cause) {

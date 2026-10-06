@@ -308,7 +308,9 @@ test("afstand aanpassen via Gewenste afstand", async ({ page, url }) => {
   release();
   await page.getByLabel("Routedetails").getByText("42 km").first().waitFor();
   const call = state.calls.find((c) => c.key === "POST /api/routes/r1/adjust");
-  assert.deepEqual(call.body, { target_km: 42, expected_revision: 1 });
+  const { request_id: adjustId, ...adjustBody } = call.body;
+  assert.deepEqual(adjustBody, { target_km: 42, expected_revision: 1 });
+  assert.match(adjustId, /^[A-Za-z0-9_-]{8,128}$/, "stabiel verzoeknummer per aanpassing");
   assert.equal(await field.inputValue(), "42");
   // Stap-knoppen sturen ook de nieuwe revisie mee.
   await page.getByRole("button", { name: /^\+?\s*5 km$/ }).first().click();
@@ -481,7 +483,9 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
   assert.equal(await fresh.getByRole("button").count(), 1, "alleen de verse voorstellen, niet de oude");
   assert.equal(await fresh.getByRole("button", { name: "Voeg Kapelmuur toe" }).count(), 0, "oude voorstellen vervallen na aanpassing");
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/adjust");
-  assert.deepEqual(call.body, { voeg_klimmen_toe: ["molenberg"], target_km: 43 });
+  const { request_id: proposalId, ...proposalBody } = call.body;
+  assert.deepEqual(proposalBody, { voeg_klimmen_toe: ["molenberg"], target_km: 43 });
+  assert.match(proposalId, /^[A-Za-z0-9_-]{8,128}$/, "voorstel stuurt een verzoeknummer mee");
   await fresh.getByRole("button", { name: "Voeg Paterberg toe" }).click();
   await page.getByText("Aangepast: Voeg Paterberg toe.").waitFor();
   assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0, "geen voorstellen meer als de backend er geen geeft");
