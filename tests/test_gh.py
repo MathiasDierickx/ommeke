@@ -244,3 +244,70 @@ def test_a_point_never_gets_both_a_heading_and_a_point_hint():
     assert sent[-1]["point_hints"] == ["", "Kerkstraat", ""]
     gh.route(points, point_hints=["Berendries", "", ""], headings=[90.0, None, None], area_evs=set(), post_fn=post)
     assert "point_hints" not in sent[-1]  # alleen een lege hint over: niets meesturen
+
+
+def test_origin_secret_is_sent_on_routes_info_and_health_without_network():
+    import io
+    import os
+    saved = os.environ.get("LUSMAKER_GH_ORIGIN_SECRET")
+    requests = []
+
+    class Response(io.BytesIO):
+        status = 200
+
+    def opener(request, *, timeout):
+        requests.append(request)
+        assert timeout in (2, 5, 60)
+        return Response(b'{"ok": true}')
+
+    try:
+        for secret in ("offline-test-secret", ""):
+            os.environ["LUSMAKER_GH_ORIGIN_SECRET"] = secret
+            assert gh._post_request("/route", {"profile": "quiet"}, opener=opener) == {"ok": True}
+            assert gh.info(opener=opener, wait=lambda: None) == {"ok": True}
+            assert gh._health_ok("https://offline.invalid", opener=opener)
+            for request in requests[-3:]:
+                assert request.get_header("X-ommeke-origin") == (secret or None)
+            assert requests[-3].get_header("Content-type") == "application/json"
+            assert requests[-3].data == b'{"profile": "quiet"}'
+            assert requests[-2].full_url.endswith("/info")
+            assert requests[-1].full_url == "https://offline.invalid/health"
+    finally:
+        if saved is None:
+            os.environ.pop("LUSMAKER_GH_ORIGIN_SECRET", None)
+        else:
+            os.environ["LUSMAKER_GH_ORIGIN_SECRET"] = saved
+
+
+def test_all_request_models_only_add_landmark_compatible_penalties():
+    from itertools import product
+    from lusmaker.activities import CATALOG
+    ring = [[3.0, 50.0], [3.1, 50.0], [3.1, 50.1], [3.0, 50.0]]
+    # Alle activiteiten, legacyprofielen, heatkeuzes, booleans en area-fallbacks.
+    for activity, profile, heat, flags, areas in product(
+        [None, *CATALOG], ("quiet", "trail"), [None, *gh.ACTIVITIES],
+        product((False, True), repeat=5),
+        (set(), {"in_druk_tvl"}, set(gh._area_names())),
+    ):
+        model = gh._custom_model(
+            [ring, {"ring": ring, "factor": 1.0}], priority_factor=0.3,
+            strict=flags[0], avoid_cobbles=flags[1], avoid_concrete=flags[2],
+            avoid_busy=flags[3], prefer_cycleways=flags[4], profile=profile,
+            activity=activity, heat_activity=heat, area_evs=areas,
+        )
+        assert set(model) <= {"priority", "areas"}
+        for rule in model["priority"]:
+            assert set(rule) <= {"if", "else_if", "else", "multiply_by"}
+            assert 0 < float(rule["multiply_by"]) <= 1, (activity, rule)
+
+
+def test_avoid_factors_cannot_make_a_landmark_incompatible_boost():
+    ring = [[3.0, 50.0], [3.1, 50.0], [3.1, 50.1], [3.0, 50.0]]
+    for factor in (1.01, 0, -0.1, float("nan"), float("inf")):
+        for polygons, default in (([ring], factor), ([{"ring": ring, "factor": factor}], 0.3)):
+            try:
+                gh._custom_model(polygons, priority_factor=default, area_evs=set())
+            except gh.GhError:
+                pass
+            else:
+                raise AssertionError(f"ongeldige LM-factor aanvaard: {factor}")

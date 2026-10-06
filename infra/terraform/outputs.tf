@@ -87,3 +87,8 @@ output "zero_idle_compute" {
   }
   description = "Compute-instellingen die scale-to-zero afdwingen."
 }
+
+output "gh_service_url" {
+  description = "Externe GraphHopper-URL, null wanneer de service uit staat; bevat geen geheim."
+  value       = var.gh_service_enabled ? "https://${aws_cloudfront_distribution.gh[0].domain_name}" : null
+}

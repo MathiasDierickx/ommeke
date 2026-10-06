@@ -2,8 +2,9 @@
 
 Deze stack deployt Lusmaker als webapp én authenticated remote MCP-app. De
 statische React/Next.js-interface draait op Vercel. De AWS-compute bestaat uit
-één Lambda-container met GraphHopper op localhost en de Lusmaker ASGI/API/MCP-
-server via de AWS Lambda Web Adapter. GraphHopper en routegegevens zijn vooraf
+één Lambda-container met de Lusmaker ASGI/API/MCP-server via de AWS Lambda
+Web Adapter. Standaard draait GraphHopper op localhost; met de opt-in
+`gh_service_enabled` draait hij altijd warm op EC2 achter CloudFront. GraphHopper en routegegevens zijn vooraf
 in het image gebouwd; een request downloadt of importeert nooit kaartdata.
 
 ## Architectuur
@@ -42,26 +43,30 @@ Terraform maakt aan:
 - in de bootstrap-stack: een private Terraform-statebucket en een branch-
   gebonden GitHub OIDC-deployrol.
 
-Er zijn bewust geen CloudFront, VPC, NAT Gateway, API Gateway, EFS, EC2,
-ECS/Fargate of provisioned Lambda instances. Vercel levert de CDN/HTTPS-laag
-voor de frontend; een extra CloudFront-distributie zou dubbelop zijn. De
+Zonder `gh_service_enabled` maakt de stack geen CloudFront of EC2 aan.
+De opt-in router gebruikt de bestaande default VPC, zonder Lambda-VPC of NAT.
+Er zijn geen API Gateway, EFS, ECS/Fargate of provisioned Lambda instances.
+Vercel levert de CDN/HTTPS-laag voor de frontend; CloudFront bedient uitsluitend
+de optionele router. De
 Function URL vermijdt de API Gateway-timeout voor lange route- en modelcalls.
 
 ## Wat “scale to zero” hier betekent
 
-Als niemand Lusmaker gebruikt, draait er geen compute. `max_concurrency` kan
+Met `gh_service_enabled=false` draait er geen compute als niemand Lusmaker
+gebruikt. Met `true` blijft uitsluitend de EC2-router draaien. `max_concurrency` kan
 als kosten- en capaciteitsplafond worden ingesteld; het warmt of reserveert
 geen Lambda-instances. AWS-accounts met de minimale concurrencyquota van 10
 kunnen geen reserved concurrency instellen, omdat AWS minstens 10 executions
 accountbreed ongereserveerd houdt. In dat geval blijft de accountquota de cap.
 Een cold start kopieert de read-only GraphHopper-cache naar Lambda `/tmp`, start
-GraphHopper en opent daarna pas de MCP-server. `AWS_LWA_ASYNC_INIT` laat die
+GraphHopper op de achtergrond. De API opent meteen; routeraanvragen wachten
+op de health-check. Met een externe URL worden de kopie en JVM overgeslagen. `AWS_LWA_ASYNC_INIT` laat die
 opstart binnen de Lambda-timeout doorlopen.
 
 AWS wordt niet letterlijk kosteloos wanneer de app idle is. ECR bewaart het
 containerimage, S3 bewaart Terraform-state, regiopack en gebruikersdata,
 DynamoDB bewaart chatitems en CloudWatch bewaart logs. ECR rekent bijvoorbeeld
-per opgeslagen GB-maand. Er zijn geen vaste servers of gereserveerde compute,
+per opgeslagen GB-maand. In de standaardstand zijn er geen vaste servers of gereserveerde compute,
 maar persistente opslag maakt “uitsluitend per invocation” technisch
 onmogelijk. DynamoDB rekent in `PAY_PER_REQUEST` geen idle throughput aan.
 
@@ -426,3 +431,106 @@ terraform -chdir=infra/terraform destroy \
 
 Dit verwijdert gebruikersdata en images permanent. Verwijder de bootstrap pas
 nadat de applicatiestack weg is en je de Terraform-state niet meer nodig hebt.
+
+## Altijd-warme GraphHopper (issue #19)
+
+Besluit: [0002 — warme GraphHopper](decisions/0002-warme-graphhopper.md).
+`gh_service_enabled=false` is de Terraform-standaard: alle nieuwe resources
+én lookups hebben count 0 en de Lambda-omgeving blijft gelijk. De deployment
+gebruikt repositoryvariabele `GH_SERVICE_ENABLED`, standaard `false`.
+
+Met `true`: één Amazon Linux 2023 x86_64 EC2 (standaard `t3.large`) in een
+subnet van de default VPC met publiek IPv4/DNS, een versleuteld gp3-graphvolume
+(standaard 40 GB) en een gp3-rootvolume van 16 GB. Het instanceprofile mag
+uitsluitend `s3:GetObject` op
+`s3://<TF_STATE_BUCKET>/region-packs/<slug>.tar.gz`. De instance downloadt
+hetzelfde pack als de workflow, controleert SHA256, slug en GH-image, en
+weigert persoonlijke heat. Elke pack-SHA krijgt een eigen map op het volume.
+Een herstart behoudt graph-cache en LM-preparatie; een nieuwe pack-SHA vervangt
+de instantie en activeert een nieuwe cache. Oude caches blijven op het volume;
+controleer vrije ruimte bij packwissels. De rootdisk bevat geen graph-cache.
+
+Docker draait `israelhikingmap/graphhopper:11.0`, uitsluitend op loopback:8989.
+De serviceconfig is afgeleid van de packconfig, met `profiles_lm` voor `quiet`
+en `trail` en MMAP; de packconfig en lokale engineconfig worden niet gewijzigd.
+CH blijft uit wegens request-time custom models. Alle activiteit- en
+voorkeursregels straffen alleen (priority-factor > 0 en ≤ 1), afgedwongen door
+offline tests; ongeldige vermijdfactoren worden geweigerd. **LM-preparatieduur
+en piekgeheugen: te meten** op EC2. De JVM start met `-Xms1g -Xmx5g` op een
+8 GB-instance. Een eerste start kan langer duren dan de smoke-timeout van
+900 s; wacht dan op voltooide voorbereiding en herhaal de smoke-test.
+
+CloudFront gebruikt het standaard `*.cloudfront.net`-certificaat, HTTPS voor
+clients, HTTP naar originpoort 80, alle methodes en geen caching. Het geeft
+`X-Ommeke-Origin` van de client door; het voegt het geheim niet zelf toe.
+nginx weigert elk verzoek zonder het juiste geheim. De security group laat
+poort 80 uitsluitend toe vanaf AWS-managed prefix list
+`com.amazonaws.global.cloudfront.origin-facing`; SSH en de GH-poort zijn dicht.
+De default SG-quota moet het prefix-listgewicht (55 regels) kunnen dragen.
+De Lambda krijgt de CloudFront-URL en het `random_password`-geheim als
+`LUSMAKER_GH_URL` en `LUSMAKER_GH_ORIGIN_SECRET`. Route, info en health sturen
+de header mee. `/health?router=1` controleert in beide standen de gekozen GH.
+Alleen `gh_service_url` is een output; het geheim heeft geen output of logregel.
+Terraform-state/plan, EC2-user-data en de nginx-config bevatten wel het geheim;
+beperk beheertoegang. CloudFront/nginx-accesslogging staat uit.
+
+Kostenraming door de eigenaar goedgekeurd: t3.large on-demand eu-west-1
+**≈ $0,0912/u, ≈ $67/maand**, plus gp3 (40 GB graph + 16 GB root), CloudFront,
+publiek IPv4 en eventuele T3 CPU-creditkosten. Dit is de afgesproken raming,
+geen tijdens deze wijziging opgezochte offerte. Controleer vóór uitrol de
+accountquota en het budget (huidige Terraform-standaard $50/maand).
+
+### Uitrol door de eigenaar
+
+0. Controleer vóór deployment op een machine met providerdownload-toegang:
+   ```sh
+   terraform -chdir=infra/terraform init -backend=false
+   terraform -chdir=infra/terraform validate
+   terraform -chdir=infra/terraform providers lock -platform=linux_amd64 -platform=darwin_arm64
+   ```
+   `random` is exact gepind op 3.8.1 met lockfile-checksums. Beide stacks zijn
+   tijdens deze implementatie offline gevalideerd met reeds gecachte providers;
+   CI initialiseert met `-lockfile=readonly`.
+1. Pas de gewijzigde bootstrap één keer toe met een **adminidentiteit** (de
+   deployrol kan zijn eigen rechten niet uitbreiden):
+   ```sh
+   terraform -chdir=infra/bootstrap init -backend=false
+   terraform -chdir=infra/bootstrap plan -out=bootstrap.tfplan
+   terraform -chdir=infra/bootstrap apply bootstrap.tfplan
+   ```
+   Gebruik de bestaande bootstrap-state en bestaande `terraform.tfvars` voor
+   het juiste account; geen nieuwe lege state voor bestaande resources.
+   De policy voegt gerichte EC2- en CloudFront-acties en instanceprofilebeheer
+   toe; `iam:PassRole` voor de GH-rol is beperkt tot `ec2.amazonaws.com`.
+2. Controleer dat het regiopack onder `TF_STATE_BUCKET/region-packs/<slug>.tar.gz`
+   staat (zo nodig *Build region pack* uitvoeren). Zet GitHub-repositoryvariabelen
+   `GH_SERVICE_ENABLED=true`, optioneel `GH_INSTANCE_TYPE=t3.large` en
+   `GH_VOLUME_SIZE_GB=40`. `TF_STATE_BUCKET` blijft dezelfde bestaande bucket.
+   Bij handmatige Terraform: `TF_VAR_gh_service_enabled=true`,
+   `TF_VAR_gh_pack_bucket=<bucket>`, `TF_VAR_gh_pack_sha256=<pack-sha256>` en
+   desgewenst `TF_VAR_gh_instance_type` / `TF_VAR_gh_volume_size_gb`.
+3. Start **Deploy AWS** op de gereviewde main-versie, zonder rollback-digest.
+   De workflow valideert het pack en neemt de SHA op in user-data. Bekijk het
+   plan: EC2, volume, SG, instanceprofile, CloudFront en twee extra Lambda-envvars.
+   Laat de workflow deployen en de bestaande smoke-test uitvoeren.
+4. Controleer bij een eerste start via de EC2-console/cloud-init- en
+   GraphHopper-servicelogs of LM-preparatie klaar is; toon nooit user-data of
+   nginx-config in logs. Herhaal zo nodig:
+   ```sh
+   curl --fail --show-error --max-time 900 '<health_endpoint>?router=1'
+   ```
+   Controleer afzonderlijk dat `<gh_service_url>/info` zonder header 403 geeft.
+5. Meet dezelfde representatieve routes (incl. 60 km klimroute), p50/p95,
+   routertijd, koude API-start, CPU/credits en geheugengebruik. Leg ook
+   LM-preparatieduur en piekgeheugen vast; beide zijn **te meten**.
+6. Verlaag pas daarna `lambda_memory_mb` stapsgewijs en meet opnieuw. De workflow
+   accepteert hiervoor `LAMBDA_MEMORY_MB` (standaard 3008, huidige ondergrens
+   1769 MB). Er wordt in deze wijziging nog geen geheugenverlaging uitgevoerd.
+
+Rollback: zet `GH_SERVICE_ENABLED=false` en voer **Deploy AWS** opnieuw uit
+met het huidige compatibele image. Zet `LAMBDA_MEMORY_MB` eerst terug op 3008
+als dit na metingen verlaagd was. Lambda start dan weer de ingebouwde GH;
+de opt-in resources, inclusief het graphvolume, worden verwijderd. CloudFront
+uitschakelen/verwijderen kan tijd kosten. De bronpack in S3 blijft bestaan.
+Een image-digestrollback verandert de routerkeuze niet: de schakelaar bepaalt
+het pad, en de EC2-router gebruikt het huidige gevalideerde S3-pack.

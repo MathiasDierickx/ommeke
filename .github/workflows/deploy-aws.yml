@@ -58,6 +58,11 @@ jobs:
       TF_VAR_aws_region: ${{ vars.AWS_REGION || 'eu-west-1' }}
       TF_VAR_project_name: ${{ vars.PROJECT_NAME || 'lusmaker' }}
       TF_VAR_environment: ${{ vars.DEPLOY_ENVIRONMENT || 'prod' }}
+      TF_VAR_lambda_memory_mb: ${{ vars.LAMBDA_MEMORY_MB || '3008' }}
+      TF_VAR_gh_service_enabled: ${{ vars.GH_SERVICE_ENABLED || 'false' }}
+      TF_VAR_gh_pack_bucket: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_gh_instance_type: ${{ vars.GH_INSTANCE_TYPE || 't3.large' }}
+      TF_VAR_gh_volume_size_gb: ${{ vars.GH_VOLUME_SIZE_GB || '40' }}
       TF_VAR_region_slug: ${{ vars.LUSMAKER_REGION_SLUG || 'vlaanderen' }}
       TF_VAR_oauth_callback_urls: ${{ vars.OAUTH_CALLBACK_URLS_JSON }}
       TF_VAR_web_callback_urls: ${{ vars.WEB_CALLBACK_URLS_JSON }}
@@ -127,7 +132,6 @@ jobs:
 
       - name: Download en valideer regiopack
         id: pack
-        if: env.ROLLBACK_DIGEST == ''
         run: |
           PACK="$RUNNER_TEMP/${REGION_SLUG}.tar.gz"
           aws s3 cp \
@@ -257,6 +261,8 @@ jobs:
           echo "uri=${{ steps.image.outputs.ecr_url }}@$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Plan applicatiestack
+        env:
+          TF_VAR_gh_pack_sha256: ${{ steps.pack.outputs.sha }}
         run: |
           PLAN_ARGS=(-var="image_uri=${{ steps.rollback.outputs.uri || steps.digest.outputs.uri }}")
           if [ -n "$BILLING_EMAIL" ]; then
@@ -276,7 +282,7 @@ jobs:
           API=$(terraform -chdir=infra/terraform output -raw api_endpoint)
           curl --fail --show-error --max-time 900 "$HEALTH" > "$RUNNER_TEMP/health.json"
           cat "$RUNNER_TEMP/health.json"
-          # De API start vóór GraphHopper; controleer dat de router echt opkomt.
+          # Controleer de gekozen router: lokaal of via CloudFront op EC2.
           curl --fail --show-error --max-time 900 "$HEALTH?router=1" > "$RUNNER_TEMP/router.json"
           jq -e '.status == "ok"' "$RUNNER_TEMP/router.json" >/dev/null
           if [ "$REGION_SLUG" = vlaanderen ] && [ -z "$ROLLBACK_DIGEST" ]; then

@@ -363,7 +363,7 @@ resource "aws_lambda_function" "app" {
   }
 
   environment {
-    variables = {
+    variables = merge({
       LUSMAKER_QUOTA_CHAT         = tostring(var.daily_quotas.chat)
       LUSMAKER_QUOTA_ROUTE        = tostring(var.daily_quotas.route)
       LUSMAKER_QUOTA_TOKENS       = tostring(var.daily_quotas.tokens)
@@ -387,7 +387,10 @@ resource "aws_lambda_function" "app" {
       LUSMAKER_TOKEN_AUTH_METHODS = var.oauth_generate_secret ? "client_secret_basic,client_secret_post" : "none"
       LUSMAKER_WEB_URL            = length(local.web_origins) > 0 ? local.web_origins[0] : ""
       LUSMAKER_GOOGLE_MAPS_KEY    = var.google_maps_api_key
-    }
+      }, var.gh_service_enabled ? {
+      LUSMAKER_GH_URL           = "https://${aws_cloudfront_distribution.gh[0].domain_name}"
+      LUSMAKER_GH_ORIGIN_SECRET = random_password.gh_origin[0].result
+    } : {})
   }
 
   depends_on = [

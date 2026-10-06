@@ -159,7 +159,6 @@ data "aws_iam_policy_document" "github_deploy" {
       "iam:ListAttachedRolePolicies",
       "iam:ListInstanceProfilesForRole",
       "iam:ListRoleTags",
-      "iam:PassRole",
       "iam:PutRolePolicy",
       "iam:GetRolePolicy",
       "iam:DeleteRolePolicy",
@@ -170,6 +169,128 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = [
       "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}*"
     ]
+  }
+
+  statement {
+    sid       = "PassLambdaRole"
+    actions   = ["iam:PassRole"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}*-lambda"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["lambda.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid = "GraphHopperInstanceProfiles"
+    actions = [
+      "iam:CreateInstanceProfile", "iam:DeleteInstanceProfile", "iam:GetInstanceProfile",
+      "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile",
+      "iam:TagInstanceProfile", "iam:UntagInstanceProfile"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${var.project_name}-*-gh"]
+  }
+
+  statement {
+    sid       = "PassGraphHopperRole"
+    actions   = ["iam:PassRole"]
+    resources = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*-gh"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ec2.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid = "GraphHopperEc2Discovery"
+    actions = [
+      "ec2:DescribeVpcs", "ec2:DescribeSubnets", "ec2:DescribeImages",
+      "ec2:DescribeManagedPrefixLists", "ec2:GetManagedPrefixListEntries",
+      "ec2:DescribeSecurityGroups", "ec2:DescribeSecurityGroupRules",
+      "ec2:DescribeInstances", "ec2:DescribeInstanceAttribute", "ec2:DescribeInstanceTypes",
+      "ec2:DescribeVolumes", "ec2:DescribeVolumesModifications", "ec2:DescribeTags", "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeInstanceCreditSpecifications"
+    ]
+    resources = ["*"]
+  }
+
+  # RunInstances autoriseert elk onderdeel van de launch afzonderlijk.
+  statement {
+    sid     = "GraphHopperLaunchDependencies"
+    actions = ["ec2:RunInstances"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}::image/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:subnet/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:network-interface/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group/*"
+    ]
+  }
+
+  statement {
+    sid     = "GraphHopperCreateCompute"
+    actions = ["ec2:RunInstances", "ec2:CreateVolume", "ec2:CreateSecurityGroup"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group/*"
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/Application"
+      values   = [var.project_name]
+    }
+  }
+
+  statement {
+    sid       = "GraphHopperSecurityGroupVpc"
+    actions   = ["ec2:CreateSecurityGroup"]
+    resources = ["arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:vpc/*"]
+  }
+
+  statement {
+    sid = "GraphHopperManageCompute"
+    actions = [
+      "ec2:TerminateInstances", "ec2:ModifyInstanceAttribute", "ec2:ModifyInstanceCreditSpecification",
+      "ec2:StopInstances", "ec2:StartInstances", "ec2:DeleteVolume", "ec2:ModifyVolume",
+      "ec2:AttachVolume", "ec2:DetachVolume", "ec2:DeleteSecurityGroup",
+      "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
+      "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress",
+      "ec2:CreateTags", "ec2:DeleteTags"
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:volume/*",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:security-group/*"
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Application"
+      values   = [var.project_name]
+    }
+  }
+
+  statement {
+    sid       = "GraphHopperTagsOnCreate"
+    actions   = ["ec2:CreateTags"]
+    resources = ["arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:CreateAction"
+      values   = ["RunInstances", "CreateVolume", "CreateSecurityGroup"]
+    }
+  }
+
+  statement {
+    sid = "GraphHopperCloudFront"
+    actions = [
+      "cloudfront:CreateDistribution", "cloudfront:CreateDistributionWithTags",
+      "cloudfront:GetDistribution", "cloudfront:GetDistributionConfig",
+      "cloudfront:UpdateDistribution", "cloudfront:DeleteDistribution",
+      "cloudfront:ListTagsForResource", "cloudfront:TagResource", "cloudfront:UntagResource"
+    ]
+    resources = ["arn:${data.aws_partition.current.partition}:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/*"]
   }
 
   statement {

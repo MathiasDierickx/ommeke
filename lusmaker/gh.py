@@ -20,9 +20,20 @@ _ready_lock = threading.Lock()
 _ready_url: str | None = None
 
 
-def _health_ok(url: str) -> bool:
+def _request(url: str, *, body: dict | None = None) -> urllib.request.Request:
+    headers = {}
+    if secret := os.environ.get("LUSMAKER_GH_ORIGIN_SECRET"):
+        headers["X-Ommeke-Origin"] = secret
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    return urllib.request.Request(
+        url, data=None if body is None else json.dumps(body).encode(), headers=headers,
+    )
+
+
+def _health_ok(url: str, *, opener=urllib.request.urlopen) -> bool:
     try:
-        with urllib.request.urlopen(url + "/health", timeout=2) as resp:
+        with opener(_request(url + "/health"), timeout=2) as resp:
             return resp.status == 200
     except OSError:
         return False
@@ -73,14 +84,10 @@ def _post(path: str, body: dict) -> dict:
         telemetry.router_record(calls=1, ms=(time.monotonic() - started) * 1000)
 
 
-def _post_request(path: str, body: dict) -> dict:
-    req = urllib.request.Request(
-        config.GH_URL + path,
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
-    )
+def _post_request(path: str, body: dict, *, opener=urllib.request.urlopen) -> dict:
+    req = _request(config.GH_URL + path, body=body)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with opener(req, timeout=60) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as e:
         try:
@@ -94,10 +101,10 @@ def _post_request(path: str, body: dict) -> dict:
         ) from e
 
 
-def info() -> dict:
-    wait_until_ready()
+def info(*, opener=urllib.request.urlopen, wait=wait_until_ready) -> dict:
+    wait()
     try:
-        with urllib.request.urlopen(config.GH_URL + "/info", timeout=5) as resp:
+        with opener(_request(config.GH_URL + "/info"), timeout=5) as resp:
             return json.load(resp)
     except OSError as e:
         raise GhError(f"GraphHopper niet bereikbaar op {config.GH_URL}: {e}") from e
@@ -291,6 +298,8 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
         for k, item in enumerate(avoid_polygons):
             ring = item["ring"] if isinstance(item, dict) else item
             factor = item.get("factor", priority_factor) if isinstance(item, dict) else priority_factor
+            if not 0 < float(factor) <= 1:
+                raise GhError("De vermijdfactor moet groter dan 0 en maximaal 1 zijn.")
             features.append(
                 {
                     "type": "Feature",

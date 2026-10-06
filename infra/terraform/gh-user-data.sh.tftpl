@@ -1,0 +1,113 @@
+#!/bin/bash
+set -eu
+# Geen set -x: het origin-geheim mag nooit in cloud-init/journal verschijnen.
+dnf install -y docker nginx
+systemctl enable --now docker
+DEVICE=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_id}
+# De attachment ontstaat na de instantie; wacht ook bij vervanging op hetzelfde volume.
+for attempt in $(seq 1 180); do
+  if [ -b "$DEVICE" ]; then break; fi
+  if [ -b /dev/xvdf ]; then DEVICE=/dev/xvdf; break; fi
+  sleep 5
+done
+test -b "$DEVICE"
+if ! blkid "$DEVICE" >/dev/null; then mkfs -t xfs "$DEVICE"; fi
+mkdir -p /srv/graphhopper
+UUID=$(blkid -s UUID -o value "$DEVICE")
+if ! grep -q "UUID=$UUID " /etc/fstab; then
+  echo "UUID=$UUID /srv/graphhopper xfs defaults,nofail 0 2" >> /etc/fstab
+fi
+mountpoint -q /srv/graphhopper || mount /srv/graphhopper
+# Elke packversie krijgt een eigen cache, zodat een herstart LM behoudt en een
+# nieuw pack geen oude LM-bestanden mengt met een nieuwe graph.
+aws s3 cp 's3://${pack_bucket}/region-packs/${region_slug}.tar.gz' /srv/graphhopper/pack.tar.gz --region '${aws_region}' --only-show-errors
+PACK_SHA=$(sha256sum /srv/graphhopper/pack.tar.gz | cut -d ' ' -f 1)
+EXPECTED_SHA='${pack_sha256}'
+if [ -n "$EXPECTED_SHA" ] && [ "$PACK_SHA" != "$EXPECTED_SHA" ]; then
+  echo "Regiopack veranderde sinds de deploymentvalidatie" >&2
+  exit 1
+fi
+PACK_HOME="/srv/graphhopper/$PACK_SHA"
+export PACK_HOME
+if [ ! -f "$PACK_HOME/.pack-ready" ]; then
+  mkdir -p "$PACK_HOME"
+  python3 - <<'PYCODE'
+import json, os, pathlib, tarfile
+root = pathlib.Path(os.environ['PACK_HOME'])
+with tarfile.open('/srv/graphhopper/pack.tar.gz') as archive:
+    manifest = json.load(archive.extractfile('pack.json'))
+    assert manifest['slug'] == '${region_slug}'
+    assert manifest['gh_image'] == 'israelhikingmap/graphhopper:11.0'
+    assert not manifest.get('contains_personal_heat')
+    for member in archive.getmembers():
+        path = pathlib.PurePosixPath(member.name)
+        assert not path.is_absolute() and '..' not in path.parts
+        assert member.isfile() or member.isdir()
+    archive.extractall(root)
+(root / '.pack-ready').touch()
+PYCODE
+fi
+rm /srv/graphhopper/pack.tar.gz
+ln -sfn "$PACK_HOME" /srv/graphhopper/current
+# Alleen de serviceconfig krijgt LM; het pack en Lambda blijven ongewijzigd.
+# Normaliseer de serverpoort (packs kunnen een regio-eigen poort gebruiken).
+awk '
+  /^  profiles_lm:/ { skipping=1; next }
+  skipping && /^  [a-z]/ { skipping=0 }
+  skipping { next }
+  /^  profiles_ch:/ {
+    print "  profiles_lm:"
+    print "    - profile: quiet"
+    print "    - profile: trail"
+    print "  graph.dataaccess.default_type: MMAP"
+  }
+  /^      port:/ { $0="      port: " (++port == 1 ? 8989 : 8990) }
+  { print }
+' /srv/graphhopper/current/gh/config.yml > /srv/graphhopper/current/gh/service.yml
+chmod -R a+rX /srv/graphhopper
+cat > /etc/systemd/system/ommeke-graphhopper.service <<'UNIT'
+[Unit]
+Description=Ommeke GraphHopper met Landmarks
+Requires=docker.service
+After=docker.service network-online.target
+RequiresMountsFor=/srv/graphhopper
+[Service]
+Restart=always
+RestartSec=10
+ExecStartPre=-/usr/bin/docker rm -f ommeke-graphhopper
+ExecStart=/usr/bin/docker run --name ommeke-graphhopper --log-driver=local -p 127.0.0.1:8989:8989 -e JAVA_OPTS="-Xms1g -Xmx5g" -v /srv/graphhopper/current:/lus -v /srv/graphhopper/current/gh/graph-cache:/data/default-gh israelhikingmap/graphhopper:11.0 -c /lus/gh/service.yml
+ExecStop=/usr/bin/docker stop ommeke-graphhopper
+[Install]
+WantedBy=multi-user.target
+UNIT
+# Header wordt door CloudFront doorgestuurd, niet door CloudFront toegevoegd.
+# Anders zou elke anonieme bezoeker de router via CloudFront kunnen gebruiken.
+umask 077
+cat > /etc/nginx/conf.d/graphhopper.conf <<'NGINX'
+server {
+  listen 80 default_server;
+  server_name _;
+  access_log off;
+  error_log /var/log/nginx/graphhopper-error.log crit;
+  if ($http_x_ommeke_origin != "${origin_secret}") { return 403; }
+  location / {
+    proxy_set_header X-Ommeke-Origin "";
+    proxy_pass http://127.0.0.1:8989;
+    proxy_read_timeout 60s;
+    client_max_body_size 10m;
+  }
+}
+NGINX
+# AL2023 nginx heeft ook een default-server in nginx.conf.
+cat > /etc/nginx/nginx.conf <<'NGINX'
+user nginx;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log crit;
+events { worker_connections 1024; }
+http { include /etc/nginx/conf.d/*.conf; }
+NGINX
+systemctl daemon-reload
+systemctl enable --now ommeke-graphhopper
+systemctl enable nginx
+systemctl restart nginx

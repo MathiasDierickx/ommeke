@@ -264,3 +264,41 @@ variable "enable_application_monitoring" {
   default     = true
   description = "Maak extra alarmen en dashboard; vereist eerst de monitoringrechten uit infra/bootstrap."
 }
+
+variable "gh_service_enabled" {
+  description = "Gebruik een altijd-warme GraphHopper op EC2; false behoudt GraphHopper in Lambda."
+  type        = bool
+  default     = false
+}
+
+variable "gh_pack_bucket" {
+  description = "TF_STATE_BUCKET met region-packs/<slug>.tar.gz; verplicht als de service aan staat."
+  type        = string
+  default     = ""
+}
+
+variable "gh_instance_type" {
+  description = "x86_64 EC2-type voor GraphHopper."
+  type        = string
+  default     = "t3.large"
+}
+
+variable "gh_volume_size_gb" {
+  description = "Grootte van het aparte gp3-volume met pack en LM graph-cache."
+  type        = number
+  default     = 40
+  validation {
+    condition     = var.gh_volume_size_gb >= 20 && floor(var.gh_volume_size_gb) == var.gh_volume_size_gb
+    error_message = "gh_volume_size_gb moet een geheel getal van minstens 20 zijn."
+  }
+}
+
+variable "gh_pack_sha256" {
+  description = "SHA256 van het gevalideerde pack; wijziging vervangt EC2 en activeert een eigen cache op het volume."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.gh_pack_sha256 == "" || can(regex("^[a-f0-9]{64}$", var.gh_pack_sha256))
+    error_message = "gh_pack_sha256 is leeg of een SHA256 met 64 hextekens."
+  }
+}
