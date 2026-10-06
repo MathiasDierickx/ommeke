@@ -5,7 +5,13 @@ import { useEffect, useRef, useState } from "react";
 
 import type { RouteGeometry } from "@/lib/types";
 
-const POI_LABELS: Record<string, string> = { water: "Drinkwater", cafe: "Cafés", bakker: "Bakkers", toilet: "Toiletten", fietsenmaker: "Fietsenmakers", logies: "Logies" };
+const POI_LABELS: Record<string, string> = {
+  water: "Drinkwater", cafe: "Cafés", bakker: "Bakkers", toilet: "Toiletten", fietsenmaker: "Fietsenmakers", logies: "Logies",
+  zitbank: "Zitbanken", picknickbank: "Picknickbanken", speeltuin: "Speeltuinen", uitkijktoren: "Uitkijktorens",
+  fietspomp_en_fietsherstel: "Fietspomp en herstelpunt", fietsverhuur: "Fietsverhuur", ebike: "Laadpunten e-bike",
+};
+// Onbekende bronlabels leesbaar maken i.p.v. ruwe sleutels te tonen.
+const poiLabel = (kind: string) => POI_LABELS[kind] || (kind.charAt(0).toUpperCase() + kind.slice(1)).replaceAll("_", " ");
 // In een stad liggen tientallen voorzieningen langs de lus; die overspoelen
 // de routelijn. Toon ze dan pas op vraag.
 const POI_AUTO_LIMIT = 15;
@@ -84,5 +90,5 @@ export function RouteMap({ geometry, loading, onPoiChange }: { onPoiChange?: (ki
 
   if (loading) return <div className="map-state"><LoaderCircle className="spin" /> Routekaart laden…</div>;
   if (!geometry?.points.length) return <div className="map-state"><MapIcon />Nog geen kaart voor deze route</div>;
-  return <><div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />{geometry.pois?.length ? <label className="poi-filter">Onderweg <select value={poiKind} onChange={e=>setPoiKind(e.target.value)}><option value="geen">Verbergen</option><option value="alle">Alle voorzieningen ({geometry.pois.length})</option>{[...new Set(geometry.pois.map(p=>p.kind))].map(k=><option key={k} value={k}>{POI_LABELS[k] || k}</option>)}</select></label> : null}</>;
+  return <><div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />{geometry.pois?.length ? <label className="poi-filter">Onderweg <select value={poiKind} onChange={e=>setPoiKind(e.target.value)}><option value="geen">Verbergen</option><option value="alle">Alle voorzieningen ({geometry.pois.length})</option>{[...new Set(geometry.pois.map(p=>p.kind))].map(k=><option key={k} value={k}>{poiLabel(k)}</option>)}</select></label> : null}</>;
 }

@@ -1,5 +1,6 @@
 """OSM-punten langs een route, met afstand langs de werkelijke geometrie."""
 import math
+import re
 from . import geo
 
 KINDS = {'amenity:drinking_water':'water','amenity:cafe':'cafe','shop:bakery':'bakker',
@@ -17,9 +18,13 @@ def parse_selection(value):
         return None
     if value == 'geen':
         return frozenset()
-    kinds = frozenset(value.split(','))
-    if not kinds or not kinds <= EXPORT_KINDS:
-        raise ValueError('Onbekend POI-type; kies: ' + ', '.join(sorted(EXPORT_KINDS)) + ' of geen.')
+    parts = value.split(',')
+    kinds = frozenset(parts)
+    # De kaart toont ook Toerisme Vlaanderen-types (zitbank, fietspomp_en_fietsherstel, ...);
+    # filteren gebeurt op wat er langs de route ligt, dus valideer de vorm, geen vaste lijst.
+    if (not value or '' in parts or kinds & {'alle', 'geen'} or len(kinds) > 20
+            or not all(re.fullmatch(r'[a-z][a-z_]{1,39}', kind) for kind in kinds)):
+        raise ValueError('Ongeldige keuze van voorzieningen; gebruik types zoals cafe,water of geen.')
     return kinds
 
 

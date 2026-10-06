@@ -74,7 +74,12 @@ async function authenticatedBlobInner(path: string, token: string): Promise<Blob
   const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   }, token, requestAccessToken);
-  if (!response.ok) throw new Error("Routebestand kon niet worden geladen.");
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    // Toon een begrijpelijke serverreden (bv. ongeldige voorzieningenkeuze), anders de algemene tekst.
+    const reason = response.status === 400 && typeof payload.error === "string" ? ` ${payload.error}` : "";
+    throw new Error(`Routebestand kon niet worden geladen.${reason}`);
+  }
   return response.blob();
 }
 

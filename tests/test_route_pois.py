@@ -22,7 +22,7 @@ def test_export_selection_validates_known_kinds():
     assert parse_selection('geen') == set()
     assert parse_selection('cafe,water,cafe') == {'cafe', 'water'}
     assert parse_selection('vakantiewoning') == {'vakantiewoning'}
-    for bad in ('', 'alle', 'cafe,geen', 'onbekend', 'cafe,'):
+    for bad in ('', 'alle', 'cafe,geen', 'Onbekend', 'cafe,'):
         try:
             parse_selection(bad)
         except ValueError:
@@ -50,7 +50,7 @@ def test_export_endpoints_reject_invalid_filter_before_loading():
     from starlette.requests import Request
     from lusmaker.aws_api import route_gpx, route_fit
     for endpoint in (route_gpx, route_fit):
-        response = asyncio.run(endpoint(Request({'type':'http', 'query_string':b'poi=onbekend'})))
+        response = asyncio.run(endpoint(Request({'type':'http', 'query_string':b'poi=Cafe;drop'})))
         assert response.status_code == 400
         assert json.loads(response.body)['code'] == 'invalid_poi'
 
@@ -95,3 +95,15 @@ def test_fit_endpoint_applies_poi_filter_and_preserves_headers():
             assert response.headers['cache-control'] == 'private, no-store'
             assert 'attachment;' in response.headers['content-disposition']
             assert {r[6] for n,r in _decode(response.body) if n == 32} == expected
+
+
+def test_export_selection_accepts_tourism_flanders_kinds_and_rejects_garbage():
+    from lusmaker.route_pois import parse_selection
+    # Live (6 okt): de kaart toonde 'fietspomp_en_fietsherstel', de download gaf 400.
+    assert parse_selection('fietspomp_en_fietsherstel,zitbank') == {'fietspomp_en_fietsherstel', 'zitbank'}
+    for bad in ('', 'Cafe', 'cafe;drop', '../x', ','.join(f'k{i}x' for i in range(25))):
+        try:
+            parse_selection(bad)
+            raise AssertionError(f'verwacht ValueError voor {bad!r}')
+        except ValueError:
+            pass
