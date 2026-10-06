@@ -273,3 +273,87 @@ def test_questions_distinguish_unknown_from_explicit_ok_and_nee():
     assert "kasseien" not in asked(kasseien=True)   # expliciet oké: nooit meer vragen
     assert "kasseien" not in asked(kasseien=False)  # expliciet vermijden: ook niet
     assert "heuvels" in asked() and "heuvels" not in asked(heuvels="ok")
+
+
+# -- fietspaden en oversteken (slice 3) -------------------------------------
+
+def _urban(cycleway_pct, crossings=0, places=("Gent",)):
+    d = _draft(km=20, hm=20)
+    d["_probe"]["kwaliteit"].update(fietspad_pct=cycleway_pct, steenweg_kruisingen=crossings)
+    d["_probe"]["terrein"].update(fietspad_pct=cycleway_pct, plaatskernen=[{"label": p} for p in places])
+    return d
+
+
+def test_cycleway_question_for_city_bikes_in_built_up_area_with_few_cycle_paths():
+    d = _urban(5)
+    asked = {q["id"]: q for q in questions.ask(d, _profile("stadsfiets"), d["_probe"])}
+    assert set(asked["fietspaden"]["opties"]) == {"belangrijk", "ok"}
+    assert "5%" in asked["fietspaden"]["reden"]
+    assert "fietspaden" in _ids(d, _profile("toerfiets"))
+
+
+def test_cycleway_question_is_not_asked_without_reason():
+    assert "fietspaden" not in _ids(_urban(40), _profile("stadsfiets"))             # genoeg fietspad
+    assert "fietspaden" not in _ids(_urban(5, places=()), _profile("stadsfiets"))   # geen bebouwde kom
+    assert "fietspaden" not in _ids(_urban(5), _profile("koersfiets"))
+    assert "fietspaden" not in _ids(_urban(5), _profile("wandelen"))
+    assert "fietspaden" not in _ids(_urban(5), _profile("stadsfiets", fietspaden="ok"))
+    unknown = _urban(5)
+    unknown["_probe"]["terrein"].pop("fietspad_pct")
+    unknown["_probe"]["kwaliteit"].pop("fietspad_pct")
+    assert "fietspaden" not in _ids(unknown, _profile("stadsfiets"))
+
+
+def test_crossing_question_for_walking_and_road_running_above_three():
+    d = _urban(0, crossings=4)
+    asked = {q["id"]: q for q in questions.ask(d, _profile("wandelen"), d["_probe"])}
+    assert set(asked["oversteken"]["opties"]) == {"vermijd", "ok"}
+    assert "4 keer" in asked["oversteken"]["reden"]
+    assert "oversteken" in _ids(d, _profile("wegloop"))
+
+
+def test_crossing_question_is_not_asked_without_reason():
+    assert "oversteken" not in _ids(_urban(0, crossings=3), _profile("wandelen"))
+    assert "oversteken" not in _ids(_urban(0, crossings=None), _profile("wandelen"))
+    assert "oversteken" not in _ids(_urban(0, crossings=9), _profile("toerfiets"))
+    for answer in ("ok", "vermijd"):
+        per_activity = _profile("wandelen")
+        per_activity["voorkeuren_per_activiteit"] = {"wandelen": {"oversteken": answer}}
+        assert "oversteken" not in _ids(_urban(0, crossings=9), per_activity)
+
+
+def test_new_preferences_validate_and_old_profiles_still_load():
+    legacy = profiles.default_document()
+    for key in ("fietspaden", "oversteken"):
+        del legacy["voorkeuren"][key]
+    checked = profiles._validate(legacy)
+    assert checked["voorkeuren"]["fietspaden"] is None and checked["voorkeuren"]["oversteken"] is None
+    for key, bad in (("fietspaden", "vermijd"), ("oversteken", "belangrijk")):
+        doc = profiles.default_document()
+        doc["voorkeuren"][key] = bad
+        try:
+            profiles._validate(doc)
+        except profiles.ProfileError:
+            continue
+        raise AssertionError(f"{key}={bad} moet falen")
+
+
+def test_answers_drive_routing_preferences_without_touching_the_profile():
+    from lusmaker import draft, gh
+
+    state = {"id": "d", "route_request": {"doel": "toeren", "activiteit": "stadsfiets"}}
+    intents.apply_answers("d", {"fietspaden": "belangrijk", "oversteken": "vermijd"},
+                          load_fn=lambda _id: state, save_fn=lambda _d: None,
+                          adjust_fn=lambda *_a, **_k: {})
+    assert draft.prefers_cycleways(state) is True
+    assert draft.routing_preferences(state)["strict"] is True
+    assert draft._activity_kwargs(state) == {"activity": "stadsfiets", "prefer_cycleways": True}
+    penalty = gh._custom_model(area_evs=set(), prefer_cycleways=True)["priority"]
+    assert penalty == gh.PREFER_CYCLEWAYS_PRIORITY
+    assert all(float(rule["multiply_by"]) >= 0.6 for rule in penalty)
+    assert gh._custom_model(area_evs=set())["priority"] == []
+
+    ok = {"id": "d", "route_request": {"activiteit": "stadsfiets", "expliciete_voorkeuren": {"fietspaden": "ok", "oversteken": "ok"}}}
+    assert draft.prefers_cycleways(ok) is False
+    assert draft.routing_preferences(ok)["strict"] is False
+    assert draft._activity_kwargs(ok) == {"activity": "stadsfiets"}

@@ -215,6 +215,16 @@ AVOID_COBBLES_AREA_PRIORITY = {
     "multiply_by": "0.25",
 }
 
+# "fietspaden zijn belangrijk": straf wat noch een fietspad noch op een
+# fietsroutenetwerk ligt. Factor >= 0,6 zodat het een voorkeur blijft en geen
+# omweg afdwingt; alle encoded values zitten al in de graph.
+PREFER_CYCLEWAYS_PRIORITY = [
+    {
+        "if": "road_class != CYCLEWAY && bike_network == MISSING",
+        "multiply_by": "0.65",
+    },
+]
+
 AVOID_BUSY_PRIORITY = {
     "if": "in_druk_tvl",
     "multiply_by": "0.45",
@@ -236,7 +246,8 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   avoid_concrete: bool = False, avoid_busy: bool = False,
                   profile: str = "", area_evs: set[str] | frozenset[str] | None = None,
                   heat_activity: str | None = None,
-                  activity: str | None = None) -> dict:
+                  activity: str | None = None,
+                  prefer_cycleways: bool = False) -> dict:
     """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes.
 
     ``activity`` kiest het request-time fragment uit ``activities``. Zonder
@@ -248,6 +259,8 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
         custom["priority"] = custom["priority"] + activities.priority_fragment(activity)
     elif profile == "trail":
         custom["priority"] = custom["priority"] + list(TRAIL_OFFROAD_PRIORITY)
+    if prefer_cycleways:
+        custom["priority"] = custom["priority"] + [dict(r) for r in PREFER_CYCLEWAYS_PRIORITY]
     if avoid_cobbles:
         custom["priority"] = custom["priority"] + list(AVOID_COBBLES_PRIORITY)
         if "in_kassei_tvl" in area_evs:
@@ -326,6 +339,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           instructions: bool = False,
           heat_activity: str | None = None,
           activity: str | None = None,
+          prefer_cycleways: bool = False,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
@@ -388,6 +402,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
         avoid_busy, profile=profile, area_evs=area_evs,
         heat_activity=heat_activity, activity=activity,
+        prefer_cycleways=prefer_cycleways,
     )
 
     data = post_fn("/route", body)
@@ -401,6 +416,7 @@ def round_trip(point, distance_m: float, seed: int,
                avoid_busy: bool = False, details: bool = False, *,
                heat_activity: str | None = None,
                activity: str | None = None,
+               prefer_cycleways: bool = False,
                area_evs: set[str] | frozenset[str] | None = None,
                post_fn=_post) -> dict:
     """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
@@ -420,6 +436,7 @@ def round_trip(point, distance_m: float, seed: int,
             avoid_polygons, priority_factor, strict, avoid_cobbles, avoid_concrete,
             avoid_busy, profile=profile, area_evs=area_evs,
             heat_activity=heat_activity, activity=activity,
+            prefer_cycleways=prefer_cycleways,
         ),
     }
     if details:
