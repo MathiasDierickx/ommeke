@@ -145,6 +145,9 @@ herbouw door de reviewer is nodig om die garanties te verkrijgen.
 Persoonlijke heat vereist expliciete private packaging; de gedeelde AWS-pack
 weigert zulke packs. Hosted gebruikers kunnen niet de gedeelde heat opbouwen.
 
+Neem bij de volgende regiopackbouw `amenity=pub|bar` mee in de POI-extract en
+verhoog daarbij `EXTRACT_FORMAT_VERSION`.
+
 ### Datastroom per ingangspunt (lokaal versus hosted)
 
 | Ingangspunt | Lokaal (CLI, `~/.lusmaker`) | Hosted (Lambda, S3-state per tenant) |

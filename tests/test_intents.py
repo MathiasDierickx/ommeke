@@ -1036,7 +1036,7 @@ def test_apply_answers_maps_flat_and_unpaved_and_rejects_unknown_values():
             pass
 
 
-def _plan_with_stop(pois, *, reroute_km=1.4, stop=None):
+def _plan_with_stop(pois, *, reroute_km=1.4, stop=None, overpass_fetch=None):
     state = {'id':'stoptest', 'name':'Stoptest', 'start':{'label':'Test', 'lat':51,'lon':3}, 'loop':True, 'climbs':[], 'computed':None}
     calls = []
     def router(d, db):
@@ -1051,6 +1051,7 @@ def _plan_with_stop(pois, *, reroute_km=1.4, stop=None):
             create_fn=lambda **kw: {'id':state['id']}, load_fn=lambda _:state,
             save_fn=lambda _:None, route_fn=router, optimize_fn=lambda *a, **k:None,
             climbs_fn=lambda:{}, pois_fn=lambda _:pois,
+            overpass_fetch=overpass_fetch or (lambda query, hour: {'elements': []}),
             export_gpx_fn=lambda *a:None, export_preview_fn=lambda *a:None,
             exports_root=Path(root))
     return state, calls, result
@@ -1077,8 +1078,38 @@ def test_plan_route_warns_without_stop_and_rolls_back_outside_tolerance():
         state, calls, result = _plan_with_stop(pois, reroute_km=km)
         assert 'stop_onderweg' not in state and 'stop_onderweg' not in result
         assert result['km'] == 1.4
-        assert any('stop' in w or 'cafe' in w for w in result['constraints']['waarschuwingen'])
+        assert any('stop' in w or 'café' in w for w in result['constraints']['waarschuwingen'])
         assert len(calls) == (2 if pois else 1)
+
+
+def test_plan_stop_accepts_local_cafe_with_600m_offset():
+    pois = [{'id':'node/600','kind':'cafe','name':'Omwegcafé','lat':51,'lon':3.008,'at_km':.6,'offset_m':600}]
+    state, _, result = _plan_with_stop(pois)
+    assert state['stop_onderweg']['name'] == 'Omwegcafé'
+
+
+def test_plan_stop_falls_back_to_overpass_pub():
+    fetches = []
+    def fetch(query, hour):
+        fetches.append(query)
+        return {'elements':[{'type':'node','id':22,'lat':51,'lon':3.008,'tags':{'amenity':'pub','name':'De Pub'}}]}
+    state, _, result = _plan_with_stop([], overpass_fetch=fetch)
+    assert len(fetches) == 1 and 'pub' in fetches[0]
+    assert state['stop_onderweg']['name'] == 'De Pub'
+
+
+def test_plan_stop_overpass_error_warns_in_dutch_and_keeps_route():
+    def fail(query, hour):
+        raise TimeoutError('timeout')
+    state, calls, result = _plan_with_stop([], overpass_fetch=fail)
+    assert 'café' in state['stop_warning']
+    assert 'stop_onderweg' not in state and calls == [False]
+
+
+def test_plan_stop_ignores_cafe_outside_km_window():
+    pois = [{'id':'node/far','kind':'cafe','name':'Verderop','lat':51,'lon':3.008,'at_km':4,'offset_m':0}]
+    state, calls, result = _plan_with_stop(pois)
+    assert 'stop_onderweg' not in state and calls == [False]
 
 
 def test_plan_route_validates_stop_before_side_effects():

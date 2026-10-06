@@ -45,7 +45,7 @@ CLI: `lus plan-route`. MCP/chat: `plan_route`. Web: `POST /api/routes` en
 | langs_water | `--langs-water` | `langs_water` | `langs_water` | — | Waterloop of water langs de route. |
 | heuvels | `--heuvels` | `heuvels` | `heuvels` | — | `null` = onbekend (vlag weglaten); zoek, ok of vlak. |
 | ondergrond | `--ondergrond` | `ondergrond` | `ondergrond` | — | `null` = onbekend (vlag weglaten); verhard, ok of onverhard. |
-| stop_onderweg | `--stop-onderweg` | `stop_onderweg` | `stop_onderweg` | — | Optioneel object met soort (cafe, water, bakker, toilet, fietsenmaker) en rond_km ≥ 0. CLI: JSON. Dichtst bij gevraagde routeafstand, binnen 150 m; herroutering bewaakt doel/tolerantie en hard maximum, anders waarschuwing en oorspronkelijke route. |
+| stop_onderweg | `--stop-onderweg` | `stop_onderweg` | `stop_onderweg` | — | Optioneel object met soort (cafe, water, bakker, toilet, fietsenmaker) en rond_km ≥ 0. CLI: JSON. Kandidaten binnen 1 km van de route en binnen max(3 km, 40% van rond_km); eerst kleinste afwijking van rond_km, dan route-offset. Voor cafe volgt bij geen lokale kandidaat een begrensde Overpass-zoekactie naar cafe, pub, bar of biergarten. Herroutering bewaakt doel/tolerantie en hard maximum, anders waarschuwing en oorspronkelijke route. |
 | check_readiness | `--check-readiness` | — | — | — | CLI: standaard uit. MCP, chat en web sturen altijd `true`. |
 
 Bewuste verschillen:

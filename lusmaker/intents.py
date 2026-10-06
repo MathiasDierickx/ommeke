@@ -533,16 +533,51 @@ def _needs_input(
     }
 
 
-def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn):
+def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn, overpass_fetch=None):
     from .route_pois import project
     from . import geo, gh
     wanted = request.get('stop_onderweg')
     if not wanted or d.get('stop_onderweg'):
         return
-    candidates = [p for p in pois_fn(d) if p['kind'] == wanted['soort'] and p.get('offset_m', 0) <= 150]
+    kind = wanted['soort']
+    label = {'cafe': 'café', 'bakker': 'bakker', 'water': 'waterpunt', 'toilet': 'toilet', 'fietsenmaker': 'fietsenmaker'}.get(kind, kind)
+    around_km = wanted['rond_km']
+    window = max(3.0, around_km * .4)
+    candidates = [p for p in pois_fn(d) if p['kind'] == kind and p.get('offset_m', 0) <= 1000
+                  and abs(p['at_km'] - around_km) <= window]
+    if not candidates and kind == 'cafe':
+        try:
+            from . import place_search
+            fetch = overpass_fetch or place_search._fetch
+            track = [point for leg in d.get('_geometry', []) for point in leg]
+            if len(track) >= 2:
+                left = around_km * 1000
+                route_point = track[0]
+                for a, b in zip(track, track[1:]):
+                    length = geo.haversine(*a[:2], *b[:2])
+                    if left <= length:
+                        fraction = left / length if length else 0
+                        route_point = [a[0] + fraction * (b[0]-a[0]), a[1] + fraction * (b[1]-a[1])]
+                        break
+                    left -= length
+                    route_point = b
+                lat, lon = route_point[:2]
+                query = f'[out:json][timeout:20];nwr(around:1500,{lat},{lon})["amenity"~"^(cafe|pub|bar|biergarten)$"];out tags center;'
+                payload = fetch(query, int(__import__('time').time() // 3600))
+                from .route_pois import along_route
+                elements = []
+                for item in payload.get('elements', []):
+                    tags = item.get('tags', {})
+                    if tags.get('amenity') not in {'cafe', 'pub', 'bar', 'biergarten'}:
+                        continue
+                    elements.append({**item, 'tags': {**tags, 'amenity': 'cafe'}})
+                candidates = [p for p in along_route(track, elements, radius_m=1000, limit=1000)
+                              if abs(p['at_km'] - around_km) <= window]
+        except Exception:
+            candidates = []
     d.pop('stop_warning', None)
     if not candidates:
-        d['stop_warning'] = f"Geen geschikte {wanted['soort']} binnen 150 m van de route gevonden."
+        d['stop_warning'] = f"Ik vond geen {label} binnen 1 km van de route rond km {around_km:g}."
     else:
         chosen = min(candidates, key=lambda p: (abs(p['at_km'] - wanted['rond_km']), p.get('offset_m', 0), p['id']))
         original = copy.deepcopy(d)
@@ -578,10 +613,10 @@ def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn):
         persist_fn(d)
 
 
-def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None, pois_fn=None, climb_adjustment=False):
+def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None, pois_fn=None, climb_adjustment=False, overpass_fetch=None):
     _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn, climb_adjustment=climb_adjustment)
     from .route_pois import for_draft
-    _plan_stop(d, climb_db, request, route_fn=route_fn, pois_fn=pois_fn or (lambda item: for_draft(item, limit=None)), persist_fn=persist_fn)
+    _plan_stop(d, climb_db, request, route_fn=route_fn, pois_fn=pois_fn or (lambda item: for_draft(item, limit=None)), persist_fn=persist_fn, overpass_fetch=overpass_fetch)
     actual = (d.get("computed") or {}).get("total_km")
     problem = None
     if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual < 0.1:
@@ -812,6 +847,7 @@ def plan_route(
     stop_onderweg: dict | None = None,
     *,
     pois_fn=None,
+    overpass_fetch=None,
     create_fn=draft.create,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -974,6 +1010,7 @@ def plan_route(
                     optimize_fn=optimize_fn,
                     persist_fn=save_fn,
                     pois_fn=pois_fn,
+                    overpass_fetch=overpass_fetch,
                 )
                 d = load_fn(d["id"])
             files = _export_files(
@@ -1064,6 +1101,7 @@ def plan_route(
             optimize_fn=optimize_fn,
             persist_fn=save_fn,
             pois_fn=pois_fn,
+            overpass_fetch=overpass_fetch,
         )
         d = load_fn(draft_id)
         files = _export_files(
