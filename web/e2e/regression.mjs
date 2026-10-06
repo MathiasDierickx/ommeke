@@ -295,7 +295,10 @@ test("routeconcept met vragen afmaken vanaf routepagina", async ({ page, url }) 
   await page.getByRole("radio", { name: "Liever verhard" }).check();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByRole("button", { name: "Download GPX" }).waitFor();
-  assert.ok(state.calls.filter(call => call.key === "GET /api/routes/r1").length >= 2, "detailroute na antwoorden opnieuw geladen");
+  // Het herladen loopt asynchroon na het streamresultaat; wacht er kort op i.p.v. meteen te tellen.
+  const reloads = () => state.calls.filter(call => call.key === "GET /api/routes/r1").length;
+  for (let waited = 0; reloads() < 2 && waited < TIMEOUT; waited += 100) await wait(100);
+  assert.ok(reloads() >= 2, "detailroute na antwoorden opnieuw geladen");
   assert.deepEqual(state.calls.map(call => call.key).filter(key => key.includes("answers/stream")), ["POST /api/routes/r1/answers/stream"]);
   expectNoStrays(state, "routeconcept afmaken");
 });
