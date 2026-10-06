@@ -289,10 +289,13 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     void sendPrompt(content);
   };
 
-  const downloadRoute = async (format: "gpx" | "fit" = "gpx") => {
+  const downloadRoute = async (format: "gpx" | "fit" = "gpx", poiKind = "alle") => {
     if (!session || !selectedRoute?.download_url) return;
     try {
-      const blob = await authenticatedBlob(format === "fit" ? `/api/routes/${selectedRoute.id}/fit` : selectedRoute.download_url, session.accessToken);
+      const path = format === "fit" ? `/api/routes/${selectedRoute.id}/fit` : selectedRoute.download_url;
+      const separator = path.includes("?") ? "&" : "?";
+      const downloadUrl = poiKind === "alle" ? path : `${path}${separator}poi=${encodeURIComponent(poiKind)}`;
+      const blob = await authenticatedBlob(downloadUrl, session.accessToken);
       saveBlob(blob, safeFilename(selectedRoute.name, format));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Download mislukt."); }
   };
@@ -421,7 +424,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={() => void downloadRoute()} onDownloadFit={() => void downloadRoute("fit")} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }

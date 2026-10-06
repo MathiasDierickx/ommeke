@@ -108,7 +108,7 @@ async function installBackend(page, { handlers = {}, session = true } = {}) {
     const key = `${request.method()} ${url.pathname}`;
     let body = null;
     try { body = request.postDataJSON(); } catch { /* geen JSON-body */ }
-    state.calls.push({ key, body });
+    state.calls.push({ key, body, url: request.url() });
     const handler = handlers[key] ?? defaultHandlers[key];
     if (!handler) { state.unexpected.push(`ONBEKEND ${key}`); return route.fulfill(json(404, { error: "onbekend" })); }
     return route.fulfill(await handler({ request, body, state }));
@@ -382,6 +382,27 @@ test("GPX- en FIT-download geven een downloadevent", async ({ page, url }) => {
   assert.equal(await alerts(page).count(), 0, `onverwachte melding: ${await alerts(page).allInnerTexts()}`);
   assert.deepEqual(state.calls.map((c) => c.key).filter((k) => /gpx|fit/.test(k)), ["GET /api/routes/r1/gpx", "GET /api/routes/r1/fit"]);
   expectNoStrays(state, "download");
+});
+
+test("download neemt de actuele POI-filter mee", async ({ page, url }) => {
+  const state = await installBackend(page);
+  state.route.geometry = {
+    points: [[51, 3], [51, 3.02]], climbs: [], elevation: [],
+    pois: [{id: "node/1", kind: "cafe", name: "Café", lat: 51, lon: 3.01, at_km: 0.7}],
+  };
+  await page.route("https://*.tile.openstreetmap.org/**", route => route.fulfill({status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aOioAAAAASUVORK5CYII=", "base64")}));
+  await openRoute(page, url);
+  const filter = page.getByLabel("Onderweg");
+  await filter.waitFor({timeout: TIMEOUT});
+  for (const kind of ["cafe", "geen", "alle"]) {
+    await filter.selectOption(kind);
+    for (const format of ["GPX", "FIT"]) {
+      await Promise.all([page.waitForEvent("download", {timeout: TIMEOUT}), page.getByRole("button", {name: `Download ${format}`}).click()]);
+      const call = state.calls.filter(c => c.key === `GET /api/routes/r1/${format.toLowerCase()}`).at(-1);
+      assert.equal(new URL(call.url).searchParams.get("poi"), kind === "alle" ? null : kind);
+    }
+  }
+  expectNoStrays(state, "POI-download");
 });
 
 test("download mislukt: fout wordt aangekondigd", async ({ page, url }) => {

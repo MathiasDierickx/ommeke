@@ -1034,3 +1034,57 @@ def test_apply_answers_maps_flat_and_unpaved_and_rejects_unknown_values():
             raise AssertionError(f"verwacht IntentError voor {bad}")
         except intents.IntentError:
             pass
+
+
+def _plan_with_stop(pois, *, reroute_km=1.4, stop=None):
+    state = {'id':'stoptest', 'name':'Stoptest', 'start':{'label':'Test', 'lat':51,'lon':3}, 'loop':True, 'climbs':[], 'computed':None}
+    calls = []
+    def router(d, db):
+        calls.append(bool(d.get('stop_onderweg')))
+        if d.get('stop_onderweg'):
+            assert (51, 3.008) in draft._waypoints(d, db)[0]['points']
+        d['_geometry'] = [[[51,3],[51,3.02]]]
+        d['computed'] = {'total_km':reroute_km if d.get('stop_onderweg') else 1.4, 'ascend_m':0, 'legs':[], 'kwaliteit':{}}
+    with tempfile.TemporaryDirectory() as root:
+        result = intents.plan_route('Test', doel='kort', target_km=1.4, tolerance_km=.2,
+            stop_onderweg=stop or {'soort':'cafe','rond_km':.6},
+            create_fn=lambda **kw: {'id':state['id']}, load_fn=lambda _:state,
+            save_fn=lambda _:None, route_fn=router, optimize_fn=lambda *a, **k:None,
+            climbs_fn=lambda:{}, pois_fn=lambda _:pois,
+            export_gpx_fn=lambda *a:None, export_preview_fn=lambda *a:None,
+            exports_root=Path(root))
+    return state, calls, result
+
+
+def _stop_pois():
+    return [{'id':f'node/{i}', 'kind':kind, 'name':name, 'lat':51, 'lon':lon, 'at_km':km, 'offset_m':0}
+            for i, (kind,name,lon,km) in enumerate([('water','Water',3.008,.6), ('cafe','Ver',3.016,1.12), ('cafe','Dichtbij',3.008,.56)])]
+
+
+def test_plan_route_selects_stop_by_kind_and_route_km_then_reroutes():
+    state, calls, result = _plan_with_stop(_stop_pois())
+    assert calls == [False, True]
+    assert state['route_request']['target_km'] == 1.4
+    assert state['route_request']['tolerance_km'] == .2
+    assert state['route_request']['input_signature']['stop_onderweg']['soort'] == 'cafe'
+    assert result['stop_onderweg']['naam'] == 'Dichtbij'
+    assert .55 < result['stop_onderweg']['km'] < .57
+    assert result['constraints']['voldaan'] is True
+
+
+def test_plan_route_warns_without_stop_and_rolls_back_outside_tolerance():
+    for pois, km in [([],1.4), (_stop_pois(),2.0)]:
+        state, calls, result = _plan_with_stop(pois, reroute_km=km)
+        assert 'stop_onderweg' not in state and 'stop_onderweg' not in result
+        assert result['km'] == 1.4
+        assert any('stop' in w or 'cafe' in w for w in result['constraints']['waarschuwingen'])
+        assert len(calls) == (2 if pois else 1)
+
+
+def test_plan_route_validates_stop_before_side_effects():
+    for value in ({'soort':'hotel','rond_km':2}, {'soort':'cafe','rond_km':-1}, {'soort':'cafe','rond_km':float('nan')}, {'soort':'cafe','rond_km':True}, {'soort':'cafe'}, {'soort':'cafe','rond_km':2,'extra':True}):
+        try:
+            intents.plan_route('Test', target_km=10, stop_onderweg=value, create_fn=lambda **kw: (_ for _ in ()).throw(AssertionError('side effect')))
+        except intents.IntentError:
+            continue
+        raise AssertionError(f'Ongeldige stop aanvaard: {value}')

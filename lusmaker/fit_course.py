@@ -39,7 +39,7 @@ def beperk_cues(cues,limit=MAX_COURSE_POINTS):
     return sorted(cues,key=lambda c:c['distance_m'])
 
 
-def encode(d, climb_db, *, timestamp=None, pois=None):
+def encode(d, climb_db, *, timestamp=None, pois=None, poi_types=None):
     points=[p for leg in d.get('_geometry',[]) for p in leg]
     if len(points)<2: raise ValueError('Routeer eerst de route voor FIT-export.')
     timestamp=int(time.time() if timestamp is None else timestamp)-631065600
@@ -63,7 +63,8 @@ def encode(d, climb_db, *, timestamp=None, pois=None):
     for cid in d.get('climbs',[]):
         c=climb_db.get(cid)
         if c: cues.append({'lat':c['foot'][0],'lon':c['foot'][1],'text':c['name'],'type':43,'soort':'klim'})
-    for p in for_draft(d) if pois is None else pois:
+    from .route_pois import select
+    for p in select(for_draft(d) if pois is None else pois, poi_types):
         cues.append({**p,'text':p['name'],'type':{'water':3,'cafe':4,'bakker':4,'toilet':39,'fietsenmaker':31}.get(p['kind'],0),'soort':'poi'})
     for cue in cues:
         cue['distance_m']=project((cue['lat'],cue['lon']),points)[1]

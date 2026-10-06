@@ -89,8 +89,8 @@ export function RouteDetail({
   mapSlot?: React.ReactNode;
   route: Route | null;
   loading: boolean;
-  onDownload: () => void;
-  onDownloadFit?: () => void;
+  onDownload: (poiKind: string) => void;
+  onDownloadFit?: (poiKind: string) => void;
   onReturn?: (lat:number,lon:number,budget:number | "kortste",requestId:string,closure?:{lat:number;lon:number})=>Promise<void>;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -102,6 +102,7 @@ export function RouteDetail({
   onUnshare: () => Promise<void>;
   onFeedback: (category: string, comment: string) => Promise<void>;
 }) {
+  const [poiKind, setPoiKind] = useState("alle");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(route?.name || "");
   const [adjusting, setAdjusting] = useState(false);
@@ -148,7 +149,7 @@ export function RouteDetail({
 
   return (
     <section className="route-fullscreen">
-      <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} />}</div>
+      <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} onPoiChange={setPoiKind} />}</div>
       <header className="route-topbar">
         <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
         <div className="route-topbar-title"><Logo /><span><strong>{route?.name || "Route laden…"}</strong></span></div>
@@ -180,8 +181,8 @@ export function RouteDetail({
             </section>
           ) : null}
           <div className="route-downloads">
-            <button className="button button-primary" onClick={onDownload} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
-            {onDownloadFit && <button className="button button-secondary" onClick={onDownloadFit} disabled={!route.ready}><ArrowDownToLine /> Download FIT</button>}
+            <button className="button button-primary" onClick={() => onDownload(poiKind)} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
+            {onDownloadFit && <button className="button button-secondary" onClick={() => onDownloadFit?.(poiKind)} disabled={!route.ready}><ArrowDownToLine /> Download FIT</button>}
           </div>
           <div className="route-actions">
             <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>

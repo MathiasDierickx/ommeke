@@ -572,10 +572,17 @@ async def route_delete(request: Request) -> Response:
 
 
 async def route_gpx(request: Request) -> Response:
+    from . import gpx
+    from .route_pois import parse_selection
+    try:
+        poi_types = parse_selection(request.query_params.get("poi"))
+    except ValueError as exc:
+        return _error(str(exc), 400, "invalid_poi")
     try:
         draft_id = _draft_id(request)
         item = await asyncio.to_thread(draft.load, draft_id)
         payload = await asyncio.to_thread(artifacts.read, draft_id, "route.gpx")
+        payload = gpx.filter_pois(payload, poi_types)
         filename = quote(f"{item.get('name') or 'lusmaker-route'}.gpx")
         funnel.exported("gpx", item)
         return Response(
@@ -591,12 +598,17 @@ async def route_gpx(request: Request) -> Response:
 
 
 async def route_fit(request: Request) -> Response:
+    from .route_pois import parse_selection
+    try:
+        poi_types = parse_selection(request.query_params.get("poi"))
+    except ValueError as exc:
+        return _error(str(exc), 400, "invalid_poi")
     from .fit_course import encode
     try:
         item = await asyncio.to_thread(draft.load, _draft_id(request))
         def build():
             with draft.region_scope(item):
-                return encode(item, climbs.all_climbs())
+                return encode(item, climbs.all_climbs(), poi_types=poi_types)
         payload = await asyncio.to_thread(build)
         filename = quote(f"{item.get('name') or 'ommeke-route'}.fit")
         funnel.exported("fit", item)

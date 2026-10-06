@@ -6,6 +6,27 @@ KINDS = {'amenity:drinking_water':'water','amenity:cafe':'cafe','shop:bakery':'b
          'amenity:toilets':'toilet','shop:bicycle':'fietsenmaker'}
 
 
+STOP_KINDS = frozenset(KINDS.values())
+from .tvl_places import KINDS as LODGING_KINDS
+EXPORT_KINDS = STOP_KINDS | frozenset(LODGING_KINDS.values()) | {'logies'}
+
+
+def parse_selection(value):
+    """None = alle voorzieningen; lege set = expliciet verborgen."""
+    if value is None:
+        return None
+    if value == 'geen':
+        return frozenset()
+    kinds = frozenset(value.split(','))
+    if not kinds or not kinds <= EXPORT_KINDS:
+        raise ValueError('Onbekend POI-type; kies: ' + ', '.join(sorted(EXPORT_KINDS)) + ' of geen.')
+    return kinds
+
+
+def select(pois, kinds):
+    return list(pois) if kinds is None else [p for p in pois if p['kind'] in kinds]
+
+
 def project(point, track):
     """Dichtste segmentprojectie: afstand tot route, routeafstand, segment en fractie."""
     if len(track)<2: raise ValueError('Route heeft minstens twee punten nodig.')
@@ -44,7 +65,7 @@ def along_route(track, places, *, radius_m=150, limit=100):
     return sorted(result,key=lambda p:(p['at_km'],p['id']))[:limit]
 
 
-def for_draft(d, *, gazetteer=None, source_pois=None):
+def for_draft(d, *, gazetteer=None, source_pois=None, limit=100):
     from . import geocode, draft, tvl_places
     injected = gazetteer is not None
     try:
@@ -59,11 +80,11 @@ def for_draft(d, *, gazetteer=None, source_pois=None):
             except (RuntimeError, OSError):
                 gazetteer = {}
         if source_pois is None:
-            source_pois = [] if injected else tvl_places.along_route(d.get('_geometry', []))
+            source_pois = [] if injected else tvl_places.along_route(d.get('_geometry', []), limit=limit)
         # Onderbroken legs niet verbinden met een fictief pad.
         osm, distance = [], 0
         for leg in d.get('_geometry', []):
-            for item in along_route(leg, gazetteer.get('nearby_places', [])):
+            for item in along_route(leg, gazetteer.get('nearby_places', []), limit=limit):
                 osm.append({**item, 'at_km': round(item['at_km']+distance/1000, 3)})
             distance += geo.path_length(leg)
         result = list(source_pois)
@@ -76,4 +97,4 @@ def for_draft(d, *, gazetteer=None, source_pois=None):
                 continue
             result.append(item)
             seen.add(item['id'])
-        return sorted(result, key=lambda p: (p['at_km'], p['id']))[:100]
+        return sorted(result, key=lambda p: (p['at_km'], p['id']))[:limit]

@@ -445,6 +445,10 @@ def cmd_draft_preview(args):
 def cmd_plan_route(args):
     from . import intents
 
+    try:
+        stop = json.loads(args.stop_onderweg) if args.stop_onderweg else None
+    except json.JSONDecodeError as exc:
+        raise ValueError('stop-onderweg moet een geldig JSON-object zijn met soort en rond_km.') from exc
     return intents.plan_route(
         start=args.start,
         region=args.region,
@@ -470,6 +474,7 @@ def cmd_plan_route(args):
         request_id=args.request_id,
         heuvels=args.heuvels,
         ondergrond=args.ondergrond,
+        stop_onderweg=stop,
     )
 
 
@@ -686,6 +691,7 @@ def main(argv=None):
         "--request-id",
         help="stabiele sleutel om een retry van dezelfde route te hervatten",
     )
+    s.add_argument("--stop-onderweg", help='Stop als JSON: {"soort":"cafe","rond_km":20}')
     s.add_argument("--rond-plaats")
     s.add_argument("--langs-water")
     s.add_argument(

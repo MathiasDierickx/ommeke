@@ -93,3 +93,13 @@ def test_fit_empty_route_rejected():
     try: encode({'_geometry':[]},{},pois=[])
     except ValueError: pass
     else: raise AssertionError('empty course')
+
+
+def test_fit_poi_selection_keeps_turns_and_climbs():
+    d = _route([{'lat':51,'lon':3.01,'text':'Rechts','sign':2}], ['hill'])
+    db = {'hill': {'foot':[51,3.02], 'name':'Klim'}}
+    pois = [{'lat':51, 'lon':3.03+i*.01, 'name':name, 'kind':kind} for i,(name,kind) in enumerate([('Café','cafe'),('Water','water')])]
+    for kinds, expected in [(None, {'Rechts','Klim','Café','Water'}), ({'water'}, {'Rechts','Klim','Water'}), (set(), {'Rechts','Klim'})]:
+        records = _decode(encode(d, db, timestamp=1760000000, pois=pois, poi_types=kinds))
+        assert {r[6] for n,r in records if n == 32} == expected
+        assert len([r for n,r in records if n == 20]) == 2

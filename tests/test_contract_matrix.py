@@ -160,3 +160,36 @@ def test_documented_error_codes_exist_in_code():
     )
     for code in codes - {"bad_request"}:
         assert f'"{code}"' in source, f"foutcode {code} ontbreekt in de code"
+
+
+def test_stop_underway_contract_is_typed_and_available_everywhere():
+    from pydantic import TypeAdapter, ValidationError
+    from lusmaker import intents
+    from lusmaker.mcp_contracts import StopOnderweg
+    from lusmaker.chat_contracts import STOP_SCHEMA
+    assert 'stop_onderweg' in inspect.signature(intents.plan_route).parameters
+    assert 'stop_onderweg' in inspect.signature(mcp_server.plan_route).parameters
+    assert PLAN_ROUTE_SCHEMA['properties']['stop_onderweg'] == STOP_SCHEMA
+    assert set(STOP_SCHEMA['properties']) == {'soort', 'rond_km'}
+    assert any(name == 'stop_onderweg' for name, _ in _sections()['plan_route'])
+    adapter = TypeAdapter(StopOnderweg)
+    assert adapter.validate_python({'soort':'cafe', 'rond_km':20})['rond_km'] == 20
+    for bad in ({'soort':'onbekend','rond_km':20}, {'soort':'cafe','rond_km':-1}, {'soort':'cafe','rond_km':float('inf')}):
+        try:
+            adapter.validate_python(bad)
+        except ValidationError:
+            continue
+        raise AssertionError('Ongeldige MCP-stop aanvaard')
+
+
+def test_stop_is_forwarded_by_cli_and_chat():
+    from unittest.mock import patch
+    from lusmaker import intents
+    from tests.test_contract_gaps import _cli_plan
+    wanted = {'soort':'cafe', 'rond_km':20}
+    seen, _ = _cli_plan('--stop-onderweg', '{"soort":"cafe","rond_km":20}')
+    assert seen['stop_onderweg'] == wanted
+    calls = []
+    with patch.object(intents, 'plan_route', lambda **kw: calls.append(kw) or {'status':'ready'}):
+        aws_chat.RouteToolExecutor().execute('plan_route', {'start':'Test', 'target_km':40, 'stop_onderweg':wanted}, request_id='stop-test-123')
+    assert calls[0]['stop_onderweg'] == wanted

@@ -40,6 +40,7 @@ from . import (
     tenant,
 )
 from .mcp_contracts import (
+    StopOnderweg,
     Activity,
     APPS_COMPONENT_MIME_TYPE,
     APPS_PREVIEW_TOOLS,
@@ -412,6 +413,7 @@ def plan_route(
     langs_water: NonEmptyString | None = None,
     heuvels: Literal["zoek", "ok", "vlak"] | None = None,
     ondergrond: Literal["verhard", "ok", "onverhard"] | None = None,
+    stop_onderweg: StopOnderweg | None = None,
 ) -> RouteWorkflowResult:
     """Start een routeworkflow; kan eerst gerichte ``needs_input``-vragen geven."""
     return _structured_errors(intents.plan_route)(
@@ -437,6 +439,7 @@ def plan_route(
         langs_water=langs_water,
         heuvels=heuvels,
         ondergrond=ondergrond,
+        stop_onderweg=stop_onderweg,
     )
 
 

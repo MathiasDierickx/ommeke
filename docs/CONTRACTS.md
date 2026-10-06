@@ -45,6 +45,7 @@ CLI: `lus plan-route`. MCP/chat: `plan_route`. Web: `POST /api/routes` en
 | langs_water | `--langs-water` | `langs_water` | `langs_water` | — | Waterloop of water langs de route. |
 | heuvels | `--heuvels` | `heuvels` | `heuvels` | — | `null` = onbekend (vlag weglaten); zoek, ok of vlak. |
 | ondergrond | `--ondergrond` | `ondergrond` | `ondergrond` | — | `null` = onbekend (vlag weglaten); verhard, ok of onverhard. |
+| stop_onderweg | `--stop-onderweg` | `stop_onderweg` | `stop_onderweg` | — | Optioneel object met soort (cafe, water, bakker, toilet, fietsenmaker) en rond_km ≥ 0. CLI: JSON. Dichtst bij gevraagde routeafstand, binnen 150 m; herroutering bewaakt doel/tolerantie en hard maximum, anders waarschuwing en oorspronkelijke route. |
 | check_readiness | `--check-readiness` | — | — | — | CLI: standaard uit. MCP, chat en web sturen altijd `true`. |
 
 Bewuste verschillen:
@@ -148,6 +149,23 @@ Er is geen `request_id` of `expected_revision`: een profielpatch is een
 last-write-wins samenvoeging met historiek (`bron` = cli, mcp of chat). Een
 gekoppelde verkenningsprobe wordt automatisch ongeldig.
 
+## Exportselectie
+
+`GET /api/routes/{draft_id}/gpx` en `/fit` accepteren de queryparameter
+`poi=cafe,water` (kommagescheiden bekende types) of `poi=geen`.
+Zonder parameter blijft de bestaande export met alle voorzieningen behouden.
+Bekende soorten komen uit `route_pois.EXPORT_KINDS`: de vijf stopsoorten en
+logiescategorieën uit de lokale Toerisme Vlaanderen-bron.
+Onbekende of lege selecties geven HTTP 400 met `code: invalid_poi`.
+Klimwaypoints en navigatie-instructies blijven behouden. De kaart geeft haar
+actuele selectie mee; “Alle” laat de parameter weg en “Verbergen” stuurt `geen`.
+Beide antwoorden behouden `Cache-Control: private, no-store`.
+
+GPX filtert de voorzieningswaypoints in het opgeslagen S3-artefact bij het
+serveren. Dit vermijdt een nieuwe lokale data-/klimdatabase-afhankelijkheid en
+behoudt dezelfde geëxporteerde route. FIT wordt zoals voorheen gegenereerd,
+met de selectie toegepast vóór de course-pointlimiet.
+
 ## Foutcodes
 
 CLI en MCP geven JSON zonder HTTP-status; de web-API geeft `{"error", "code"}`
@@ -164,6 +182,7 @@ er misging.
 | `route_not_found` | 404 | Onbekende `draft_id`. | Web. |
 | `chat_failed` | 422 | De chatagent kon het bericht niet afronden. | Web. |
 | `model_unavailable` | 502 | Bedrock niet beschikbaar of niet geactiveerd. | Web. |
+| `invalid_poi` | 400 | Onbekend of leeg POI-type bij GPX/FIT-download. | Web. |
 | `bad_request` | 400 | Ongeldige of onbekende invoer, onbekende waarden, schemafout. | Web (standaardcode). |
 
 In de motor zijn dit `coverage.OutOfCoverage`, `quotas.QuotaExceeded`,

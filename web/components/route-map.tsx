@@ -10,10 +10,11 @@ const POI_LABELS: Record<string, string> = { water: "Drinkwater", cafe: "Cafés"
 // de routelijn. Toon ze dan pas op vraag.
 const POI_AUTO_LIMIT = 15;
 
-export function RouteMap({ geometry, loading }: { geometry?: RouteGeometry | null; loading: boolean }) {
+export function RouteMap({ geometry, loading, onPoiChange }: { onPoiChange?: (kind: string) => void; geometry?: RouteGeometry | null; loading: boolean }) {
   const [poiKind, setPoiKind] = useState("alle");
   const poiCount = geometry?.pois?.length ?? 0;
-  useEffect(() => { setPoiKind(poiCount > POI_AUTO_LIMIT ? "geen" : "alle"); }, [poiCount]);
+  useEffect(() => { setPoiKind(poiCount > POI_AUTO_LIMIT ? "geen" : "alle"); }, [geometry, poiCount]);
+  useEffect(() => { onPoiChange?.(poiKind); }, [poiKind, onPoiChange]);
   const elementRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

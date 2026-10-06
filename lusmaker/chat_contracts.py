@@ -1,10 +1,19 @@
 """JSON-schema’s voor de chatadapter; netwerk- en opslagvrij."""
 
+STOP_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["soort", "rond_km"],
+    "properties": {
+        "soort": {"type": "string", "enum": ["cafe", "water", "bakker", "toilet", "fietsenmaker"]},
+        "rond_km": {"type": "number", "minimum": 0},
+    },
+}
+
 PLAN_ROUTE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "required": ["start"],
     "properties": {
+        "stop_onderweg": STOP_SCHEMA,
         "start": {"type": "string", "minLength": 1, "maxLength": 160},
         "rond_plaats": {"type": "string", "minLength": 1, "maxLength": 160},
         "langs_water": {"type": "string", "minLength": 1, "maxLength": 120},

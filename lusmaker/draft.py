@@ -489,7 +489,7 @@ def water_via_points(
     ]
 
 
-def _waypoints(d: dict, climb_db: dict) -> list[dict]:
+def _base_waypoints(d: dict, climb_db: dict) -> list[dict]:
     """Reeks legs; een klim-leg krijgt [voet, midden, top] zodat de route
     effectief de helling zelf omhoog rijdt."""
     start = (d["start"]["lat"], d["start"]["lon"])
@@ -625,6 +625,21 @@ def _waypoints(d: dict, climb_db: dict) -> list[dict]:
             }
         )
     return integrated
+
+
+def _waypoints(d: dict, climb_db: dict) -> list[dict]:
+    legs = _base_waypoints(d, climb_db)
+    stop = d.get('stop_onderweg')
+    if stop and legs:
+        from .route_pois import project
+        index = min(stop['leg_index'], len(legs) - 1)
+        leg = legs[index]
+        point = (stop['lat'], stop['lon'])
+        _, _, segment, _ = project(point, leg['points'])
+        leg['points'] = [*leg['points'][:segment + 1], point, *leg['points'][segment + 1:]]
+        if leg.get('hints'):
+            leg['hints'] = [*leg['hints'][:segment + 1], '', *leg['hints'][segment + 1:]]
+    return legs
 
 
 def _circle_ring(lat, lon, radius_km, n=24):

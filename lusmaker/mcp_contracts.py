@@ -234,6 +234,12 @@ class CompactRouteResult(TypedDict):
     voorstellen: NotRequired[list[dict[str, Any]]]
 
 
+class StopOnderweg(TypedDict):
+    __pydantic_config__ = ConfigDict(extra="forbid")
+    soort: Literal["cafe", "water", "bakker", "toilet", "fietsenmaker"]
+    rond_km: Annotated[float, Field(ge=0, allow_inf_nan=False, strict=True)]
+
+
 class RouteWorkflowResult(TypedDict, total=False):
     """Objectvorm die zowel ``ready`` als ``needs_input`` kan dragen."""
 
@@ -251,6 +257,7 @@ class RouteWorkflowResult(TypedDict, total=False):
     artifacts: list[ArtifactDescriptor]
     constraints: dict[str, Any]
     voorstellen: list[dict[str, Any]]
+    stop_onderweg: dict[str, Any]
     profiel: str
     onbekend: list[str]
     vragen: list[dict[str, Any]]

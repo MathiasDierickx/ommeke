@@ -2,7 +2,23 @@
 from xml.sax.saxutils import escape, quoteattr
 
 
-def export(d: dict, climb_db: dict, path: str) -> dict:
+def filter_pois(payload, kinds):
+    """Filter het opgeslagen artefact; klimwaypoints hebben geen voorzieningstype."""
+    if kinds is None:
+        return payload
+    import xml.etree.ElementTree as ET
+    from .route_pois import EXPORT_KINDS
+    ns = '{http://www.topografix.com/GPX/1/1}'
+    ET.register_namespace('', ns[1:-1])
+    root = ET.fromstring(payload)
+    for waypoint in list(root.findall(ns + 'wpt')):
+        kind = waypoint.findtext(ns + 'type')
+        if kind in EXPORT_KINDS and kind not in kinds:
+            root.remove(waypoint)
+    return ET.tostring(root, encoding='utf-8', xml_declaration=True)
+
+
+def export(d: dict, climb_db: dict, path: str, *, pois=None, poi_types=None) -> dict:
     if not d.get("_geometry"):
         raise RuntimeError("routeer eerst: `lus draft route <id>`")
 
@@ -19,8 +35,8 @@ def export(d: dict, climb_db: dict, path: str) -> dict:
                 f"<ele>{c['ele_top']}</ele><name>{escape(c['name'])}</name>"
                 f"<desc>{c['length_m']} m @ {c['avg_pct']}% (max {c['max_pct']}%)</desc></wpt>"
             )
-    from .route_pois import for_draft
-    for poi in for_draft(d):
+    from .route_pois import for_draft, select
+    for poi in select(for_draft(d) if pois is None else pois, poi_types):
         description = f'{poi["at_km"]} km; openingstijden niet geverifieerd; Bron: {poi.get("attribution", "© OpenStreetMap contributors")}'
         lines.append(f'<wpt lat="{poi["lat"]}" lon="{poi["lon"]}"><name>{escape(poi["name"])}</name><type>{escape(poi["kind"])}</type><desc>{escape(description)}</desc><link href={quoteattr(poi["source"])}/></wpt>')
     if d.get("cues"):

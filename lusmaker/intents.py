@@ -295,6 +295,8 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
         )
         if d.get("optimize_note"):
             warnings.append(d["optimize_note"])
+    if d.get('stop_warning'):
+        warnings.append(d['stop_warning'])
     if d.get("fill_note"):
         warnings.append(d["fill_note"])
     if within_hard_max is False:
@@ -358,6 +360,9 @@ def compact_result(
         "artifacts": artifacts.describe_all(d["id"]),
         "constraints": constraint_report(d, request),
     }
+    if d.get('stop_onderweg'):
+        stop = d['stop_onderweg']
+        result['stop_onderweg'] = {'soort': stop['kind'], 'naam': stop['name'], 'km': stop['at_km']}
     underway = underway_label(_route_poi_counts(d, feature_selector))
     if underway:
         result["onderweg"] = underway
@@ -500,8 +505,55 @@ def _needs_input(
     }
 
 
-def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None):
+def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn):
+    from .route_pois import project
+    from . import geo, gh
+    wanted = request.get('stop_onderweg')
+    if not wanted or d.get('stop_onderweg'):
+        return
+    candidates = [p for p in pois_fn(d) if p['kind'] == wanted['soort'] and p.get('offset_m', 0) <= 150]
+    d.pop('stop_warning', None)
+    if not candidates:
+        d['stop_warning'] = f"Geen geschikte {wanted['soort']} binnen 150 m van de route gevonden."
+    else:
+        chosen = min(candidates, key=lambda p: (abs(p['at_km'] - wanted['rond_km']), p.get('offset_m', 0), p['id']))
+        original = copy.deepcopy(d)
+        legs = d.get('_geometry', [])
+        # De routeafstand bepaalt op welke passage van een lus de stop ligt.
+        distance = 0.0
+        leg_index = 0
+        for i, leg in enumerate(legs):
+            leg_index = i
+            distance += geo.path_length(leg) / 1000
+            if distance >= chosen['at_km']:
+                break
+        d['stop_onderweg'] = {**chosen, 'leg_index': leg_index}
+        try:
+            route_fn(d, climb_db)
+            actual = (d.get('computed') or {}).get('total_km')
+            target, tolerance = request.get('target_km'), request.get('tolerance_km', 2.5)
+            maximum = request.get('max_km') if request.get('max_km_explicit', True) else None
+            if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual < 0.1 or (maximum is not None and actual > maximum) or (target is not None and abs(actual - target) > tolerance):
+                raise draft.DraftError('De stop past niet binnen de gevraagde afstand en tolerantie.')
+            progress = 0.0
+            for i, leg in enumerate(d.get('_geometry', [])):
+                if i == leg_index:
+                    progress += project((chosen['lat'], chosen['lon']), leg)[1] / 1000
+                    break
+                progress += geo.path_length(leg) / 1000
+            d['stop_onderweg']['at_km'] = round(progress, 3)
+        except (draft.DraftError, gh.GhError) as exc:
+            d.clear()
+            d.update(original)
+            d['stop_warning'] = f"Geen geschikte stop ingepland: {exc}"
+    if persist_fn:
+        persist_fn(d)
+
+
+def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None, pois_fn=None):
     _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn)
+    from .route_pois import for_draft
+    _plan_stop(d, climb_db, request, route_fn=route_fn, pois_fn=pois_fn or (lambda item: for_draft(item, limit=None)), persist_fn=persist_fn)
     actual = (d.get("computed") or {}).get("total_km")
     problem = None
     if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual < 0.1:
@@ -712,7 +764,9 @@ def plan_route(
     langs_water: str | None = None,
     heuvels: str | None = None,
     ondergrond: str | None = None,
+    stop_onderweg: dict | None = None,
     *,
+    pois_fn=None,
     create_fn=draft.create,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -732,6 +786,12 @@ def plan_route(
     exports_root: Path | None = None,
 ) -> dict:
     """Maak en routeer een lus, eventueel na een readiness-gesprek."""
+    if stop_onderweg is not None:
+        from .chat_contracts import STOP_SCHEMA, validate_arguments
+        try:
+            validate_arguments(stop_onderweg, STOP_SCHEMA, 'stop_onderweg')
+        except ValueError as exc:
+            raise IntentError(str(exc)) from exc
     if doel not in {"hoogtemeters", "offroad", "kort", "toeren"}:
         raise IntentError("doel moet 'hoogtemeters', 'offroad', 'kort' of 'toeren' zijn")
     if activities.canonical(activiteit) is None:
@@ -788,7 +848,7 @@ def plan_route(
     }
     # Nieuwe optionele invoer komt alleen in de signatuur als ze gegeven is,
     # zodat bestaande request-id's idempotent hervatbaar blijven.
-    for key, value in (("heuvels", heuvels), ("ondergrond", ondergrond)):
+    for key, value in (("heuvels", heuvels), ("ondergrond", ondergrond), ("stop_onderweg", stop_onderweg)):
         if value is not None:
             input_signature[key] = value
     request = _route_request(
@@ -810,6 +870,8 @@ def plan_route(
         heuvels=heuvels,
         ondergrond=ondergrond,
     )
+    if stop_onderweg is not None:
+        request['stop_onderweg'] = dict(stop_onderweg)
     existing = find_request_fn(request_id) if request_id is not None else None
     if existing is not None:
         stored_request = existing.get("route_request") or {}
@@ -862,6 +924,7 @@ def plan_route(
                     route_fn=route_fn,
                     optimize_fn=optimize_fn,
                     persist_fn=save_fn,
+                    pois_fn=pois_fn,
                 )
                 d = load_fn(d["id"])
             files = _export_files(
@@ -940,6 +1003,7 @@ def plan_route(
             route_fn=route_fn,
             optimize_fn=optimize_fn,
             persist_fn=save_fn,
+            pois_fn=pois_fn,
         )
         d = load_fn(draft_id)
         files = _export_files(
