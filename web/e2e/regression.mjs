@@ -481,11 +481,14 @@ test("snelle planner: validatie, voortgang en buiten_gebied (422)", async ({ pag
   expectNoStrays(state, "planner");
 });
 
+// Achtergrondladingen van de bibliotheek (gesprekken/routes) tellen niet mee.
+const actionCalls = (state) => state.calls.filter((c) => !/^GET \/api\/(conversations|routes)$/.test(c.key)).length;
+
 test("locatie geweigerd: melding, focus op startplaats en geen API-call", async ({ page, url }) => {
   const state = await installBackend(page);
   await page.context().grantPermissions([]);
   await openHome(page, url);
-  const before = state.calls.length;
+  const before = actionCalls(state);
   const locate = page.getByRole("button", { name: "Mijn locatie" });
   await locate.click();
   const alert = alerts(page);
@@ -493,7 +496,7 @@ test("locatie geweigerd: melding, focus op startplaats en geen API-call", async 
   assert.match(await alert.innerText(), /Locatie kon niet worden opgehaald\. Vul je startplaats in\./);
   assert.ok(await locate.isEnabled(), "locatieknop is na weigering weer bruikbaar");
   assert.equal(await page.getByLabel("Startplaats").evaluate((el) => el === document.activeElement), true, "focus gaat naar Startplaats");
-  assert.equal(state.calls.length, before, "locatie ophalen doet geen API-call");
+  assert.equal(actionCalls(state), before, "locatie ophalen doet geen API-call");
   expectNoStrays(state, "locatie geweigerd");
 });
 
@@ -501,7 +504,7 @@ test("locatie ontbreekt: melding, focus op startplaats en geen API-call", async 
   const state = await installBackend(page);
   await page.addInitScript(() => { Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined }); });
   await openHome(page, url);
-  const before = state.calls.length;
+  const before = actionCalls(state);
   const locate = page.getByRole("button", { name: "Mijn locatie" });
   await locate.click();
   const alert = alerts(page);
@@ -509,7 +512,7 @@ test("locatie ontbreekt: melding, focus op startplaats en geen API-call", async 
   assert.match(await alert.innerText(), /Locatie is niet beschikbaar\. Vul je startplaats in\./);
   assert.ok(await locate.isEnabled(), "locatieknop blijft bruikbaar");
   assert.equal(await page.getByLabel("Startplaats").evaluate((el) => el === document.activeElement), true, "focus gaat naar Startplaats");
-  assert.equal(state.calls.length, before, "ontbrekende locatievoorziening doet geen API-call");
+  assert.equal(actionCalls(state), before, "ontbrekende locatievoorziening doet geen API-call");
   expectNoStrays(state, "locatie ontbreekt");
 });
 
