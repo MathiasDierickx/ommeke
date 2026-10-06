@@ -60,3 +60,20 @@ export function chatReply(value: unknown): { message: { id: string; conversation
   }
   return reply as ReturnType<typeof chatReply>;
 }
+
+/**
+ * Browserfouten ("signal timed out", "Failed to fetch") zijn Engels en zeggen
+ * niets over herstel. Vertaal ze; de naam blijft voor wie op TimeoutError test.
+ */
+export function networkError(cause: unknown): unknown {
+  if (!(cause instanceof Error)) return cause;
+  if (cause.name === "TimeoutError" || cause.name === "AbortError") {
+    const error = new Error("Dit duurt langer dan verwacht. Je route kan nog worden afgewerkt: kijk zo meteen in Mijn routes. Opnieuw proberen maakt geen dubbele route.");
+    error.name = cause.name;
+    return error;
+  }
+  if (cause.name === "TypeError" && /fetch|network|load failed/i.test(cause.message)) {
+    return new Error("Geen verbinding met Ommeke. Controleer je internet en probeer opnieuw; je routes blijven bewaard.");
+  }
+  return cause;
+}

@@ -1,4 +1,4 @@
-import { errorMessage } from "./interaction";
+import { errorMessage, networkError } from "./interaction";
 import { fetchAuthenticated } from "./authenticated-fetch";
 import { requestAccessToken } from "./cognito";
 
@@ -28,6 +28,14 @@ export async function apiRequest<T>(
   path: string,
   token: string,
   init: RequestInit = {},
+): Promise<T> {
+  try { return await apiRequestInner<T>(path, token, init); } catch (cause) { throw networkError(cause); }
+}
+
+async function apiRequestInner<T>(
+  path: string,
+  token: string,
+  init: RequestInit,
 ): Promise<T> {
   const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     signal: init.signal ?? AbortSignal.timeout(240_000),
@@ -59,6 +67,10 @@ export async function publicApiRequest<T>(
 }
 
 export async function authenticatedBlob(path: string, token: string): Promise<Blob> {
+  try { return await authenticatedBlobInner(path, token); } catch (cause) { throw networkError(cause); }
+}
+
+async function authenticatedBlobInner(path: string, token: string): Promise<Blob> {
   const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   }, token, requestAccessToken);
@@ -67,6 +79,10 @@ export async function authenticatedBlob(path: string, token: string): Promise<Bl
 }
 
 export async function apiStream<T>(path: string, token: string, body: unknown, onProgress: (value: import('./event-stream').ProgressEvent) => void): Promise<T> {
+  try { return await apiStreamInner<T>(path, token, body, onProgress); } catch (cause) { throw networkError(cause); }
+}
+
+async function apiStreamInner<T>(path: string, token: string, body: unknown, onProgress: (value: import('./event-stream').ProgressEvent) => void): Promise<T> {
   const { readEventStream } = await import('./event-stream');
   const response = await fetchAuthenticated(`${apiBase()}${path}`, {
     method: 'POST', signal: AbortSignal.timeout(850_000),

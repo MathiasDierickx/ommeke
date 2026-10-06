@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pendingPrompt, errorMessage, mergeById, chatReply, unansweredPrompt, orphanState } from '../lib/interaction.ts';
+import { pendingPrompt, errorMessage, mergeById, chatReply, unansweredPrompt, orphanState, networkError } from '../lib/interaction.ts';
 
 test('retry en refresh behouden hetzelfde verzoeknummer, nieuwe inhoud niet', () => {
   const first = pendingPrompt(null, 'chat1', '  50 km  ', () => 'id-1');
@@ -39,4 +39,15 @@ test('een onbeantwoorde vraag na herladen krijgt een herstelstatus', () => {
   assert.equal(orphanState('interrupted', true), 'interrupted');
   assert.equal(orphanState('unknown', true), 'interrupted');
   assert.equal(orphanState('running', false), 'interrupted');
+});
+
+test('browserfouten worden begrijpelijk Nederlands met herstelactie', () => {
+  const timeout = new DOMException('signal timed out', 'TimeoutError');
+  const mapped = networkError(timeout);
+  assert.equal(mapped.name, 'TimeoutError');
+  assert.match(mapped.message, /Mijn routes/);
+  assert.doesNotMatch(mapped.message, /signal/);
+  assert.match(networkError(new TypeError('Failed to fetch')).message, /Geen verbinding/);
+  const own = new Error('Je daglimiet voor chatberichten is bereikt.');
+  assert.equal(networkError(own), own);
 });
