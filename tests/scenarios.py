@@ -3,7 +3,7 @@ import json
 import sys
 from .run import _deny_network
 from .test_regression import _replay
-from .regression_support import SCENARIOS, metrics
+from .regression_support import SCENARIOS, acceptance_constraints, metrics
 from . import test_acceptance, test_quality
 from lusmaker.quality import evaluate
 
@@ -14,7 +14,8 @@ def main():
     for name in SCENARIOS:
         try:
             route = _replay(name)
-            geometry = evaluate(route, {})
+            constraints = acceptance_constraints(name, route)
+            geometry = evaluate(route, constraints)
             results.append({'scenario': name, 'source': 'opgenomen echte GraphHopper-antwoorden',
                             'ok': geometry['ok'], 'metrics': {**metrics(name, route), **geometry['metrics']}, 'failures': geometry['failures']})
         except Exception as exc:

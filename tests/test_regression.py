@@ -8,7 +8,9 @@ from unittest import SkipTest
 
 from lusmaker import draft, gh
 from lusmaker.recording import ReplayPost
+from lusmaker.quality import evaluate
 from tests.regression_support import (
+    acceptance_constraints,
     fixture_path,
     invariant_failures,
     load_fixture,
@@ -54,6 +56,8 @@ def _replay(name: str):
         f"{name}: {len(replay.unused_hashes)} cassette-responses niet gebruikt; "
         "engine-gedrag gewijzigd"
     )
+    quality = evaluate(scenario_draft, acceptance_constraints(name, scenario_draft))
+    assert quality['ok'], f"{name}: quality acceptance failed: {quality['failures']}"
 
     return scenario_draft
 

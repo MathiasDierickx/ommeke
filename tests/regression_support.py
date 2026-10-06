@@ -150,6 +150,32 @@ def _quality(routed: dict) -> dict:
     return (routed.get("computed") or {}).get("kwaliteit") or {}
 
 
+def acceptance_constraints(name: str, routed: dict) -> dict:
+    """Conditions uit het scenario-draft en de vastgelegde acceptatieband."""
+    draft = routed
+    request = draft.get("route_request") or {}
+    bands = {
+        "berendries_quiet": (54, 64),
+        "trail_offroad": (6, 9),
+        "zottegem_avoid": (0, 70),
+    }
+    low, high = bands[name]
+    constraints = {
+        "loop": bool(draft.get("loop", True)),
+        "target_km": request.get("target_km", (low + high) / 2),
+        "tolerance_km": request.get("tolerance_km", (high - low) / 2),
+        "max_km": request.get("max_km", high),
+        "overlap_tolerance_m": 650,
+        "avoid": [
+            {"lat": place["lat"], "lon": place["lon"],
+             "radius_m": place.get("radius_km", 0) * 1000,
+             "tolerance_m": 200}
+            for place in draft.get("avoid_places", [])
+        ],
+    }
+    return constraints
+
+
 def metrics(name: str, routed: dict) -> dict:
     computed = routed.get("computed") or {}
     quality = _quality(routed)

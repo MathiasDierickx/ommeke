@@ -9,9 +9,40 @@ herhalingen van opgeslagen echte GraphHopper-antwoorden, geen nieuwe live ritten
 | Korte onverharde trail (`trail_offroad`) | 8,485 km | 90 m | 0 m | 51% onverhard, gesloten |
 | Fietslus met vermijdzone Zottegem (`zottegem_avoid`) | 64,749 km | 762 m | 534 m | 35 m marge buiten vermijdzone |
 
-De vaste cassettegrenzen staan in `tests/test_regression.py`. Hergebruik is
+De vaste cassettegrenzen staan in `tests/test_regression.py`. Dezelfde drie
+cassettes lopen ook door `quality.evaluate` met afstandsband, lusstatus,
+vermijdzone uit het draft en een overlapgrens. Voor overlap geldt standaard
+650 m: dit ligt boven de gemeten cassettewaarde (maximaal 534 m) met marge;
+de grens is per evaluatie instelbaar via `overlap_tolerance_m` en verschijnt
+als `overlap_m` en `overlap_tolerance_m` in de metrics. Een cassette die een
+echte afstandsgrens niet haalt, blijft rood; de band wordt niet op basis van
+een mislukking verruimd. Hergebruik is
 hier gemeten en begrensd, niet volledig opgelost. Een gesloten geometrie bewijst
 geen actuele toegankelijkheid, verkeersveiligheid of aangename rit.
+
+## Offline acceptatiematrix (issue #4)
+
+De regressierijen gebruiken de bestaande cassettegeometrie. Synthetische rijen
+gebruiken vaste geometrie of een geïnjecteerde router; er zijn geen nieuwe
+opnames of netwerkcalls. `tests/test_acceptance.py` borgt dat alle genoemde
+scenariofuncties blijven bestaan.
+
+| Scenario | Metriek | Tolerantie / grens | Uitkomst |
+|---|---|---|---|
+| `berendries_quiet` (cassette) | afstand, sluiting, onderbreking, overlap, vermijdzone | 54–64 km; lus 25 m; legs 25 m; overlap 650 m; vermijdzone 200 m | routekwaliteit moet slagen; bestaande invarianten blijven gelden |
+| `trail_offroad` (cassette) | afstand, sluiting, overlap | 6–9 km; lus 25 m; legs 25 m; overlap 650 m | routekwaliteit en trail-invarianten slagen |
+| `zottegem_avoid` (cassette) | afstand, sluiting, overlap, marge tot Zottegem | max 70 km; lus 25 m; legs 25 m; overlap 650 m; marge ≥ −200 m | routekwaliteit en vermijd-invariant slagen |
+| fiets vs trail (synthetisch) | profiel/activiteit | fiets `quiet`; trail `trail` | profielen blijven onderscheiden |
+| hard maximum vs zacht doel (synthetisch) | afstandsstatus en waarschuwing | hard max 10 km; zacht doel tolerantie 1 km | 12 km hard wordt afgewezen; zacht doel wordt niet als hard maximum gemeld |
+| waterloop en landmark (synthetisch) | aandeel nabij water; dichtstbijzijnde afstand anker | water ≥ 10%; anker ≤ 30 m | beide geometrische voorwaarden slagen |
+| vermijdzone (synthetisch) | marge tot zone | tolerantie 0 m | route door de zone faalt en rapporteert negatieve marge |
+| onhaalbare wens (synthetisch, router geïnjecteerd) | harde afstand | max 5 km, routerantwoord 20 km | Nederlandse `IntentError` meldt overschrijding; geen stille acceptatie |
+| heen-en-weer (synthetisch) | overlap | configureerbaar, hier 10 m | teruggereden segment faalt en grens wordt gerapporteerd |
+
+De cassettegrenzen komen uit de eerder vastgelegde praktijkbanden in deze
+file (`54–64`, `6–9`, `max 70 km`). De huidige geometrie wordt direct aan die
+voorwaarden getoetst; een eventuele mislukking wordt als cassette-afwijking
+gerapporteerd en niet opgelost door de tolerantie automatisch te verruimen.
 
 Vier nieuwe acceptatietests faalden vóór de verbeteringen en slagen nu:
 

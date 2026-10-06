@@ -15,12 +15,17 @@ def evaluate(route: dict, constraints: dict) -> dict:
     distance = sum(geo.haversine(*a, *b) for leg in legs for a, b in zip([p[:2] for p in leg], [p[:2] for p in leg][1:])) / 1000
     gap = max((geo.haversine(*a[-1][:2], *b[0][:2]) for a, b in zip(legs, legs[1:]) if a and b), default=0)
     metrics = {'km': round(distance, 3), 'closure_m': round(geo.haversine(*points[0], *points[-1]), 1), 'leg_gap_m': round(gap, 1)}
+    overlap = geo.self_retrace_m(legs)
+    overlap_limit = constraints.get('overlap_tolerance_m', 650)
+    metrics['overlap_m'] = round(overlap, 1)
+    metrics['overlap_tolerance_m'] = overlap_limit
     failures = []
     def require(condition, message):
         if not condition:
             failures.append(message)
     require(distance > 0, 'route heeft geen lengte')
     require(gap <= constraints.get('max_leg_gap_m', 25), 'route bevat een onderbreking')
+    require(overlap <= overlap_limit, 'heen-en-weer boven tolerantie')
     if constraints.get('loop', True):
         require(metrics['closure_m'] <= constraints.get('closure_m', 25), 'route is niet gesloten')
     if constraints.get('max_km') is not None:
