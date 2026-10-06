@@ -5,6 +5,9 @@
 *Stappen met [MENS] vereisen Mathias; de rest is code/config die er al is of
 uit het AWS-spoor komt. Volgorde is geoptimaliseerd op doorlooptijd.*
 
+Stand: 6 oktober 2026. [x] betekent gecontroleerd in code/documentatie; het
+betekent niet dat een externe platformreview al geslaagd is.
+
 ## Nu al starten (doorlooptijd!)
 
 - [ ] [MENS] OpenAI Platform Dashboard: identiteits- of bedrijfsverificatie
@@ -15,21 +18,21 @@ uit het AWS-spoor komt. Volgorde is geoptimaliseerd op doorlooptijd.*
 
 ## Uit het AWS-spoor (zie docs/INTEGRATIE-AWS.md)
 
-- [ ] Publiek domein + TLS voor `lus-mcp --http` (bv. mcp.lusmaker.app)
-- [ ] IdP met interactieve OAuth 2.1 + PKCE (géén client_credentials;
-      DCR of CIMD aanbevolen voor Claude)
-- [ ] Env's gezet: `LUSMAKER_OAUTH_ISSUER/JWKS_URL/AUDIENCE`,
-      `LUSMAKER_PUBLIC_URL`
+- [x] Publiek domein + TLS en hosted `/mcp`-endpoint zijn gedeployed (6 okt 2026)
+- [x] Cognito authorization-code OAuth en scopes zijn geconfigureerd (6 okt 2026); PKCE en consent nog live te controleren
+- [x] Env's `LUSMAKER_OAUTH_ISSUER/JWKS_URL/AUDIENCE`, `LUSMAKER_PUBLIC_URL` ingesteld voor productie (6 okt 2026)
+- [x] Vooraf geregistreerde Cognito-client; geen DCR/CIMD (6 okt 2026)
+- [ ] Echte IdP-flow met Claude- en ChatGPT-clients end-to-end testen
 - [ ] `/privacy` en `/terms` publiek (na juridische review)
 - [ ] 2 reviewer-testaccounts in de IdP
 - [ ] Rate limiting aan de rand
 
 ## Claude-connectordirectory
 
-- [x] Streamable HTTP-transport (T17)
-- [x] Tool-annotaties: titles + readOnly/destructive-hints, alle tools (T17)
-- [x] RFC 9728 protected-resource-metadata (T17)
-- [x] 401 zonder token; bearer-JWT-validatie (T17)
+- [x] Streamable HTTP-transport (T17; gecontroleerd 6 okt 2026)
+- [x] Tool-annotaties: titles + readOnly/destructive-hints, alle tools (T17; 6 okt 2026)
+- [x] RFC 9728 protected-resource-metadata (T17; 6 okt 2026)
+- [x] 401 zonder token; bearer-JWT-validatie (T17; 6 okt 2026)
 - [ ] End-to-end OAuth-flow testen met echte IdP (na AWS-spoor)
 - [ ] [MENS] Indienen via het submission-portal in Claude.ai-adminsettings:
       beschrijving (NL/EN), logo, privacy-URL, testaccount-credentials,
@@ -38,8 +41,8 @@ uit het AWS-spoor komt. Volgorde is geoptimaliseerd op doorlooptijd.*
 
 ## ChatGPT-appdirectory
 
-- [x] MCP-server (zelfde als Claude) + lite-toolset
-- [ ] T18: component-template (inline kaartpreview) — in uitvoering
+- [x] MCP-server (zelfde als Claude) + lite-toolset (12 tools; 6 okt 2026)
+- [x] T18: component-template (inline kaartpreview) (6 okt 2026)
 - [ ] [MENS] Domeincontrole-verificatie van de MCP-host in het
       OpenAI-dashboard
 - [ ] [MENS] Submission: MCP-URL, testinstructies, directory-metadata,
