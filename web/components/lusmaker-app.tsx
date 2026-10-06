@@ -29,6 +29,9 @@ export type WorkspaceView =
 // client-navigatie. Zo landt een ingelogde gebruiker bij het openen van de app
 // meteen op zijn laatste route, terwijl "Nieuwe route" gewoon blijft werken.
 let didInitialLanding = false;
+// Wie op het startscherm al klikt of typt voordat de bibliotheek geladen is,
+// wil een nieuwe route: dan springen we niet meer weg naar de laatste route.
+let actedBeforeLanding = false;
 
 export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const router = useRouter();
@@ -115,9 +118,22 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   // gebruiker meteen op zijn meest recente route i.p.v. het lege startscherm.
   useEffect(() => {
     if (didInitialLanding) return;
+    const markActed = () => { actedBeforeLanding = true; };
+    document.addEventListener("pointerdown", markActed, true);
+    document.addEventListener("keydown", markActed, true);
+    document.addEventListener("input", markActed, true);
+    return () => {
+      document.removeEventListener("pointerdown", markActed, true);
+      document.removeEventListener("keydown", markActed, true);
+      document.removeEventListener("input", markActed, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (didInitialLanding) return;
     if (!authReady || !session || !workspaceLoaded) return;
     didInitialLanding = true;
-    if (view.kind === "new" && !new URLSearchParams(window.location.search).has("new") && routes.length) {
+    if (view.kind === "new" && !actedBeforeLanding &&!new URLSearchParams(window.location.search).has("new") && routes.length) {
       const latest = routes[0];
       if (latest) router.replace(`/routes/${encodeURIComponent(latest.id)}`);
     }
@@ -408,6 +424,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     libraryVersion.current++;
     routeLoadVersion.current++;
     didInitialLanding = false;
+    actedBeforeLanding = false;
     setSession(null);
     setConversations([]);
     setRoutes([]);

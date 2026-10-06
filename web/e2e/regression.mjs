@@ -534,6 +534,28 @@ test("planner houdt invoer vast terwijl de bibliotheek nog laadt", async ({ page
   expectNoStrays(state, "laden");
 });
 
+test("startscherm: wie al typt, wordt niet naar de laatste route gestuurd", async ({ page, url }) => {
+  const state = await installBackend(page, {
+    handlers: {
+      "GET /api/routes": async ({ state: s }) => { await wait(3000); return json(200, { routes: [s.route], next_cursor: null }); },
+    },
+  });
+  await page.goto(`${url}/`);
+  await page.getByLabel("Startplaats").fill("Kluisbos");
+  await page.getByText(/1 van 1 routes/).first().waitFor({ state: "attached", timeout: TIMEOUT });
+  await wait(500);
+  assert.equal(new URL(page.url()).pathname, "/", "blijft op het startscherm");
+  assert.equal(await page.getByLabel("Startplaats").inputValue(), "Kluisbos", "invoer bleef staan");
+  expectNoStrays(state, "landing na interactie");
+});
+
+test("startscherm zonder interactie landt op de laatste route", async ({ page, url }) => {
+  const state = await installBackend(page);
+  await page.goto(`${url}/`);
+  await page.waitForURL(/\/routes\/r1\/?$/, { timeout: TIMEOUT });
+  expectNoStrays(state, "landing");
+});
+
 test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async ({ page, url }) => {
   let release;
   const gate = new Promise(resolve => { release = resolve; });
