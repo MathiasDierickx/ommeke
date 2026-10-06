@@ -43,13 +43,15 @@ CLI: `lus plan-route`. MCP/chat: `plan_route`. Web: `POST /api/routes` en
 | request_id | `--request-id` | `request_id` | — | `request_id` | Zie idempotentie. Chat: impliciet per toolaanroep. Web: verplicht. |
 | rond_plaats | `--rond-plaats` | `rond_plaats` | `rond_plaats` | — | Lus rond een plaats (landmark). |
 | langs_water | `--langs-water` | `langs_water` | `langs_water` | — | Waterloop of water langs de route. |
-| heuvels | — | `heuvels` | `heuvels` | — | `null` = onbekend; zoek, ok of vlak. CLI: via `lus profile set`. |
-| ondergrond | — | `ondergrond` | `ondergrond` | — | `null` = onbekend; verhard, ok of onverhard. CLI: via `lus profile set`. |
+| heuvels | `--heuvels` | `heuvels` | `heuvels` | — | `null` = onbekend (vlag weglaten); zoek, ok of vlak. |
+| ondergrond | `--ondergrond` | `ondergrond` | `ondergrond` | — | `null` = onbekend (vlag weglaten); verhard, ok of onverhard. |
+| check_readiness | `--check-readiness` | — | — | — | CLI: standaard uit. MCP, chat en web sturen altijd `true`. |
 
 Bewuste verschillen:
 
 - `check_readiness`: MCP, chat en web sturen altijd `true` (vragen via
-  `needs_input`); de CLI laat het uit en gebruikt `readiness` als aparte stap.
+  `needs_input`); de CLI laat het standaard uit en gebruikt `readiness` als
+  aparte stap, of zet het aan met `--check-readiness`.
 - Het webformulier toont enkel een beperkte set; alle andere wensen lopen via
   de chat.
 - Een `null`-voorkeur is onbekend, `ok` is expliciet onverschillig. Geef geen
@@ -67,21 +69,22 @@ CLI: `lus adjust-route <id>`. MCP/chat: `adjust_route`. Web:
 | verwijder_klimmen | `--verwijder-klim` | `verwijder_klimmen` | `verwijder_klimmen` | `verwijder_klimmen` | Lijst. |
 | vermijd_plaatsen | `--vermijd-plaats` | `vermijd_plaatsen` | `vermijd_plaatsen` | `vermijd_plaatsen` | Lijst. |
 | niet_meer_vermijden | `--niet-meer-vermijden` | `niet_meer_vermijden` | `niet_meer_vermijden` | — | Lijst. |
-| sta_plaatsen_toe | `--sta-plaats-toe` | `sta_plaatsen_toe` | — | `sta_plaatsen_toe` | Passage die expliciet oké is. Het chatschema (`additionalProperties: false`) kent dit veld niet. |
+| sta_plaatsen_toe | `--sta-plaats-toe` | `sta_plaatsen_toe` | `sta_plaatsen_toe` | `sta_plaatsen_toe` | Passage die expliciet oké is. Lijst, max. 12 in chat. |
 | max_km | `--max-km` | `max_km` | `max_km` | — | Web: afgeleid, `target_km + 3`. |
 | target_km | `--target-km` | `target_km` | `target_km` | `target_km` | Web: getal. |
 | tolerance_km | `--tolerance-km` | `tolerance_km` | `tolerance_km` | — | Leeg = bestaande waarde. |
 | doel | `--doel` | `doel` | `doel` | `doel` | Leeg = bestaande waarde. Web gebruikt `hm` voor hoogtemeters. |
 | geen_opvulling | `--geen-opvulling` | `geen_opvulling` | `geen_opvulling` | — | Leeg = bestaande waarde. |
-| profiel_naam | `--profiel-naam` | `profiel_naam` | — | — | Leeg = profiel van de draft. |
+| profiel_naam | `--profiel-naam` | `profiel_naam` | `profiel_naam` | — | Leeg = profiel van de draft. |
 | expected_revision | `--expected-revision` | `expected_revision` | `expected_revision` | `expected_revision` | Zie revisies. Web: geheel getal. |
 | rond_plaats | `--rond-plaats` | `rond_plaats` | `rond_plaats` | `rond_plaats` | |
 | langs_water | `--langs-water` | `langs_water` | `langs_water` | `langs_water` | |
+| request_id | — | `request_id` | — | `request_id` | Optioneel; zie idempotentie. Chat: impliciet per toolaanroep (hash van beurt en argumenten). Web: scope `adjust:{draft_id}`. De CLI geeft geen request-id door. |
 
 Bewuste verschillen:
 
-- `adjust_route` heeft geen `request_id`: het is idempotent via de revisie
-  (`expected_revision`), niet via een receipt.
+- `adjust_route` is idempotent via de revisie (`expected_revision`) en, wanneer
+  een `request_id` meekomt, ook via een receipt (zie idempotentie).
 - Web gebruikt `check_readiness=false` (een UI-bewerking stelt geen vragen);
   MCP en chat gebruiken `true`.
 - Web stelt `max_km` altijd ruim in zodat een nieuwe `target_km` niet botst met
@@ -120,6 +123,8 @@ Terugweg vanaf de huidige positie binnen een resterend budget. CLI:
 | request_id | — | `request_id` | — | `request_id` | Chat: impliciet. Web: verplicht. De CLI geeft geen request-id door. |
 
 De locatie moet binnen 2 km van de route liggen, anders volgt een `bad_request`.
+Web: een revisieconflict geeft 409 `route_conflict`, een locatie buiten de
+dekking 422 `buiten_gebied`.
 
 ## update_profile
 
@@ -154,8 +159,8 @@ er misging.
 |---|---|---|---|
 | `buiten_gebied` | 422 | Start, anker of via-punt ligt buiten de gemeten dekking van de pack. Payload bevat `error`, `code`, `dekking` en optioneel `punt`. | Alle interfaces: CLI/chat/web als payload, MCP als JSON-tekst in de toolfout. |
 | `quota_exceeded` | 429 | Daglimiet voor chat, routes, tokens, feedback of regio's bereikt. Header `Retry-After` in seconden. | Web (route_plan, route_adjust, answers, reroute, chat); in MCP/CLI enkel wanneer quota's aan staan. |
-| `request_conflict` | 409 | Dezelfde `request_id` is al gebruikt voor een andere opdracht, of het eerdere verzoek is nog bezig of onderbroken. | Web: plan, answers, chat. Reroute geeft 409 zonder specifieke code (`bad_request`). |
-| `route_conflict` | 409 | `expected_revision` komt niet overeen met de huidige draft (of de draft is gewijzigd). | Web: adjust en `PATCH /api/routes/{draft_id}`. |
+| `request_conflict` | 409 | Dezelfde `request_id` is al gebruikt voor een andere opdracht, of het eerdere verzoek is nog bezig of onderbroken. | Web: plan, adjust, answers, reroute, chat. |
+| `route_conflict` | 409 | `expected_revision` komt niet overeen met de huidige draft (of de draft is gewijzigd). | Web: adjust, reroute en `PATCH /api/routes/{draft_id}`. |
 | `route_not_found` | 404 | Onbekende `draft_id`. | Web. |
 | `chat_failed` | 422 | De chatagent kon het bericht niet afronden. | Web. |
 | `model_unavailable` | 502 | Bedrock niet beschikbaar of niet geactiveerd. | Web. |
@@ -182,10 +187,12 @@ gecontroleerd.
 
 - `plan_route` (motor): een `request_id` zoekt een bestaande draft; dezelfde
   routewens hervat die draft, een andere routewens geeft een `IntentError`.
-  Formaat motor en MCP: begint met letter of cijfer, daarna letters, cijfers,
-  `.`, `_`, `:` of `-`, max. 128 tekens.
-- Webreceipts (`requests.once`): web-plan (scope `quick-plan`), `answers`,
-  `reroute` en chatberichten (scope `chat:{conversation_id}`) schrijven een
+  Formaat motor: begint met letter of cijfer, daarna letters, cijfers, `.`, `_`,
+  `:` of `-`, max. 128 tekens. De MCP-tools (`plan_route`, `adjust_route`,
+  `reroute_from`) hanteren het strengere receiptformaat hieronder, zodat een
+  ongeldig id meteen met een duidelijke schemafout faalt.
+- Receipts (`requests.once`): web-plan (scope `quick-plan`), `answers`,
+  `reroute`, `adjust` (scope `adjust:{draft_id}`, ook in de motor voor MCP en chat) en chatberichten (scope `chat:{conversation_id}`) schrijven een
   persistent receipt in S3. Formaat: 8 tot 128 tekens `[A-Za-z0-9_-]`. Zelfde id
   met dezelfde invoer geeft het opgeslagen resultaat terug; zelfde id met
   andere invoer geeft `request_conflict`.
@@ -196,5 +203,7 @@ gecontroleerd.
   dan met een nieuw verzoeknummer opnieuw.
 - Lokaal (zonder S3-state) vallen receipts weg en blijft enkel de
   draft-idempotentie van `plan_route` over.
-- `adjust_route`, `update_profile` hebben geen verzoeknummer; `reroute_from` heeft
-  er een op MCP, chat (impliciet) en web, niet op de CLI.
+- `update_profile` heeft geen verzoeknummer; `adjust_route` en `reroute_from`
+  hebben er een op MCP, chat (impliciet) en web, niet op de CLI. Bij web-adjust
+  is `request_id` optioneel en telt `max_km` (afgeleid van de huidige lengte)
+  niet mee in de vergelijking.
