@@ -175,3 +175,25 @@ def test_graph_bbox_is_cached_per_gh_url():
             coverage.graph_bbox()
             coverage.graph_bbox()
             assert len(calls) == 1
+
+
+def test_a_point_without_roads_becomes_a_structured_out_of_area_error():
+    import io
+    import json
+    import urllib.error
+    from unittest import mock
+    from lusmaker import coverage, gh
+    body = json.dumps({"message": "Cannot find point 0: 50.6370193,3.0636696"}).encode()
+    error = urllib.error.HTTPError("http://gh/route", 400, "Bad Request", {}, io.BytesIO(body))
+    def opener(*_a, **_k):
+        raise error
+    with mock.patch.object(coverage, "graph_bbox", lambda: None):
+        try:
+            gh._post_request("/route", {}, opener=opener)
+            raise AssertionError("verwacht een fout")
+        except coverage.OutOfCoverage as exc:
+            assert isinstance(exc, gh.GhError)  # kandidaatlussen blijven dit overslaan
+            payload = exc.payload()
+            assert payload["code"] == "buiten_gebied"
+            assert payload["punt"]["lat"] == 50.6370193
+            assert "buiten het gebied" in payload["error"]

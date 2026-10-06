@@ -119,3 +119,32 @@ def check_point(point: dict, role: str = "startpunt", region=None) -> None:
         dekking(bbox, region),
         {"rol": role, "lat": lat, "lon": lon, "label": point.get("label")},
     )
+
+
+def unroutable_point(router_message: str, region=None):
+    """GraphHopper vond geen weg bij een punt: dat punt ligt buiten de graph.
+
+    De uitzondering is tegelijk ``OutOfCoverage`` (voor API, chat en CLI) en
+    ``gh.GhError`` (zodat lussen die kandidaten overslaan dat blijven doen).
+    """
+    import re
+    from .gh import GhError
+
+    class UnroutablePoint(OutOfCoverage, GhError):
+        pass
+
+    match = re.search(r"Cannot find point \d+: ([-\d.]+),([-\d.]+)", router_message)
+    punt = None
+    location = "Dit punt"
+    if match:
+        lat, lon = float(match.group(1)), float(match.group(2))
+        punt = {"rol": "routepunt", "lat": lat, "lon": lon}
+        location = f"Het punt ({lat:.4f}, {lon:.4f})"
+    region = region or config.current_region()
+    bbox = graph_bbox()
+    hint = f" {message(bbox, region)}" if bbox else ""
+    return UnroutablePoint(
+        f"{location} ligt buiten het gebied waar Ommeke wegen kent.{hint} Kies een plaats binnen dat gebied.",
+        dekking(bbox, region) if bbox else {"regio": region.slug},
+        punt,
+    )

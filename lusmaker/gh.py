@@ -94,6 +94,12 @@ def _post_request(path: str, body: dict, *, opener=urllib.request.urlopen) -> di
             msg = json.load(e).get("message", str(e))
         except Exception:
             msg = str(e)
+        if "Cannot find point" in msg:
+            # Een punt zonder wegen (bv. Rijsel valt binnen de bbox van het
+            # België-extract maar heeft geen wegen in de graph): toon dat als
+            # buiten_gebied i.p.v. een algemene fout.
+            from .coverage import unroutable_point
+            raise unroutable_point(msg) from e
         raise GhError(f"GraphHopper: {msg}") from e
     except urllib.error.URLError as e:
         raise GhError(
