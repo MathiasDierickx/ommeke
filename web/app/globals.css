@@ -428,6 +428,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .planner-questions .planner-submit { justify-self: start; }
 .planner-question { margin: 0; }
 .planner-question p { margin: 0 0 .5rem; line-height: 1.5; }
+.route-pending { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: #f5f8f3; }
+.route-pending h3, .route-pending p { margin: 0; }
+.route-pending .planner-question small { display: block; margin: -.25rem 0 .55rem; color: var(--muted); }
+.route-download-note { margin: -.35rem 0 1rem; color: var(--muted); font-size: .86rem; }
 .option-button { min-height: 44px; padding: .5rem .95rem; border: 1px solid var(--green); border-radius: 999px; color: var(--green-deep); background: white; font-weight: 600; cursor: pointer; }
 .quick-result { margin-top: .5rem; padding: 1.2rem; border-radius: 1.1rem; background: #edf4eb; }
 .quick-result h3 { margin: 0 0 .3rem; font: 400 1.6rem/1.15 var(--font-serif), Georgia, serif; }

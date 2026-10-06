@@ -9,6 +9,16 @@ from starlette.requests import Request
 from lusmaker import aws_api, aws_chat, intents
 
 
+def test_route_detail_payload_returns_saved_questions_only_for_pending_routes():
+    questions = [{"id": "heuvels", "vraag": "Hoeveel heuvels?", "reden": "Onbekend", "opties": {"zoek": {}, "vlak": {}}}]
+    item = {"id": "abc123", "revision": 1, "name": "Concept", "computed": None,
+            "route_request": {"target_km": 60}, "open_vragen": questions}
+    payload = aws_api._route_detail_payload(item)
+    assert payload["vragen"] == questions and payload["ready"] is False
+    item["computed"] = {"total_km": 60, "ascend_m": 500}
+    assert aws_api._route_detail_payload(item)["vragen"] == []
+
+
 def _plan_calls(user_text, arguments, *, via_agent=False):
     calls = []
 

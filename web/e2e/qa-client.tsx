@@ -18,6 +18,7 @@ export function QaClient() {
       onRename={async name => setRoute(current => ({ ...current, name }))}
       onDelete={async () => setEvent("Verwijderen aangevraagd")}
       onAdjust={async values => { if (conflict) { setEvent("De route is intussen gewijzigd. Laad opnieuw."); return; } setRoute(current => ({ ...current, total_km: values.target_km ?? current.total_km, revision: current.revision + 1 })); setEvent("Route aangepast"); }}
+      onAnswers={async () => { setRoute(current => ({ ...current, ready: true, total_km: 30, revision: current.revision + 1 })); setEvent("Antwoorden toegepast"); }}
       onLoadClimbs={async () => []}
       onShare={async () => { setRoute(current => ({ ...current, shared: true })); return { token: "fixture", url: "http://127.0.0.1:3017/qa-local" }; }}
       onUnshare={async () => { setRoute(current => ({ ...current, shared: false })); setEvent("Delen gestopt"); }}

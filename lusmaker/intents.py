@@ -477,6 +477,7 @@ def _needs_input(
     probe_fn,
     assess_fn,
     profile_load_fn,
+    save_fn=None,
 ) -> dict | None:
     from .progress import emit
     emit("checking", "Ik controleer de ondergrond, drukke wegen en je voorkeuren.")
@@ -485,7 +486,11 @@ def _needs_input(
         d, _profile_for_request(request, profile_load_fn), climb_db
     )
     if assessment["klaar"]:
+        d.pop("open_vragen", None)
         return None
+    d["open_vragen"] = assessment["vragen"]
+    if save_fn is not None:
+        save_fn(d)
     return {
         "status": "needs_input",
         "draft": d["id"],
@@ -913,6 +918,7 @@ def plan_route(
                     probe_fn=probe_fn,
                     assess_fn=assess_fn,
                     profile_load_fn=profile_load_fn,
+                    save_fn=save_fn,
                 )
                 if needs_input is not None:
                     return needs_input
@@ -993,6 +999,7 @@ def plan_route(
                 probe_fn=probe_fn,
                 assess_fn=assess_fn,
                 profile_load_fn=profile_load_fn,
+                save_fn=save_fn,
             )
             if needs_input is not None:
                 return needs_input
@@ -1281,6 +1288,7 @@ def adjust_route(
                 probe_fn=probe_fn,
                 assess_fn=assess_fn,
                 profile_load_fn=profile_load_fn,
+                save_fn=save_fn,
             )
             if needs_input is not None:
                 return needs_input

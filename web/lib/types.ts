@@ -32,6 +32,7 @@ export type RouteConstraints = {
 };
 
 export type Route = {
+  vragen?: import("./question-labels").RouteQuestion[];
   constraints?: RouteConstraints;
   shared?: boolean;
   id: string;

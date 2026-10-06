@@ -243,6 +243,7 @@ def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
     result["route_request"] = item.get("route_request") or {}
     result["computed"] = item.get("computed")
     result["geometry"] = _route_geometry(item) if result["ready"] else None
+    result["vragen"] = (item.get("open_vragen") or []) if not result["ready"] and item.get("route_request") else []
     return result
 
 

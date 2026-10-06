@@ -352,6 +352,17 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     }
   };
 
+  const answerRoute = async (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => {
+    if (!session || !selectedRoute) return;
+    setError(undefined);
+    await apiStream(`/api/routes/${encodeURIComponent(selectedRoute.id)}/answers/stream`, session.accessToken, {
+      antwoorden: answers,
+      request_id: crypto.randomUUID(),
+    }, onProgress);
+    await loadRoute(selectedRoute.id, session.accessToken);
+    await loadWorkspace(session.accessToken);
+  };
+
   const loadNearbyClimbs = async (): Promise<NearbyClimb[]> => {
     if (!session || !selectedRoute) return [];
     try {
@@ -424,7 +435,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }

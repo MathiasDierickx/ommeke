@@ -5,27 +5,13 @@ import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiRequest, apiStream } from "@/lib/api";
 import { isOutOfCoverage } from "@/lib/interaction";
+import { optionLabel, type RouteQuestion } from "@/lib/question-labels";
 
-type Question = { id?: string; vraag: string; opties: Record<string, unknown> };
+type Question = RouteQuestion;
 // Kant-en-klaar voorstel van de backend (lusmaker/proposals.py): de argumenten gaan ongewijzigd naar /adjust.
 type Proposal = { titel: string; uitleg: string; adjust_route: { voeg_klimmen_toe?: string[]; rond_plaats?: string; langs_water?: string; target_km?: number } };
 type Result = { voorstellen?: Proposal[]; aangepast?: string; km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
 
-// Leesbare knoppen voor de situationele vragen (sleutels uit lusmaker/questions.py).
-const OPTION_LABELS: Record<string, Record<string, string>> = {
-  kasseien: { graag: "Graag kasseien", vermijd: "Liever geen kasseien" },
-  heuvels: { zoek: "Graag heuvels", vlak: "Liever vlak" },
-  ondergrond: { verhard: "Liever verhard", onverhard: "Graag onverhard" },
-  fietspaden: { belangrijk: "Liefst op fietspaden" },
-  oversteken: { vermijd: "Liever weinig oversteken" },
-};
-function optionLabel(question: Question, option: string): string {
-  if (option === "ok") return "Maakt niet uit";
-  const label = question.id ? OPTION_LABELS[question.id]?.[option] : undefined;
-  if (label) return label;
-  const text = option.replaceAll("_", " ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
 type Activity = { value: string; label: string; verb: string; km: number; max: number };
 
 // Waarden volgen lusmaker/activities.py; afstanden zijn een redelijke start per activiteit.

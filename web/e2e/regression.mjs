@@ -273,6 +273,33 @@ test("routepagina: toetsenbord, focus en namen", async ({ page, url, vp }) => {
   expectNoStrays(state, "routepagina");
 });
 
+test("routeconcept met vragen afmaken vanaf routepagina", async ({ page, url }) => {
+  const questions = [
+    { id: "heuvels", vraag: "Hoeveel heuvels wil je?", reden: "Je voorkeur is nog onbekend.", opties: { zoek: {}, ok: {}, vlak: {} } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: {}, ok: {}, onverhard: {} } },
+  ];
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: s.route }),
+    "POST /api/routes/r1/answers/stream": ({ body, state: s }) => {
+      assert.deepEqual(body.antwoorden, { heuvels: "zoek", ondergrond: "verhard" });
+      assert.match(body.request_id, /^[A-Za-z0-9_-]{8,128}$/);
+      s.route = { ...s.route, ready: true, vragen: [], total_km: 60, geometry: { points: [[50, 3]], climbs: [], start: null }, revision: s.route.revision + 1 };
+      return sse([["progress", { stage: "routing", message: "Route berekenen" }], ["result", { status: "ready", draft: "r1" }]]);
+    },
+  } });
+  state.route = { ...state.route, ready: false, total_km: null, elevation_gain_m: null, download_url: null,
+    constraints: { doel_km: 60, maximum_is_hard: true, maximum_km: 63, waarschuwingen: [] }, vragen: questions };
+  await openRoute(page, url);
+  await page.getByText("Deze route wacht nog op je keuzes").waitFor();
+  await page.getByRole("radio", { name: "Graag heuvels" }).check();
+  await page.getByRole("radio", { name: "Liever verhard" }).check();
+  await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
+  await page.getByRole("button", { name: "Download GPX" }).waitFor();
+  assert.ok(state.calls.filter(call => call.key === "GET /api/routes/r1").length >= 2, "detailroute na antwoorden opnieuw geladen");
+  assert.deepEqual(state.calls.map(call => call.key).filter(key => key.includes("answers/stream")), ["POST /api/routes/r1/answers/stream"]);
+  expectNoStrays(state, "routeconcept afmaken");
+});
+
 test("route laden: foutmelding wordt aangekondigd", async ({ page, url }) => {
   const state = await installBackend(page, { handlers: { "GET /api/routes/r1": () => json(404, { error: "Route niet gevonden." }) } });
   await page.goto(`${url}/routes/r1/`, { waitUntil: "domcontentloaded" });
