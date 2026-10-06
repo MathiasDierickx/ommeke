@@ -115,6 +115,28 @@ opnieuw routeren. Enkel beschikbaar via de web-API
 
 De motor kent ook `expected_revision`; de web-endpoint geeft die niet door.
 
+## Voorstellen in de webchat
+
+`GET /api/routes/{draft_id}` geeft in `route.voorstellen` de actuele voorstellen
+terug (altijd een lijst, leeg bij een concept of wanneer niets past). Deze worden
+zonder routercalls opgebouwd uit de huidige draft en routewensen. De compacte
+routebibliotheek bevat ze niet; de chat haalt het routedetail op voor genoemde
+routes waarvoor de voorstellen nog ontbreken, ook na het herladen van een gesprek.
+
+Elk voorstel bevat `titel`, `uitleg` en `adjust_route` met de exacte argumenten.
+Chat en snelle planner gebruiken dezelfde voorstelcomponent: klikken doet
+`POST /api/routes/{draft_id}/adjust` met die argumenten en een `request_id`.
+De respons bevat het bijgewerkte `route.voorstellen` en behoudt het bestaande
+optionele top-level `voorstellen`. Een lege lijst vervangt alle oude voorstellen.
+De chat toont voorstelknoppen alleen bij het laatste assistentbericht voor die
+route en ververst de routekaart met de teruggegeven route.
+
+In de web-chatcontext worden bestandsvelden (`file`, `gpx`, `preview`, `fit`,
+`bestanden`, `artifacts`, `path`, `filename`) recursief uit toolresultaten verwijderd;
+interne paden in tekst worden geredigeerd. De oorspronkelijke toolresultaten en
+CLI-/MCP-contracten blijven behouden. Het model verwijst voor downloads naar
+“Download GPX/FIT” op de routekaart en beschrijft voorstellen zonder toolsyntaxis.
+
 ## reroute_from
 
 Terugweg vanaf de huidige positie binnen een resterend budget. CLI:

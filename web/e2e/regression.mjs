@@ -624,6 +624,132 @@ const startplaatsQuestion = {
   },
 };
 
+test("chat: voorstel toepassen via knop", async ({ page, url }) => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const conversation = { id: "c1", title: "Racefiets vanaf Kluisbos" };
+  const content = 'Je route is klaar. Nog iets toevoegen?\n- GPX: [/tmp/lusmaker/exports/r1/route.gpx]\n- Preview: [/tmp/lusmaker/exports/r1/preview.html]\n1. Voeg Chemin du Bois toe `adjust_route(voeg_klimmen_toe=["auto-chemin-du-bois"], target_km=55)`';
+  const oldMessage = { id: "old", conversation_id: "c1", role: "assistant", content, created_at: "2026-10-06", route_ids: ["r1"] };
+  const newMessage = { ...oldMessage, id: "new" };
+  let messages = [oldMessage];
+  const proposal = { titel: "Voeg Chemin du Bois toe", uitleg: "Ongeveer 2,1 km extra voor 40 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["auto-chemin-du-bois"], target_km: 55 } };
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes": ({ state: s }) => {
+      const { voorstellen, ...compact } = s.route;
+      return json(200, { routes: [compact] });
+    },
+    "GET /api/conversations/c1/messages": () => json(200, { conversation, messages }),
+    "POST /api/conversations/c1/messages/stream": () => {
+      messages = [oldMessage, newMessage];
+      return sse([["result", { message: newMessage, route_ids: ["r1"] }]]);
+    },
+    "POST /api/routes/r1/adjust": async ({ body, state: s }) => {
+      assert.deepEqual(body.voeg_klimmen_toe, ["auto-chemin-du-bois"]);
+      assert.equal(body.target_km, 55);
+      assert.match(body.request_id, /^[A-Za-z0-9_-]{8,128}$/);
+      await gate;
+      s.route = { ...s.route, total_km: 54.1, revision: 2, voorstellen: [] };
+      return json(200, { route: s.route });
+    },
+  } });
+  state.route = { ...state.route, total_km: 52, voorstellen: [proposal] };
+  await page.goto(`${url}/chats/c1`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: proposal.titel, exact: true }).waitFor();
+  assert.ok(state.calls.some(c => c.key === "GET /api/routes/r1"), "voorstellen opgehaald via routedetail");
+  await page.getByLabel("Bericht aan Lus").fill("Wat kan ik nog toevoegen?");
+  await page.getByRole("button", { name: "Verstuur bericht" }).click();
+  await page.locator(".message-assistant").nth(1).waitFor();
+  const group = page.getByRole("group", { name: "Voorstellen voor je route" });
+  await group.getByRole("button", { name: proposal.titel, exact: true }).waitFor();
+  assert.equal(await group.count(), 1, "alleen het laatste bericht toont voorstellen");
+  assert.equal(await page.locator(".message-assistant").first().locator(".quick-proposals").count(), 0);
+  assert.equal(await page.locator(".option-chips").count(), 0, "geen geraden voorstellen of bestandsknoppen");
+  assert.match(await group.innerText(), /2,1 km extra voor 40 hoogtemeters/);
+  for (const label of await page.locator(".messages button").allTextContents()) assert.doesNotMatch(label, /\/tmp|adjust_route|`/);
+  const before = actionCalls(state);
+  await group.getByRole("button", { name: proposal.titel, exact: true }).click();
+  await page.getByRole("status").filter({ hasText: "Ik voeg Chemin du Bois toe en bereken je route opnieuw." }).waitFor();
+  assert.equal(await group.getByRole("button").isDisabled(), true);
+  release();
+  await page.locator(".route-made").last().getByText("54,1 km · bekijk kaart en downloads").waitFor();
+  assert.equal(await group.count(), 0, "oude voorstellen verdwenen na aanpassing");
+  assert.equal(actionCalls(state), before + 1, "voorstel doet alleen één adjust-POST");
+  const calls = state.calls.filter(c => c.key === "POST /api/routes/r1/adjust");
+  assert.equal(calls.length, 1);
+  const { request_id, ...body } = calls[0].body;
+  assert.deepEqual(body, proposal.adjust_route);
+  assert.equal(state.calls.filter(c => c.key.endsWith("messages/stream")).length, 1);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.locator(".route-made").last().getByText("54,1 km · bekijk kaart en downloads").waitFor();
+  assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0);
+  expectNoStrays(state, "chatvoorstel");
+});
+
+test("chat: open vragen als knoppen beantwoorden", async ({ page, url }) => {
+  const conversation = { id: "c1", title: "Racefiets vanaf Kluisbos" };
+  const oldMessage = { id: "old", conversation_id: "c1", role: "assistant", content: "Welke plek?\n0. **Kluisbos (Buizingen)** – lat 50.73 lon 4.26\n1. _Kluisbos_", created_at: "2026-10-06", route_ids: ["r1"] };
+  const questions = [
+    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: {}, ok: {}, onverhard: {} } },
+    { id: "heuvels", vraag: "Zoek je heuvels?", opties: { zoek: {}, ok: {}, vlak: {} } },
+    { id: "fietspaden", vraag: "Wil je fietspaden?", opties: { belangrijk: {}, ok: {} } },
+  ];
+  let release;
+  const refreshed = new Promise(resolve => { release = resolve; });
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes/r1": async ({ state: s }) => {
+      if (s.route.ready) await refreshed;
+      return json(200, { route: s.route });
+    },
+    "GET /api/conversations/c1/messages": () => json(200, { conversation, messages: [oldMessage] }),
+    "POST /api/conversations/c1/messages/stream": () => sse([["result", { message: { ...oldMessage, id: "new" }, route_ids: ["r1"] }]]),
+    "POST /api/routes/r1/answers/stream": async ({ body, state: s }) => {
+      assert.match(body.request_id, /^[A-Za-z0-9_-]{8,128}$/);
+      if (s.route.vragen[0].id === "startplaats") {
+        assert.deepEqual(body.antwoorden, { startplaats: "0" });
+        s.route = { ...s.route, vragen: questions, revision: 2 };
+        return sse([["result", { status: "needs_input", draft: "r1" }]]);
+      }
+      assert.deepEqual(body.antwoorden, { ondergrond: "verhard", heuvels: "ok", fietspaden: "belangrijk" });
+      s.route = { ...s.route, ready: true, vragen: [], total_km: 50, revision: 3 };
+      return sse([["progress", { stage: "routing", message: "Je keuzes worden verwerkt." }], ["result", { status: "ready", draft: "r1" }]]);
+    },
+  } });
+  state.route = { ...state.route, ready: false, total_km: null, vragen: [startplaatsQuestion] };
+  await page.goto(`${url}/chats/c1`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("radio", { name: "Kluisbos (Kluisbergen)", exact: true }).waitFor();
+  await page.getByLabel("Bericht aan Lus").fill("racefiets 50 km vanaf Kluisbos");
+  await page.getByRole("button", { name: "Verstuur bericht" }).click();
+  await page.locator(".message-assistant").nth(1).waitFor();
+  assert.equal(await page.locator(".route-pending").count(), 1, "alleen het laatste bericht toont open vragen");
+  assert.equal(await page.locator(".message-assistant").first().locator(".route-pending").count(), 0);
+  assert.equal(await page.locator(".option-chips").count(), 0, "geen geraden modelopties bij gestructureerde vragen");
+  for (const label of await page.locator(".messages button, .messages .choice-chip").allTextContents()) {
+    assert.doesNotMatch(label, /\*\*|\blat\b/);
+  }
+  const before = actionCalls(state);
+  await page.getByRole("radio", { name: "Kluisbos (Kluisbergen)", exact: true }).check();
+  assert.equal(actionCalls(state), before, "een keuze maken verstuurt niets");
+  await page.getByRole("button", { name: "Route berekenen", exact: true }).click();
+  await page.getByRole("radiogroup", { name: "Welke ondergrond?" }).waitFor();
+  const go = page.getByRole("button", { name: "Route berekenen", exact: true });
+  assert.equal(await go.isDisabled(), true);
+  await page.getByRole("radio", { name: "Liever verhard" }).check();
+  await page.getByRole("radiogroup", { name: "Zoek je heuvels?" }).getByRole("radio", { name: "Maakt niet uit" }).check();
+  assert.equal(await go.isDisabled(), true);
+  await page.getByRole("radio", { name: "Liefst op fietspaden" }).check();
+  await go.click();
+  await page.getByRole("status").filter({ hasText: "Je keuzes worden verwerkt." }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Route wordt berekend…", exact: true }).isDisabled(), true);
+  release();
+  await page.locator(".route-made").last().getByText("50 km · bekijk kaart en downloads").waitFor();
+  assert.equal(await page.locator(".route-pending").count(), 0);
+  const calls = state.calls.filter(c => c.key.endsWith("answers/stream"));
+  assert.equal(calls.length, 2, "één POST per reeks vragen");
+  assert.notEqual(calls[0].body.request_id, calls[1].body.request_id);
+  assert.equal(state.calls.filter(c => c.key.endsWith("messages/stream")).length, 1, "knopantwoorden gebruiken geen chatmodel");
+  expectNoStrays(state, "chatvragen");
+});
+
 test("snelle planner: startplaats kiezen vóór vervolgvragen", async ({ page, url }) => {
   const state = await installBackend(page, { handlers: {
     "POST /api/routes/stream": () => sse([["result", { status: "needs_input", draft: "d1", vragen: [startplaatsQuestion] }]]),

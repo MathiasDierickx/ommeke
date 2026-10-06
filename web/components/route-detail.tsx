@@ -4,9 +4,8 @@ import { ArrowDownToLine, ArrowLeft, Bike, Check, Copy, Footprints, LoaderCircle
 import { useEffect, useMemo, useState } from "react";
 
 import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, SharedRoute } from "@/lib/types";
-import { optionLabel, type RouteQuestion } from "@/lib/question-labels";
+import { RouteQuestions } from "./route-questions";
 import type { ProgressEvent } from "@/lib/event-stream";
-import { RouteProgress } from "./route-progress";
 import { activityKind, activityLabel } from "@/lib/route-library";
 import { Logo } from "./brand";
 import { OfflineRoute } from "./offline-route";
@@ -124,8 +123,6 @@ export function RouteDetail({
   const [feedback, setFeedback] = useState("bruikbaar");
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [answerProgress, setAnswerProgress] = useState<ProgressEvent | null>(null);
   useEffect(() => {
     setName(route?.name || "");
     setEditing(false);
@@ -133,7 +130,6 @@ export function RouteDetail({
     setNearbyClimbs([]);
     setShareUrl(undefined);
   }, [route?.id, route?.name]);
-  useEffect(() => { setAnswers({}); setAnswerProgress(null); }, [route?.id, route?.revision]);
 
   const adjust = async (value: RouteAdjustment) => {
     if (adjusting) return;
@@ -178,30 +174,10 @@ export function RouteDetail({
             <span className="activity-tag">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}{activityLabel(route.activity)}</span>
           </div>
           <p className="route-origin">Vertrek vanuit {route.start || route.geometry?.start?.label || "je gekozen startpunt"}</p>
-          {!route.ready ? <section className="route-pending" aria-labelledby="route-pending-title">
-            <h3 id="route-pending-title">{route.vragen?.length ? "Deze route wacht nog op je keuzes" : "Deze route is nog niet berekend"}</h3>
-            {route.vragen?.length ? <>
-              {route.vragen.map((question: RouteQuestion) => <div className="planner-question" role="radiogroup" aria-label={question.vraag} key={question.id || question.vraag}>
-                <p>{question.vraag}</p>{question.reden ? <small>{question.reden}</small> : null}
-                <div className="goal-options">{Object.keys(question.opties).map(option => <label key={option} className="choice-chip choice-chip-quiet">
-                  <input type="radio" name={`route-vraag-${route.id}-${question.id || question.vraag}`} value={option} checked={answers[question.id || question.vraag] === option} onChange={() => setAnswers(current => ({ ...current, [question.id || question.vraag]: option }))} />
-                  <span>{optionLabel(question, option)}</span>
-                </label>)}</div>
-              </div>)}
-              <button className="button button-primary" disabled={adjusting || route.vragen.some(q => !answers[q.id || q.vraag])} onClick={async () => {
-                if (adjusting || !route.vragen) return;
-                setAdjusting(true); setAnswerProgress(null);
-                try {
-                  await onAnswers(Object.fromEntries(route.vragen.map(q => [q.id || q.vraag, answers[q.id || q.vraag]])), setAnswerProgress);
-                  setAnswers({});
-                }
-                finally { setAdjusting(false); }
-              }}>{adjusting ? "Route wordt berekend…" : "Maak mijn route met deze keuzes"}</button>
-              {adjusting || answerProgress ? <RouteProgress event={answerProgress} /> : null}
-            </> : <>
-              <p>Er zijn geen open vragen. Je route wordt berekend met de opgeslagen afstand.</p>
-              <button className="button button-primary" disabled={adjusting || !route.constraints?.doel_km} onClick={() => void adjust({ target_km: route.constraints?.doel_km ?? undefined })}>{adjusting ? "Route wordt berekend…" : "Route berekenen"}</button>
-            </>}
+          {!route.ready && route.vragen?.length ? <RouteQuestions route={route} onAnswers={onAnswers} onBusyChange={setAdjusting} disabled={adjusting} submitLabel="Maak mijn route met deze keuzes" /> : !route.ready ? <section className="route-pending" aria-labelledby="route-pending-title">
+            <h3 id="route-pending-title">Deze route is nog niet berekend</h3>
+            <p>Er zijn geen open vragen. Je route wordt berekend met de opgeslagen afstand.</p>
+            <button className="button button-primary" disabled={adjusting || !route.constraints?.doel_km} onClick={() => void adjust({ target_km: route.constraints?.doel_km ?? undefined })}>{adjusting ? "Route wordt berekend…" : "Route berekenen"}</button>
           </section> : null}
           <StatGrid route={route} />
           <ElevationSparkline values={route.geometry?.elevation} />

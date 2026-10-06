@@ -142,3 +142,21 @@ def test_adjust_uses_existing_distance_goal_for_maximum_without_new_target():
     assert seen[0]["target_km"] is None  # intents gebruikt het opgeslagen doel
     assert seen[0]["max_km"] == 63
     assert seen[0]["voeg_klimmen_toe"] == ["molenberg"]
+
+
+def test_route_detail_exposes_current_router_free_proposals_only_when_ready():
+    seen = []
+    proposal = {"titel": "Voeg Chemin toe", "uitleg": "2 km extra", "adjust_route": {"voeg_klimmen_toe": ["chemin"], "target_km": 55}}
+    item = {"id": "abc123", "revision": 1, "name": "Concept", "computed": None,
+            "route_request": {"target_km": 50}}
+
+    def build(current):
+        seen.append(current["revision"])
+        return [proposal]
+
+    assert aws_api._route_detail_payload(item, proposals_fn=build)["voorstellen"] == []
+    assert seen == []
+    item["computed"] = {"total_km": 50, "ascend_m": 40}
+    item["revision"] = 2
+    assert aws_api._route_detail_payload(item, proposals_fn=build)["voorstellen"] == [proposal]
+    assert seen == [2]

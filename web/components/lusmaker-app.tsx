@@ -18,7 +18,7 @@ import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
 import { clearStored, currentSession, signOut } from "@/lib/cognito";
 import { clearOffline, registerOfflineWorker, storeRoute } from "@/lib/offline-routes";
 import { safeFilename, saveBlob } from "@/lib/save-file";
-import type { AuthSession, ChatMessage, Conversation, NearbyClimb, Route, RouteAdjustment } from "@/lib/types";
+import type { AuthSession, ChatMessage, Conversation, NearbyClimb, ProposalResult, Route, RouteAdjustment } from "@/lib/types";
 
 export type WorkspaceView =
   | { kind: "new" }
@@ -113,6 +113,28 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!session) return;
     loadWorkspace(session.accessToken).catch((cause) => { setWorkspaceLoaded(true); setError(cause instanceof Error ? cause.message : "Werkruimte laden mislukt."); });
   }, [session, loadWorkspace]);
+
+  // De bibliotheek heeft compacte metadata; voorstellen horen bij het actuele routedetail.
+  const proposalDetails = JSON.stringify([...new Set(messages.filter(message => message.role === "assistant").flatMap(message => message.route_ids ?? []))]
+    .filter(id => { const route = routes.find(route => route.id === id); return !route || (route.ready && route.voorstellen === undefined); }));
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    const ids: string[] = JSON.parse(proposalDetails);
+    void Promise.all(ids.map(async id => {
+      try {
+        const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(id)}`, session.accessToken);
+        if (active) setRoutes(current => mergeById(current, [{ ...data.route, voorstellen: data.route.voorstellen ?? [] }]));
+      } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : "Voorstellen laden mislukt."); }
+    }));
+    return () => { active = false; };
+  }, [proposalDetails, session]);
+
+  const proposalApplied = (data: ProposalResult) => {
+    const route = { ...data.route, voorstellen: data.voorstellen ?? data.route.voorstellen ?? [] };
+    setRoutes(current => mergeById(current, [route]));
+    setSelectedRoute(current => current?.id === route.id ? route : current);
+  };
 
   // Bij het openen van de app (volledige page-load) landt een ingelogde
   // gebruiker meteen op zijn meest recente route i.p.v. het lege startscherm.
@@ -368,15 +390,20 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     }
   };
 
-  const answerRoute = async (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => {
-    if (!session || !selectedRoute) return;
+  const answerChatRoute = async (routeId: string, answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => {
+    if (!session) return;
     setError(undefined);
-    await apiStream(`/api/routes/${encodeURIComponent(selectedRoute.id)}/answers/stream`, session.accessToken, {
+    await apiStream(`/api/routes/${encodeURIComponent(routeId)}/answers/stream`, session.accessToken, {
       antwoorden: answers,
       request_id: crypto.randomUUID(),
     }, onProgress);
-    await loadRoute(selectedRoute.id, session.accessToken);
-    await loadWorkspace(session.accessToken);
+    const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, session.accessToken);
+    setRoutes(current => mergeById(current, [data.route]));
+    setSelectedRoute(current => current?.id === routeId ? data.route : current);
+  };
+
+  const answerRoute = async (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => {
+    if (selectedRoute) await answerChatRoute(selectedRoute.id, answers, onProgress);
   };
 
   const loadNearbyClimbs = async (): Promise<NearbyClimb[]> => {
@@ -470,7 +497,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <div className="messages">
           {!messages.length && !busy && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
           {!messages.length && !busy && !quickBusy && !quickHasResult ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
-          {messages.map((message) => <Message key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} onAnswers={answerChatRoute} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
           {orphan && !busy ? <div className="orphan-notice" role="status">
             {orphan.state === "running"
               ? <p>Je laatste vraag wordt nog verwerkt. Het antwoord verschijnt hier vanzelf; je hoeft niets opnieuw te versturen.</p>

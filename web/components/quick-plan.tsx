@@ -3,13 +3,13 @@ import { Bike, Footprints, LocateFixed, Minus, Plus } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
-import { apiRequest, apiStream } from "@/lib/api";
+import { apiStream } from "@/lib/api";
 import { isOutOfCoverage } from "@/lib/interaction";
 import { optionLabel, type RouteQuestion } from "@/lib/question-labels";
 
 type Question = RouteQuestion;
-// Kant-en-klaar voorstel van de backend (lusmaker/proposals.py): de argumenten gaan ongewijzigd naar /adjust.
-type Proposal = { titel: string; uitleg: string; adjust_route: { voeg_klimmen_toe?: string[]; rond_plaats?: string; langs_water?: string; target_km?: number } };
+import type { RouteProposal as Proposal } from "@/lib/types";
+import { RouteProposals } from "./route-proposals";
 type Result = { voorstellen?: Proposal[]; aangepast?: string; km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
 
 type Activity = { value: string; label: string; verb: string; km: number; max: number };
@@ -64,7 +64,6 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   // Op een laptopscherm valt de voortgang anders onder de vouw.
   useEffect(() => { if (busy) progressBox.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [busy]);
   const pending = useRef<{ signature: string; id: string } | null>(null);
-  const pendingProposal = useRef<{ signature: string; id: string } | null>(null);
   const lock = useRef(false);
 
   function chooseActivity(next: Activity) {
@@ -127,24 +126,6 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
-  async function applyProposal(proposal: Proposal) {
-    if (!result || lock.current) return;
-    const signature = JSON.stringify([result.draft, proposal.adjust_route]);
-    if (pendingProposal.current?.signature !== signature) pendingProposal.current = { signature, id: crypto.randomUUID() };
-    const action = proposal.titel.replace(/^Voeg\s+/i, "voeg ");
-    lock.current = true; onBusyChange?.(true); setProgress({ stage: "adjusting", message: `Ik ${action} en bereken je route opnieuw.` }); setBusy(true); setError("");
-    try {
-      const data = await apiRequest<{ route: { total_km?: number | null; constraints?: Result["constraints"] }; voorstellen?: Proposal[] }>(`/api/routes/${encodeURIComponent(result.draft)}/adjust`, token, { method: "POST", body: JSON.stringify({ ...proposal.adjust_route, request_id: pendingProposal.current.id }) });
-      pendingProposal.current = null;
-      // De oude voorstellen horen bij de oude route; de backend geeft verse terug (router-vrij).
-      setResult({ ...result, km: data.route.total_km ?? result.km, constraints: data.route.constraints ?? result.constraints, voorstellen: data.voorstellen ?? [], aangepast: proposal.titel });
-      onResultChange?.(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Het voorstel kon niet worden toegepast.");
-    }
-    finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
-  }
-
   const coordinates = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(start.trim());
   return <section className="planner" aria-labelledby="planner-title">
     <h2 id="planner-title" className="planner-title">Waar wil je {current.verb}?</h2>
@@ -203,13 +184,12 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
       <p>{typeof result.km === "number" ? `${result.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
       {result.aangepast ? <p className="quick-result-applied" role="status">Aangepast: {result.aangepast}.</p> : null}
       {result.constraints?.waarschuwingen.map(warning => <p className="route-result-warning" key={warning}>{warning}</p>)}
-      {result.voorstellen?.length ? <div className="quick-proposals" role="group" aria-label="Voorstellen voor je route">
-        <p className="quick-proposals-title">Zin om er iets aan toe te voegen?</p>
-        {result.voorstellen.map(proposal => <div className="quick-proposal" key={proposal.titel}>
-          <button className="quick-proposal-button" disabled={busy} onClick={() => void applyProposal(proposal)}>{proposal.titel}</button>
-          <small>{proposal.uitleg}</small>
-        </div>)}
-      </div> : null}
+      <RouteProposals routeId={result.draft} proposals={result.voorstellen} token={token} disabled={busy}
+        onProgress={setProgress} onBusyChange={value => { lock.current = value; setBusy(value); onBusyChange?.(value); }}
+        onApplied={(data, proposal) => {
+          setResult({ ...result, km: data.route.total_km ?? result.km, constraints: data.route.constraints ?? result.constraints, voorstellen: data.voorstellen ?? data.route.voorstellen ?? [], aangepast: proposal.titel });
+          onResultChange?.(true);
+        }} />
       <div className="quick-result-actions">
         <button className="planner-submit" onClick={() => onRoute(result.draft)}>Bekijk mijn route</button>
         <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>

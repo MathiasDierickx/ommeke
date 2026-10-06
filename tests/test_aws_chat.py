@@ -199,3 +199,48 @@ def test_iteration_limit_does_not_present_needs_input_as_ready():
     assert result['ready_route_ids'] == []
     assert 'nog niet klaar' in result['content']
     assert 'Je route staat klaar' not in result['content']
+
+
+def test_needs_input_prompt_refers_to_buttons_without_raw_answer_instructions():
+    assert "vat de meegegeven vragen samen in één of twee zinnen" in SYSTEM_PROMPT
+    assert "verwijs naar de knoppen" in SYSTEM_PROMPT
+    assert "geen indexnummers en geen coördinaten" in SYSTEM_PROMPT
+    assert "vraag nooit om sleutel = waarde te typen" in SYSTEM_PROMPT
+    assert "Vrije tekstantwoorden" in SYSTEM_PROMPT
+
+
+def test_web_chat_removes_internal_files_from_the_model_context():
+    from lusmaker.aws_chat import _clean_answer
+
+    output = {
+        "status": "ready", "draft": "abc123", "km": 49.6,
+        "bestanden": {"gpx": "/tmp/lusmaker/exports/abc123/route.gpx", "preview": "/tmp/lusmaker/exports/abc123/preview.html"},
+        "artifacts": [{"uri": "lusmaker://drafts/abc123/route.gpx"}],
+        "route": {"file": "/home/service/route.gpx", "km": 49.6},
+        "metadata": [{"preview": "/var/exports/preview.html", "melding": "Bestand /tmp/lusmaker/route.gpx is klaar"}],
+        "voorstellen": [{"titel": "Voeg Chemin du Bois toe", "uitleg": "2,1 km extra", "adjust_route": {"voeg_klimmen_toe": ["auto-chemin-du-bois"], "target_km": 55}}],
+    }
+    original = deepcopy(output)
+
+    class FileTools:
+        def execute(self, *args, **kwargs):
+            return output
+
+    model = FakeBedrock()
+    result = BedrockRouteAgent(client=model, tool_executor=FileTools()).reply(
+        [{"role": "user", "content": "50 km vanuit Wetteren"},
+         {"role": "assistant", "content": "Oude preview: /tmp/lusmaker/preview.html"},
+         {"role": "user", "content": "Pas mijn route aan"}], request_id="files-test")
+    context = model.calls[1]["messages"][-1]["content"][0]["toolResult"]["content"][0]["json"]
+    assert "bestanden" not in context and "artifacts" not in context
+    assert context["route"] == {"km": 49.6}
+    assert context["metadata"] == [{"melding": "Bestand [intern bestand] is klaar"}]
+    assert context["voorstellen"] == output["voorstellen"]
+    assert output == original  # de originele tool-output blijft intact voor andere interfaces
+    assert "/tmp/" not in str(model.calls)
+    assert "/home/service/" not in str(model.calls)
+    assert result["route_ids"] == ["abc123"]
+    assert "/tmp/" not in _clean_answer("GPX: [/tmp/lusmaker/exports/abc123/route.gpx]")
+    assert "Noem nooit bestandspaden of toolnamen/-syntaxis" in SYSTEM_PROMPT
+    assert '"Download GPX/FIT" op de routekaart' in SYSTEM_PROMPT
+    assert "zonder adjust_route(...)-syntaxis" in SYSTEM_PROMPT

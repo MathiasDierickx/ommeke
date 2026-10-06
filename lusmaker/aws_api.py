@@ -235,7 +235,7 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
     }
 
 
-def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
+def _route_detail_payload(item: dict[str, Any], *, proposals_fn=None) -> dict[str, Any]:
     result = _route_item(item)
     result["shared"] = bool(item.get("share_token"))
     result["constraints"] = intents.constraint_report(item)
@@ -244,6 +244,7 @@ def _route_detail_payload(item: dict[str, Any]) -> dict[str, Any]:
     result["computed"] = item.get("computed")
     result["geometry"] = _route_geometry(item) if result["ready"] else None
     result["vragen"] = (item.get("open_vragen") or []) if not result["ready"] and item.get("route_request") else []
+    result["voorstellen"] = (proposals_fn or _fresh_proposals)(item) if result["ready"] else []
     return result
 
 
@@ -357,7 +358,9 @@ async def route_adjust(request: Request) -> JSONResponse:
             payload = {"route": _route_detail_payload(item)}
             # Verse voorstellen voor de nieuwe route (zonder routercalls); een
             # fout of lege lijst mag het aanpassen nooit breken.
-            fresh = _fresh_proposals(item)
+            fresh = payload["route"].get("voorstellen")
+            if fresh is None:
+                fresh = _fresh_proposals(item)
             if fresh:
                 payload["voorstellen"] = fresh
             return payload

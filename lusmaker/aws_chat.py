@@ -27,9 +27,26 @@ import re as _re
 _THINKING_RE = _re.compile(r"<thinking>.*?</thinking>", _re.DOTALL | _re.IGNORECASE)
 
 
+# Web-chatdownloads worden door de routekaart aangeboden, niet door het model.
+_MODEL_FILE_KEYS = {"file", "gpx", "preview", "fit", "bestanden", "artifacts", "path", "filename"}
+_INTERNAL_PATH_RE = _re.compile(r"""(?:file://)?(?<![\w])/(?:tmp|private|var|home|Users|srv|opt)/[^\s\]"'<>`]+""")
+
+
+def _model_tool_output(value: Any) -> Any:
+    """Maak een kopie zonder bestandsmetadata of interne paden, ook genest."""
+    if isinstance(value, dict):
+        return {key: _model_tool_output(item) for key, item in value.items()
+                if key.casefold() not in _MODEL_FILE_KEYS}
+    if isinstance(value, list):
+        return [_model_tool_output(item) for item in value]
+    if isinstance(value, str):
+        return _INTERNAL_PATH_RE.sub("[intern bestand]", value)
+    return value
+
+
 def _clean_answer(text: str) -> str:
     """Strip Nova's uitgelekte <thinking>-blokken en trim."""
-    return _THINKING_RE.sub("", text or "").strip()
+    return _INTERNAL_PATH_RE.sub("[intern bestand]", _THINKING_RE.sub("", text or "")).strip()
 
 
 class ChatError(RuntimeError):
@@ -335,7 +352,7 @@ Bij een gewone toer zonder klimwens zet je doel=toeren; bij expliciet onverhard 
 Kies de activiteit die bij de vraag past (wandelen, trail, wegloop, stadsfiets, toerfiets, koersfiets, gravel, mtb).
 Stel kasseien, beton_vermijden, strict of doel=hoogtemeters nooit op eigen initiatief in: alleen als de gebruiker ze noemt. Onbekend laat je weg; de tool stelt zo nodig gerichte vragen.
 Bij een wijziging haal je met route_details eerst de actuele revision op als die ontbreekt.
-Bij een vraag startplaats: stel de vraag met de kandidaatlabels en geef de gekozen optiesleutel door via adjust_route(startplaats=...). Verzin geen coördinaten.
+Bij een vrij tekstantwoord op startplaats: gebruik de kandidaatlabels en geef de gekozen optiesleutel door via adjust_route(startplaats=...). Verzin geen coördinaten.
 Gebruik update_profile voor expliciete antwoorden op voorkeurenvragen, daarna adjust_route.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
@@ -345,10 +362,13 @@ Als de gebruiker zo lang mogelijk langs een benoemde waterloop (rivier of kanaal
 de Leie, een kanaal) wil rijden of lopen, zet die naam in `langs_water` (niet in `rond_plaats`).
 Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in maximaal 80
 tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
-Als een tool status needs_input teruggeeft, stel alleen de meegegeven gerichte vragen.
+Als een tool status needs_input teruggeeft, vat de meegegeven vragen samen in één of twee zinnen en verwijs naar de knoppen.
+Noem geen indexnummers en geen coördinaten; vraag nooit om sleutel = waarde te typen.
+De knoppen tonen de kandidaatlabels en voorkeuren. Vrije tekstantwoorden blijf je via de bestaande tools verwerken.
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
-verwijs naar de routeknop onder je antwoord voor kaart en downloads. Verzin geen posities van interface-elementen. Hou antwoorden praktisch en kort.
-Bevat het resultaat voorstellen, bied dan die (hooguit twee) kort aan in gewone taal, bijvoorbeeld "Wil je ook de Molenberg erbij (+2 km)?". Voer een voorstel alleen uit als de gebruiker ja zegt, met precies de adjust_route-argumenten uit dat voorstel. Verzin zelf geen voorstellen.
+verwijs naar "Download GPX/FIT" op de routekaart.
+Noem nooit bestandspaden of toolnamen/-syntaxis in je antwoord. Verzin geen posities van interface-elementen. Hou antwoorden praktisch en kort.
+Bevat het resultaat voorstellen, vat die (hooguit twee) samen in één zin en verwijs naar de voorstelknoppen, zonder adjust_route(...)-syntaxis. Voer een voorstel alleen uit als de gebruiker ja zegt, met precies de adjust_route-argumenten uit dat voorstel. Verzin zelf geen voorstellen.
 Controleer constraints.binnen_doelbereik. Bij false probeer de route met adjust_route binnen het
 doelbereik te brengen: behoud doelafstand en tolerantie en begrens max_km tot de bovengrens
 van het doelbereik. Verhoog nooit een bestaande harde afstandslimiet. Meld het als dit niet lukt.
@@ -570,7 +590,7 @@ class BedrockRouteAgent:
         messages: list[dict[str, Any]] = []
         for item in history[-MAX_HISTORY_MESSAGES:]:
             role = item.get("role")
-            text = item.get("content")
+            text = _model_tool_output(item.get("content"))
             if role not in {"user", "assistant"} or not text:
                 continue
             if messages and messages[-1]["role"] == role:
@@ -651,7 +671,7 @@ class BedrockRouteAgent:
                     {
                         "toolResult": {
                             "toolUseId": tool_use["toolUseId"],
-                            "content": [{"json": output}],
+                            "content": [{"json": _model_tool_output(output)}],
                             "status": status,
                         }
                     }

@@ -31,7 +31,11 @@ export type RouteConstraints = {
   waarschuwingen: string[];
 };
 
+export type RouteProposal = { titel: string; uitleg: string; adjust_route: { voeg_klimmen_toe?: string[]; rond_plaats?: string; langs_water?: string; target_km?: number } };
+export type ProposalResult = { route: Route; voorstellen?: RouteProposal[] };
+
 export type Route = {
+  voorstellen?: RouteProposal[];
   vragen?: import("./question-labels").RouteQuestion[];
   constraints?: RouteConstraints;
   shared?: boolean;
