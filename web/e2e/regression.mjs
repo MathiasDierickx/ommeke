@@ -457,7 +457,13 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
   const state = await installBackend(page, {
     handlers: {
       "POST /api/routes/stream": () => sse([["result", { status: "ready", draft: "d1", km: 40.4, voorstellen, constraints: { voldaan: true, waarschuwingen: [] } }]]),
-      "POST /api/routes/d1/adjust": () => json(200, { route: { id: "d1", total_km: 42.6 } }),
+      // Na de eerste aanpassing geeft de backend verse voorstellen voor de nieuwe route; na de tweede geen meer.
+      "POST /api/routes/d1/adjust": ({ state: s }) => {
+        const first = s.calls.filter((c) => c.key === "POST /api/routes/d1/adjust").length === 1;
+        return json(200, first
+          ? { route: { id: "d1", total_km: 42.6 }, voorstellen: [{ titel: "Voeg Paterberg toe", uitleg: "Ongeveer 1,5 km extra voor 50 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["paterberg"], target_km: 44 } }] }
+          : { route: { id: "d1", total_km: 44.1 } });
+      },
     },
   });
   await openHome(page, url);
@@ -470,9 +476,16 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
   await group.getByRole("button", { name: "Voeg Molenberg toe" }).click();
   await page.getByText("Aangepast: Voeg Molenberg toe.").waitFor();
   assert.match(await page.locator(".quick-result").innerText(), /42,6 km/);
-  assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0, "oude voorstellen vervallen na aanpassing");
+  const fresh = page.getByRole("group", { name: "Voorstellen voor je route" });
+  await fresh.getByRole("button", { name: "Voeg Paterberg toe" }).waitFor();
+  assert.equal(await fresh.getByRole("button").count(), 1, "alleen de verse voorstellen, niet de oude");
+  assert.equal(await fresh.getByRole("button", { name: "Voeg Kapelmuur toe" }).count(), 0, "oude voorstellen vervallen na aanpassing");
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/adjust");
   assert.deepEqual(call.body, { voeg_klimmen_toe: ["molenberg"], target_km: 43 });
+  await fresh.getByRole("button", { name: "Voeg Paterberg toe" }).click();
+  await page.getByText("Aangepast: Voeg Paterberg toe.").waitFor();
+  assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0, "geen voorstellen meer als de backend er geen geeft");
+  assert.match(await page.locator(".quick-result").innerText(), /44,1 km/);
   expectNoStrays(state, "voorstellen");
 });
 
@@ -515,6 +528,30 @@ test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async
   assert.deepEqual(call.body.antwoorden, { ondergrond: "verhard", heuvels: "vlak" });
   assert.ok(call.body.request_id, "verzoeknummer voor idempotentie");
   expectNoStrays(state, "vragen");
+});
+
+test("snelle planner: fietspad- en oversteekvragen krijgen leesbare knoppen", async ({ page, url }) => {
+  const vragen = [
+    { id: "fietspaden", vraag: "Slechts 5% van je verkenningsroute is fietspad. Wil je zoveel mogelijk op fietspaden rijden?", opties: { belangrijk: {}, ok: {} } },
+    { id: "oversteken", vraag: "Je verkenningsroute steekt 4 keer een drukke weg over. Wil je oversteken vermijden?", opties: { vermijd: {}, ok: {} } },
+  ];
+  const state = await installBackend(page, {
+    handlers: {
+      "POST /api/routes/stream": () => sse([["result", { status: "needs_input", draft: "d1", conversation_id: "c9", vragen }]]),
+      "POST /api/routes/d1/answers/stream": () => sse([["result", { status: "ready", draft: "d1", km: 12.3, constraints: { voldaan: true, waarschuwingen: [] } }]]),
+    },
+  });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByRole("heading", { name: "Nog even je wensen aanvullen" }).waitFor();
+  await page.getByRole("radio", { name: "Liefst op fietspaden" }).check();
+  await page.getByRole("radio", { name: "Liever weinig oversteken" }).check();
+  await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
+  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  const call = state.calls.find((c) => c.key === "POST /api/routes/d1/answers/stream");
+  assert.deepEqual(call.body.antwoorden, { fietspaden: "belangrijk", oversteken: "vermijd" });
+  expectNoStrays(state, "fietspaden en oversteken");
 });
 
 test("snelle planner: streamfout met buiten_gebied-code", async ({ page, url }) => {

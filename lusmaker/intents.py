@@ -953,6 +953,8 @@ ANSWER_VALUES = {
     "kasseien": {"graag", "ok", "vermijd"},
     "heuvels": {"zoek", "ok", "vlak"},
     "ondergrond": {"verhard", "ok", "onverhard"},
+    "fietspaden": {"belangrijk", "ok"},
+    "oversteken": {"vermijd", "ok"},
 }
 
 
@@ -985,6 +987,8 @@ def apply_answers(
     d["route_request"] = request
     if "kasseien" in antwoorden:
         d["avoid_cobbles"] = antwoorden["kasseien"] == "vermijd"
+    # fietspaden (custom-modelstraf) en oversteken (strict) volgen uit de
+    # expliciete voorkeuren van de rit; draft.routing_preferences leest ze daar.
     goal = request.get("doel") or "toeren"
     if antwoorden.get("heuvels") == "zoek":
         goal = "hoogtemeters"

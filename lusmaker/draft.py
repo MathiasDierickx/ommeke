@@ -665,7 +665,28 @@ def routing_preferences(d: dict) -> dict:
     for key in ("strict", "avoid_cobbles", "avoid_concrete", "avoid_busy"):
         if d.get(key, False):
             effective[key] = True
+    explicit = (d.get("route_request") or {}).get("expliciete_voorkeuren") or {}
+    # Antwoorden op de situationele vragen gelden voor deze rit.
+    if explicit.get("oversteken") == "vermijd":
+        effective["strict"] = True
     return effective
+
+
+def prefers_cycleways(d: dict) -> bool:
+    """Fietspaden zijn belangrijk (antwoord op de rit, anders het profiel)."""
+    request = d.get("route_request") or {}
+    explicit = (request.get("expliciete_voorkeuren") or {}).get("fietspaden")
+    if explicit is not None:
+        return explicit == "belangrijk"
+    if not d.get("profile_doc"):
+        return False
+    try:
+        preferences = profiles.effective_preferences(
+            profiles.load(d["profile_doc"]), request.get("activiteit")
+        )
+    except profiles.ProfileError:
+        return False
+    return preferences.get("fietspaden") == "belangrijk"
 
 
 def _heat_activity(d: dict) -> str | None:
@@ -683,7 +704,10 @@ def _heat_activity(d: dict) -> str | None:
 def _activity_kwargs(d: dict) -> dict:
     """Routeerargumenten voor de activiteit; leeg bij oudere drafts."""
     activity = (d.get("route_request") or {}).get("activiteit")
-    return {"activity": activity} if activity else {}
+    kwargs = {"activity": activity} if activity else {}
+    if prefers_cycleways(d):
+        kwargs["prefer_cycleways"] = True
+    return kwargs
 
 
 def _prefers_cobbles(d: dict, profile_document: dict) -> bool:
@@ -1201,6 +1225,7 @@ def probe(
             "kassei_aanwezig_m": quality.get("kassei_m", 0),
             "beton_m": quality.get("beton_m", 0),
             "offroad_beschikbaar_pct": quality.get("offroad_pct", 0),
+            "fietspad_pct": quality.get("fietspad_pct"),
             "klimmen_binnen_5km": len(nearby_climbs),
             "heat_dekking_pct": quality.get("populair_pct"),
             "wandelpopulariteit_beschikbaar": walking_popularity_available,

@@ -42,6 +42,9 @@ class Context:
     hm: float
     cobble_m: float | None
     unpaved_m: float | None
+    cycleway_pct: float | None
+    crossings: float | None
+    places: int
     goal: str | None
     preferences: dict
 
@@ -68,6 +71,9 @@ def context(d: dict, profiel: dict, probe: dict) -> Context:
         hm=float(probe.get("hm") or 0.0),
         cobble_m=_metric(probe, "kassei_aanwezig_m", "kassei_m"),
         unpaved_m=_metric(probe, "onverhard_m", "onverhard_m"),
+        cycleway_pct=_metric(probe, "fietspad_pct", "fietspad_pct"),
+        crossings=_metric(probe, "kruisingen", "steenweg_kruisingen"),
+        places=len((probe.get("terrein") or {}).get("plaatskernen") or []),
         goal=(d.get("route_request") or {}).get("doel"),
         preferences=profiles.effective_preferences(profiel, activity),
     )
@@ -258,7 +264,71 @@ ONDERGROND = Row(
 )
 
 
-ROWS = (KASSEIEN, HEUVELS, ONDERGROND)
+# -- fietspaden -----------------------------------------------------------
+
+_CYCLEWAY_RELEVANCE = {"stadsfiets": 1.0, "toerfiets": 0.6}
+_CYCLEWAY_MIN_PCT = 15.0   # minder fietspad dan dit telt als 'weinig'
+
+
+def _noncycleway_pct(ctx: Context) -> float | None:
+    return None if ctx.cycleway_pct is None else 100.0 - ctx.cycleway_pct
+
+
+FIETSPADEN = Row(
+    id="fietspaden",
+    key="fietspaden",
+    label="fietspadenvraag",
+    relevance=lambda ctx: _CYCLEWAY_RELEVANCE.get(ctx.activity, 0.0),
+    measure=_noncycleway_pct,
+    threshold=lambda ctx: 100.0 - _CYCLEWAY_MIN_PCT,
+    # Alleen door bebouwde kom: op het platteland is een fietspad geen maatstaf.
+    triggered=lambda ctx: ctx.places >= 1,
+    inclusive=True,
+    reason=lambda ctx: (
+        f"slechts {fmt(ctx.cycleway_pct, 0)}% van je verkenningsroute is fietspad, "
+        f"terwijl je door {ctx.places} bebouwde kernen rijdt; fietspadvoorkeur onbekend"
+    ),
+    question=lambda ctx: (
+        f"Slechts {fmt(ctx.cycleway_pct, 0)}% van je verkenningsroute is fietspad, "
+        "terwijl je door bebouwde kom rijdt. Wil je zoveel mogelijk op fietspaden "
+        "rijden, of maakt het niet uit?"
+    ),
+    options=lambda ctx: {
+        "belangrijk": _patch("fietspaden", "belangrijk"),
+        "ok": _patch("fietspaden", "ok"),
+    },
+)
+
+
+# -- oversteken -----------------------------------------------------------
+
+_CROSSING_RELEVANCE = {"wandelen": 1.0, "wegloop": 0.8}
+_CROSSING_MAX = 3.0
+
+
+OVERSTEKEN = Row(
+    id="oversteken",
+    key="oversteken",
+    label="oversteekvraag",
+    relevance=lambda ctx: _CROSSING_RELEVANCE.get(ctx.activity, 0.0),
+    measure=lambda ctx: ctx.crossings,
+    threshold=lambda ctx: _CROSSING_MAX,
+    reason=lambda ctx: (
+        f"je verkenningsroute steekt {fmt(ctx.crossings, 0)} keer een drukke "
+        "steenweg over; oversteekvoorkeur onbekend"
+    ),
+    question=lambda ctx: (
+        f"Je verkenningsroute steekt {fmt(ctx.crossings, 0)} keer een drukke weg over. "
+        "Wil je oversteken zoveel mogelijk vermijden, of is dat oké?"
+    ),
+    options=lambda ctx: {
+        "vermijd": _patch("oversteken", "vermijd"),
+        "ok": _patch("oversteken", "ok"),
+    },
+)
+
+
+ROWS = (KASSEIEN, HEUVELS, ONDERGROND, FIETSPADEN, OVERSTEKEN)
 LABELS = {row.id: row.label for row in ROWS}
 
 

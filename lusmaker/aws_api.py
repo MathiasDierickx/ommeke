@@ -16,7 +16,7 @@ import math
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import artifacts, aws_sharing, aws_state, climbs, coverage, draft, geo, intents, tenant, quotas, requests, account, pilot, funnel
+from . import artifacts, aws_sharing, aws_state, climbs, coverage, draft, geo, intents, tenant, quotas, requests, account, pilot, funnel, proposals
 from .aws_chat import ChatError, ChatNotFound, ConversationStore, send_message
 
 
@@ -284,6 +284,14 @@ def _optional_place(body: dict, name: str) -> str | None:
     return value.strip() if value is not None else None
 
 
+def _fresh_proposals(item: dict) -> list[dict]:
+    try:
+        return proposals.build(item, climbs.all_climbs(), item.get("route_request"))
+    except Exception:
+        logging.getLogger(__name__).warning("voorstellen na adjust mislukt", exc_info=True)
+        return []
+
+
 async def route_adjust(request: Request) -> JSONResponse:
     route_found = False
     try:
@@ -332,7 +340,13 @@ async def route_adjust(request: Request) -> JSONResponse:
             expected_revision=expected_revision,
         )
         item = await asyncio.to_thread(draft.load, draft_id)
-        return JSONResponse({"route": _route_detail_payload(item)})
+        payload = {"route": _route_detail_payload(item)}
+        # Verse voorstellen voor de nieuwe route (zonder routercalls); een
+        # fout of lege lijst mag het aanpassen nooit breken.
+        fresh = await asyncio.to_thread(_fresh_proposals, item)
+        if fresh:
+            payload["voorstellen"] = fresh
+        return JSONResponse(payload)
     except ChatError as exc:
         return _error(str(exc))
     except quotas.QuotaExceeded as exc:

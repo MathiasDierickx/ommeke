@@ -6,7 +6,9 @@ from functools import lru_cache
 from . import config, geo
 
 BIG_ROADS = {"primary", "primary_link", "secondary", "secondary_link"}
-OFFROAD_CLASSES = {"path", "track", "footway", "pedestrian", "bridleway", "cycleway"}
+# Fietspaden zijn geen offroad: ze zijn meestal verhard en horen bij de stad.
+OFFROAD_CLASSES = {"path", "track", "footway", "pedestrian", "bridleway"}
+CYCLEWAY_CLASSES = {"cycleway"}
 COBBLE_SURFACES = {"cobblestone", "sett", "unhewn_cobblestone", "cobblestone:flattened"}
 CONCRETE_SURFACES = {"concrete", "concrete:lanes", "concrete:plates"}
 
@@ -140,7 +142,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     cobble_cells = surfaces.get("kassei", set())
     unpaved_cells = surfaces.get("onverhard", set())
     missing_surface, missing_unpaved = [], []
-    kassei = beton = steenweg = offroad = onverhard = 0.0
+    kassei = beton = steenweg = offroad = onverhard = fietspad = 0.0
     for leg, det in zip(legs_geometry, legs_details):
         if not det and database is None:
             continue
@@ -160,6 +162,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
                         missing_unpaved.append(leg[index:index + 2])
         beton += detail_meters(leg, surface_details, CONCRETE_SURFACES)
         steenweg += detail_meters(leg, road_details, BIG_ROADS)
+        fietspad += detail_meters(leg, road_details, CYCLEWAY_CLASSES)
         leg_offroad = detail_meters(leg, road_details, OFFROAD_CLASSES)
         offroad += leg_offroad
         onverhard += leg_offroad
@@ -181,6 +184,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     except FileNotFoundError:
         # Cassette-replay bevat alle GH-details maar bewust geen regiocache.
         crossings = None
+    total_m = max(geo.path_length([(c[0], c[1]) for c in all_coords]), 1)
     out = {
         "kassei_m": round(kassei),
         "onverhard_m": round(onverhard),
@@ -188,7 +192,9 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         "steenweg_m": round(steenweg),
         "steenweg_kruisingen": crossings,
         "heen_en_weer_m": round(geo.self_retrace_m(legs_geometry)),
-        "offroad_pct": round(offroad / max(geo.path_length([(c[0], c[1]) for leg in legs_geometry for c in leg]), 1) * 100, 1),
+        "offroad_pct": round(offroad / total_m * 100, 1),
+        "fietspad_m": round(fietspad),
+        "fietspad_pct": round(fietspad / total_m * 100, 1),
     }
     cells = heat.popular_cells(profile)
     if cells is not None:
