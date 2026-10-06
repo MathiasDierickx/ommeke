@@ -466,7 +466,10 @@ def cmd_plan_route(args):
         activiteit=args.activiteit,
         geen_opvulling=args.geen_opvulling,
         profiel_naam=args.profiel_naam,
+        check_readiness=args.check_readiness,
         request_id=args.request_id,
+        heuvels=args.heuvels,
+        ondergrond=args.ondergrond,
     )
 
 
@@ -685,6 +688,21 @@ def main(argv=None):
     )
     s.add_argument("--rond-plaats")
     s.add_argument("--langs-water")
+    s.add_argument(
+        "--heuvels",
+        choices=("zoek", "ok", "vlak"),
+        help="heuvelvoorkeur; weglaten = onbekend",
+    )
+    s.add_argument(
+        "--ondergrond",
+        choices=("verhard", "ok", "onverhard"),
+        help="ondergrondvoorkeur; weglaten = onbekend",
+    )
+    s.add_argument(
+        "--check-readiness",
+        action="store_true",
+        help="stel eerst de nodige voorkeursvragen (status needs_input)",
+    )
     s.set_defaults(func=cmd_plan_route)
 
     s = sub.add_parser(
