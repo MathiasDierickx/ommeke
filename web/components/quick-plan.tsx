@@ -67,6 +67,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const progressBox = useRef<HTMLDivElement>(null);
+  const startInput = useRef<HTMLInputElement>(null);
   const startId = useId();
   const distanceId = useId();
   useEffect(() => {
@@ -91,11 +92,11 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     setKm(Math.max(1, Math.min(current.max, Math.round(value))));
   }
   function locate() {
-    if (!navigator.geolocation) { setError("Locatie is niet beschikbaar. Vul je startplaats in."); return; }
+    if (!navigator.geolocation) { setError("Locatie is niet beschikbaar. Vul je startplaats in."); startInput.current?.focus(); return; }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       p => { setStart(`${p.coords.latitude.toFixed(6)},${p.coords.longitude.toFixed(6)}`); setError(""); setLocating(false); },
-      () => { setError("Locatie kon niet worden opgehaald. Vul je startplaats in."); setLocating(false); },
+      () => { setError("Locatie kon niet worden opgehaald. Vul je startplaats in."); setLocating(false); startInput.current?.focus(); },
       { timeout: 12000, maximumAge: 60000 },
     );
   }
@@ -179,7 +180,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
           <div className="planner-field">
             <label htmlFor={startId}>Startplaats</label>
             <div className="start-input">
-              <input id={startId} required maxLength={160} value={start} onChange={e => setStart(e.target.value)} placeholder="Plaats, adres of coördinaten" autoComplete="off" />
+            <input ref={startInput} id={startId} required maxLength={160} value={start} onChange={e => setStart(e.target.value)} placeholder="Plaats, adres of coördinaten" autoComplete="off" />
               <button type="button" className="locate-button" onClick={locate} disabled={locating}><LocateFixed /><span>{locating ? "Zoeken…" : "Mijn locatie"}</span></button>
             </div>
             {coordinates ? <small className="field-hint">Je huidige locatie. De route krijgt de naam van de dichtste plaats.</small> : null}

@@ -433,6 +433,38 @@ test("snelle planner: validatie, voortgang en buiten_gebied (422)", async ({ pag
   expectNoStrays(state, "planner");
 });
 
+test("locatie geweigerd: melding, focus op startplaats en geen API-call", async ({ page, url }) => {
+  const state = await installBackend(page);
+  await page.context().grantPermissions([]);
+  await openHome(page, url);
+  const before = state.calls.length;
+  const locate = page.getByRole("button", { name: "Mijn locatie" });
+  await locate.click();
+  const alert = alerts(page);
+  await alert.waitFor();
+  assert.match(await alert.innerText(), /Locatie kon niet worden opgehaald\. Vul je startplaats in\./);
+  assert.ok(await locate.isEnabled(), "locatieknop is na weigering weer bruikbaar");
+  assert.equal(await page.getByLabel("Startplaats").evaluate((el) => el === document.activeElement), true, "focus gaat naar Startplaats");
+  assert.equal(state.calls.length, before, "locatie ophalen doet geen API-call");
+  expectNoStrays(state, "locatie geweigerd");
+});
+
+test("locatie ontbreekt: melding, focus op startplaats en geen API-call", async ({ page, url }) => {
+  const state = await installBackend(page);
+  await page.addInitScript(() => { Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined }); });
+  await openHome(page, url);
+  const before = state.calls.length;
+  const locate = page.getByRole("button", { name: "Mijn locatie" });
+  await locate.click();
+  const alert = alerts(page);
+  await alert.waitFor();
+  assert.match(await alert.innerText(), /Locatie is niet beschikbaar\. Vul je startplaats in\./);
+  assert.ok(await locate.isEnabled(), "locatieknop blijft bruikbaar");
+  assert.equal(await page.getByLabel("Startplaats").evaluate((el) => el === document.activeElement), true, "focus gaat naar Startplaats");
+  assert.equal(state.calls.length, before, "ontbrekende locatievoorziening doet geen API-call");
+  expectNoStrays(state, "locatie ontbreekt");
+});
+
 test("planner houdt invoer vast terwijl de bibliotheek nog laadt", async ({ page, url }) => {
   const state = await installBackend(page, {
     handlers: {
