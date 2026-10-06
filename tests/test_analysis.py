@@ -179,3 +179,20 @@ def test_route_stats_without_vlaanderen_cache_keeps_cassette_metrics_cacheless()
     assert stats["kassei_m"] == 0
     assert stats["onverhard_m"] == 0
     assert "autovrij_pct" not in stats
+
+
+def test_route_stats_splits_cycleways_from_offroad():
+    coords = [[50.0, 4.000 + 0.002 * index, 0] for index in range(5)]
+    details = {
+        "surface": [[0, 4, "asphalt"]],
+        "road_class": [[0, 2, "cycleway"], [2, 3, "track"], [3, 4, "residential"]],
+    }
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            config.ensure_dirs()
+            stats = analysis.route_stats([coords], [details])
+
+    assert "cycleway" not in analysis.OFFROAD_CLASSES
+    assert stats["fietspad_pct"] == 50.0
+    assert stats["offroad_pct"] == 25.0
+    assert 0 < stats["onverhard_m"] < stats["fietspad_m"]

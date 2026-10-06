@@ -1201,6 +1201,7 @@ def probe(
             "kassei_aanwezig_m": quality.get("kassei_m", 0),
             "beton_m": quality.get("beton_m", 0),
             "offroad_beschikbaar_pct": quality.get("offroad_pct", 0),
+            "fietspad_pct": quality.get("fietspad_pct"),
             "klimmen_binnen_5km": len(nearby_climbs),
             "heat_dekking_pct": quality.get("populair_pct"),
             "wandelpopulariteit_beschikbaar": walking_popularity_available,
