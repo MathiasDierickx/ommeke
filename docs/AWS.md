@@ -167,8 +167,16 @@ naar de statebucket:
 gh workflow run build-region-pack.yml --ref main \
   -f slug=vlaanderen \
   -f geofabrik=europe/belgium \
-  -f bbox=50.68,3.35,51.10,4.20
+  -f bbox=boundary
 ```
+
+`bbox=boundary` (de standaard) leidt de bbox af uit de ingecheckte, vereenvoudigde
+Vlaanderen-grens (`lusmaker/data/flanders_boundary.geojson`, OpenStreetMap
+relatie 53134, ODbL) plus 2 km buffer. De grens haal je eenmalig op met
+`.venv/bin/python scripts/flanders_boundary.py` en check je daarna in; bestaat
+het bestand niet, dan faalt de build met een duidelijke melding. Je kan nog
+steeds een expliciete `minlat,minlon,maxlat,maxlon` meegeven. De dekkingscontrole
+in productie gebruikt ongewijzigd de gemeten GraphHopper-`/info`-bbox.
 
 Volg de run met `gh run watch`. De resulterende locatie is
 `s3://<TF_STATE_BUCKET>/region-packs/vlaanderen.tar.gz`.

@@ -13,9 +13,9 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 GROUPS = {
     "engine": ["activities", "questions", "slice2","intent_hints", "analysis", "climbs", "gh", "intents", "optimize", "probe", "profiles", "readiness", "suggest", "regression", "quality", "acceptance", "route_cache", "fit_course", "reroute", "coverage"],
-    "data": ["discover", "geocode", "google_geocode", "heat", "osm", "provision", "regions", "recording", "pack_manifest", "pack_features", "route_sources", "route_pois"],
+    "data": ["discover", "geocode", "google_geocode", "heat", "osm", "provision", "boundary", "regions", "recording", "pack_manifest", "pack_features", "route_sources", "route_pois"],
     "api": ["aws_app", "aws_chat", "aws_sharing", "aws_state", "draft_storage", "user_scope", "user_agent", "oauth", "quotas", "account", "pagination", "telemetry", "funnel", "observability", "requests", "pilot", "route_library", "quick_plan", "streaming"],
-    "mcp": ["mcp", "mcp_evals", "appsdk", "artifacts", "preview", "contracts"],
+    "mcp": ["mcp", "mcp_evals", "appsdk", "artifacts", "preview", "contracts", "contract_matrix"],
     "infra": ["aws_deploy"],
     "tooling": ["checks", "e2e_prod", "metrics", "local_chat", "model_evals"],
 }

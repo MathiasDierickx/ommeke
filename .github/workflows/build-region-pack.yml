@@ -14,9 +14,11 @@ on:
         default: europe/belgium
         type: string
       bbox:
-        description: minlat,minlon,maxlat,maxlon
+        description: >-
+          minlat,minlon,maxlat,maxlon, of "boundary" om de bbox af te leiden
+          uit lusmaker/data/flanders_boundary.geojson
         required: true
-        default: 50.68,3.35,51.10,4.20
+        default: boundary
         type: string
 
 permissions:
