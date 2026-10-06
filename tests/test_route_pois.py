@@ -34,10 +34,10 @@ def test_export_selection_validates_known_kinds():
 def test_gpx_filters_saved_pois_preserving_climbs_track_and_cues():
     from lusmaker.gpx import filter_pois
     import xml.etree.ElementTree as ET
-    payload = b'<gpx xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>Route</name></metadata><wpt lat="51" lon="3"><name>Klim</name></wpt><wpt lat="51" lon="3"><type>cafe</type></wpt><wpt lat="51" lon="3"><type>water</type></wpt><rte><rtept lat="51" lon="3"/></rte><trk><trkseg><trkpt lat="51" lon="3"/></trkseg></trk></gpx>'
+    payload = b'<gpx xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>Route</name></metadata><wpt lat="51" lon="3"><name>Klim</name></wpt><wpt lat="51" lon="3"><type>cafe</type></wpt><wpt lat="51" lon="3"><type>water</type></wpt><wpt lat="51" lon="3"><type>zitbank</type></wpt><rte><rtept lat="51" lon="3"/></rte><trk><trkseg><trkpt lat="51" lon="3"/></trkseg></trk></gpx>'
     ns = {'g': 'http://www.topografix.com/GPX/1/1'}
     assert filter_pois(payload, None) is payload
-    for selection, count in [({'water'}, 2), (set(), 1), ({'water','cafe'}, 3)]:
+    for selection, count in [({'water'}, 2), (set(), 1), ({'water','cafe'}, 3), ({'zitbank'}, 2)]:
         root = ET.fromstring(filter_pois(payload, selection))
         assert len(root.findall('g:wpt', ns)) == count
         assert root.find('g:wpt/g:name', ns).text == 'Klim'

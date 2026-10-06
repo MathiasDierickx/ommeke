@@ -7,13 +7,12 @@ def filter_pois(payload, kinds):
     if kinds is None:
         return payload
     import xml.etree.ElementTree as ET
-    from .route_pois import EXPORT_KINDS
     ns = '{http://www.topografix.com/GPX/1/1}'
     ET.register_namespace('', ns[1:-1])
     root = ET.fromstring(payload)
     for waypoint in list(root.findall(ns + 'wpt')):
         kind = waypoint.findtext(ns + 'type')
-        if kind in EXPORT_KINDS and kind not in kinds:
+        if kind and kind not in kinds:
             root.remove(waypoint)
     return ET.tostring(root, encoding='utf-8', xml_declaration=True)
 
