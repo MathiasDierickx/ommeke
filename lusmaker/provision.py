@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from . import __version__, config, pack_manifest
+from . import __version__, boundary, config, pack_manifest
 from .discover import geofabrik_path_from_url
 
 
@@ -620,9 +620,18 @@ def _main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("slug")
     parser.add_argument("--pbf-url", required=True)
-    parser.add_argument("--bbox", required=True)
+    parser.add_argument(
+        "--bbox",
+        default=boundary.BOUNDARY_TOKEN,
+        help="minlat,minlon,maxlat,maxlon, of `boundary` (standaard): leid de "
+        "bbox met buffer af uit de ingecheckte Vlaanderen-grens",
+    )
     args = parser.parse_args(argv)
-    bbox = config._validate_bbox(args.bbox.split(","))
+    try:
+        bbox = boundary.resolve_bbox(args.bbox)
+    except ValueError as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2))
+        raise SystemExit(1)
     try:
         result = provision(
             args.slug, args.pbf_url, bbox, background=False, force=True

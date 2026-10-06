@@ -12,12 +12,9 @@ from . import config
 
 
 def parse_bbox(value: str) -> tuple[float, float, float, float]:
-    try:
-        return config._validate_bbox(value.split(","))
-    except ValueError as exc:
-        raise ValueError(
-            "bbox verwacht minlat,minlon,maxlat,maxlon"
-        ) from exc
+    from . import boundary
+
+    return boundary.resolve_bbox(value)
 
 
 def _port_available(port: int) -> bool:
