@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from lusmaker import draft, intents, profiles, proposals, questions, readiness
 
@@ -99,10 +100,11 @@ def test_optimize_with_flat_objective_does_not_hunt_climbs():
         seen["called"] = True
         raise draft.gh.GhError("geen verbinding in test")
 
-    result = draft._optimize(
-        routed, _synthetic_climb_db(), 20.0, objective="vlak",
-        route_fn=router, candidates_fn=candidates_fn, round_trip_fn=round_trip_fn,
-    )
+    with mock.patch.object(draft, "save", lambda *_a, **_k: None):
+        result = draft._optimize(
+            routed, _synthetic_climb_db(), 20.0, objective="vlak",
+            route_fn=router, candidates_fn=candidates_fn, round_trip_fn=round_trip_fn,
+        )
     assert result["objective"] == "vlak"
     assert routed["climbs"] == []
 

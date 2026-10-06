@@ -1,8 +1,25 @@
 import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 from lusmaker import draft, geo
+
+
+def test_optimizer_and_draft_import_in_either_order():
+    root = Path(__file__).resolve().parents[1]
+    for imports in (
+        "import lusmaker.optimizer; import lusmaker.draft",
+        "import lusmaker.draft; import lusmaker.optimizer",
+    ):
+        result = subprocess.run(
+            [sys.executable, "-c", imports],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
 
 
 def _climb(climb_id, foot, gain_m, length_m=500):
