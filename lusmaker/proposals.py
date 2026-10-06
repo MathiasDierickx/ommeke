@@ -75,7 +75,8 @@ def _climb_proposals(d: dict, climb_db: dict, request: dict, suggest_fn) -> list
         name = (candidate.get("climb") or {}).get("name") or candidate.get("label") or climb_id
         out.append({
             "titel": f"Voeg {name} toe",
-            "uitleg": f"Ongeveer {_fmt(extra_km)} km extra voor {gain:g} hoogtemeters erbij.",
+            "uitleg": (f"Minder dan 1 km omweg voor {gain:g} hoogtemeters erbij." if extra_km < 1.0
+                       else f"Ongeveer {_fmt(extra_km)} km extra voor {gain:g} hoogtemeters erbij."),
             "adjust_route": {
                 "voeg_klimmen_toe": [climb_id],
                 "target_km": math.ceil(new_km + 0.5),

@@ -1053,7 +1053,7 @@ def _candidate_prefilter(d: dict, climb_db: dict, max_detour_km: float,
 
 # Een optimize-ronde routeerde tot 40 kandidaten x 3-4 calls (~4-5 min); met
 # 12 rondes kwam de Lambda-limiet van 15 min in zicht (live, 6 okt 2026).
-MAX_EXACT_CANDIDATES = 12
+MAX_EXACT_CANDIDATES = 8
 OPTIMIZE_TIME_BUDGET_S = 360.0
 
 
@@ -1427,12 +1427,23 @@ def _target_tolerance_m(d: dict, target_total_m: float) -> float:
     return max(100.0, target_total_m * 0.1)
 
 
+def _friendly_stop_reason(reason: str) -> str:
+    """Een technische stopreden als zin voor de gebruiker."""
+    if "tijdslimiet" in reason:
+        return "De rekentijd was op; dit is de beste lus die tot dan gevonden werd."
+    if "dezelfde wegen" in reason or "overlap" in reason:
+        return "Er lag geen extra lus in de buurt zonder dezelfde wegen opnieuw te rijden."
+    return "Er paste geen extra klim of lus die bij je wensen past."
+
+
 def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                           router=route, round_trip_fn=gh.round_trip,
                           objective="hm", prefer_cobbles: bool = False,
                           popular_cells=_LOAD_HEAT,
                           target_total_m: float | None = None,
-                          seed_start: int = 0) -> dict:
+                          seed_start: int = 0,
+                          deadline: float | None = None,
+                          clock=time.monotonic) -> dict:
     """Vul restbudget met de beste van vijf niet-overlappende GH-rondritten."""
     if not d.get("loop"):
         return {"filled": False, "reason": "draft is geen lus"}
@@ -1464,6 +1475,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         **_activity_kwargs(d),
     }
     candidates = []
+    fallback = []
     def exhausted(reason):
         # Korte lussen hebben weinig topologische opties. Probeer pas bij
         # mislukking extra seeds; succesvolle bestaande routes veranderen niet.
@@ -1472,11 +1484,14 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                 d, climb_db, budget_m, router=router, round_trip_fn=round_trip_fn,
                 objective=objective, prefer_cobbles=prefer_cobbles,
                 popular_cells=popular_cells, target_total_m=target_total_m,
-                seed_start=5,
+                seed_start=5, deadline=deadline, clock=clock,
             )
         return {"filled": False, "reason": reason}
 
     for seed in range(seed_start, 5 if seed_start == 0 else 20):
+        # Na de deadline geen extra varianten meer; de eerste poging mag altijd.
+        if deadline is not None and seed > seed_start and clock() > deadline:
+            break
         from .progress import emit
         emit("variants", f"Ik toets lusvariant {seed + 1} aan je gewenste afstand.")
         try:
@@ -1492,12 +1507,17 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
         if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:
             continue
-        if existing and max(
+        overlap_m = max(
             geo.retrace_m(existing, coords),
             geo.retrace_m(existing, list(reversed(coords))),
             geo.retrace_m(coords, existing),
             geo.retrace_m(list(reversed(coords)), existing),
-        ) > 300.0:
+        ) if existing else 0.0
+        if overlap_m > 300.0:
+            # Toegangswegen vanaf het anker overlappen bij lange lussen bijna
+            # altijd; bewaar als terugval in plaats van 20+ km tekort te komen.
+            if overlap_m <= max(2000.0, 0.15 * candidate["distance_m"]):
+                fallback.append((overlap_m, seed, candidate, coords))
             continue
         if objective == FLAT:
             score = -candidate.get("ascend_m", 0) / max(candidate["distance_m"] / 1000.0, 0.3)
@@ -1517,8 +1537,15 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                 score += 0.15 * components["kassei"]
         candidates.append((score, -seed, seed, candidate, coords))
 
+    overlap_note = None
+    if not candidates and fallback and target_total_m is not None:
+        # Minste overlap eerst; de afstand blijft hieronder de eerste sleutel.
+        fallback.sort(key=lambda item: item[0])
+        for overlap_m, seed, candidate, coords in fallback[:3]:
+            candidates.append((-overlap_m, -seed, seed, candidate, coords))
+        overlap_note = f"een deel van de extra lus volgt dezelfde wegen (ongeveer {fallback[0][0] / 1000:.1f} km)".replace(".", ",")
     if not candidates:
-        return exhausted("geen round_trip-kandidaat zonder overlap binnen budget")
+        return exhausted("geen extra lus gevonden die niet over dezelfde wegen terugkeert")
 
     before = copy.deepcopy(d)
     tolerance_m = _target_tolerance_m(d, target_total_m or 0.0)
@@ -1551,6 +1578,10 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             continue
         actual_m = d["computed"]["total_km"] * 1000.0
         if actual_m <= budget_m:
+            if overlap_note:
+                d["fill_note"] = overlap_note[0].upper() + overlap_note[1:] + "."
+            else:
+                d.pop("fill_note", None)
             result = {
                 "filled": True,
                 "seed": seed,
@@ -1803,6 +1834,8 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             objective=objective,
             prefer_cobbles=prefer_cobbles,
             target_total_m=target_m,
+            deadline=deadline + 60.0,
+            clock=clock,
         )
         if fill_result["filled"]:
             filled = True
@@ -1835,7 +1868,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
             f"{shortfall:.1f} km onder het doel van {target_m / 1000.0:.1f} km "
             f"({stopped_because})"
         )
-        d["optimize_note"] = stopped_because
+        d["optimize_note"] = _friendly_stop_reason(stopped_because)
     else:
         d.pop("optimize_note", None)
     save(d)

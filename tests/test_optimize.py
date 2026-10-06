@@ -831,7 +831,11 @@ def test_infeasible_target_is_reported_clearly_in_constraint_report():
     assert "doelafstand niet haalbaar" in result["gestopt_omdat"]
     report = intents.constraint_report(routed)
     assert report["binnen_doelbereik"] is False and report["voldaan"] is False
-    assert any("niet haalbaar" in w for w in report["waarschuwingen"])
+    # Voor de gebruiker: gewone taal met Nederlandse decimalen, geen interne termen.
+    assert any("korter dan je gevraagde" in w for w in report["waarschuwingen"])
+    assert any(w.startswith(("Er ", "De rekentijd")) for w in report["waarschuwingen"])
+    import re
+    assert not any("round_trip" in w or re.search(r"\d\.\d", w) for w in report["waarschuwingen"])
 
 
 def test_exact_candidate_evaluation_is_capped_and_reports_progress():
@@ -870,3 +874,39 @@ def test_optimize_stops_at_the_time_budget_and_keeps_the_route():
     assert "tijdslimiet" in result["gestopt_omdat"]
     assert asked == []  # geen dure kandidaatronde meer na de deadline
     assert d["computed"]["total_km"] == 30.0  # bestaande route blijft
+
+
+def test_round_trip_fill_stops_trying_extra_seeds_after_the_deadline():
+    from lusmaker import gh
+    routed = _synthetic_routed_draft()
+    routed['climbs'] = []
+    routed['computed'] = {'total_km': 0, 'ascend_m': 0, 'legs': []}
+    routed['_geometry'] = []
+    routed['route_request'] = {'target_km': 3, 'tolerance_km': .3}
+    attempts = []
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        attempts.append(seed)
+        raise gh.GhError('geen kandidaat')
+    result = draft._fill_with_round_trip(routed, {}, 3300, router=lambda *_a: None,
+        round_trip_fn=round_trip, target_total_m=3000, objective='toeren',
+        deadline=10.0, clock=lambda: 100.0)
+    assert not result['filled']
+    assert attempts == [0, 5]  # één poging per reeks, geen 20 varianten na de deadline
+
+
+def test_round_trip_fill_falls_back_to_least_overlap_instead_of_failing():
+    from unittest import mock
+    from lusmaker import geo
+    routed = _synthetic_routed_draft()
+    routed['climbs'] = []
+    routed['route_request'] = {'target_km': 30, 'tolerance_km': 2.5}
+    start_km = routed['computed']['total_km']
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        return {'distance_m': distance_m, 'ascend_m': 50, 'coords': [anchor, (50.01, 4.0), (50.01, 4.01), anchor]}
+    def router(current, _db):
+        current['computed'] = {'total_km': 30.0, 'ascend_m': 300, 'legs': []}
+    with mock.patch.object(geo, 'retrace_m', lambda *_a: 800.0):
+        result = draft._fill_with_round_trip(routed, {}, 40000, router=router, round_trip_fn=round_trip,
+                                             target_total_m=30000, objective='toeren')
+    assert start_km < 30 and result['filled'] and routed['computed']['total_km'] == 30.0
+    assert 'dezelfde wegen' in routed['fill_note'] and '0,8 km' in routed['fill_note']

@@ -287,15 +287,19 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
     within_hard_max = within_max if maximum_is_hard else None
     checks = [check for check in (within_target, within_hard_max) if check is not None]
     warnings = []
+    km = lambda value: f"{value:.1f}".replace(".", ",")
     if within_target is False:
+        direction = "korter" if actual < target else "langer"
         warnings.append(
-            f"route wijkt {abs(actual - target):.1f} km af van de doelafstand"
+            f"De route is {km(actual)} km, {km(abs(actual - target))} km {direction} dan je gevraagde {km(target)} km."
         )
         if d.get("optimize_note"):
             warnings.append(d["optimize_note"])
+    if d.get("fill_note"):
+        warnings.append(d["fill_note"])
     if within_hard_max is False:
         warnings.append(
-            f"route overschrijdt het harde maximum met {actual - hard_max:.1f} km"
+            f"De route is {km(actual - hard_max)} km langer dan je maximum van {km(hard_max)} km."
         )
     water_planned = bool(d.get("water_via")) if request.get("langs_water") else None
     if water_planned is False:
