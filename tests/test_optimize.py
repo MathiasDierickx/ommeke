@@ -832,3 +832,41 @@ def test_infeasible_target_is_reported_clearly_in_constraint_report():
     report = intents.constraint_report(routed)
     assert report["binnen_doelbereik"] is False and report["voldaan"] is False
     assert any("niet haalbaar" in w for w in report["waarschuwingen"])
+
+
+def test_exact_candidate_evaluation_is_capped_and_reports_progress():
+    from lusmaker import draft, progress
+    d = {"id": "abc123", "climbs": [], "computed": {"total_km": 40.0, "legs": [{"km": 20.0}, {"km": 20.0}]},
+         "_geometry": [[(50.80, 3.60), (50.90, 3.60)], [(50.90, 3.60), (50.80, 3.60)]]}
+    climb_db = {f"k{i}": {"id": f"k{i}", "name": f"Klim {i}", "town": "", "avg_pct": 7.0, "max_pct": 10.0, "warnings": [],
+                          "foot": [50.85, 3.60 + i * 0.002], "mid": [50.851, 3.60 + i * 0.002],
+                          "top": [50.852, 3.60 + i * 0.002], "length_m": 800, "gain_m": 60} for i in range(30)}
+    calls, events = [], []
+
+    def router(points, **_kwargs):
+        calls.append(points)
+        return {"distance_m": 1000.0, "ascend_m": 10.0, "coords": [(p[0], p[1], 0.0) for p in points]}
+
+    with progress.capture(events.append):
+        draft._candidates(d, climb_db, max_detour_km=8.0, limit=10, router=router, max_eval=5)
+    climbs_routed = {tuple(points[1]) for points in calls if len(points) == 3}
+    assert len(climbs_routed) <= 5
+    texts = [e["message"] for e in events if e["stage"] == "optimizing"]
+    assert texts and texts[0].endswith("(1 van 5).") and len(texts) == 5
+
+
+def test_optimize_stops_at_the_time_budget_and_keeps_the_route():
+    from lusmaker import draft
+    ticks = iter([0.0] + [1000.0] * 50)  # eerste meting zet de deadline; daarna is ze verstreken
+    d = {"id": "abc123", "climbs": ["k"], "computed": {"total_km": 30.0, "legs": [{"km": 30.0}]}, "_geometry": [[(50.8, 3.6), (50.8, 3.6)]],
+         "loop": True, "start": {"lat": 50.8, "lon": 3.6}}
+    climb_db = {"k": {"id": "k", "name": "K", "foot": [50.8, 3.6], "mid": [50.8, 3.6], "top": [50.8, 3.6], "length_m": 500, "gain_m": 40}}
+    asked = []
+    from unittest import mock
+    with mock.patch.object(draft, "save", lambda *_a, **_k: None), mock.patch.object(draft, "summary", lambda _d: {}):
+        result = draft._optimize(d, climb_db, max_km=60.0, route_fn=lambda *_a, **_k: None,
+                                 candidates_fn=lambda *_a, **_k: asked.append(1) or [],
+                                 fill=False, time_budget_s=360.0, clock=lambda: next(ticks))
+    assert "tijdslimiet" in result["gestopt_omdat"]
+    assert asked == []  # geen dure kandidaatronde meer na de deadline
+    assert d["computed"]["total_km"] == 30.0  # bestaande route blijft

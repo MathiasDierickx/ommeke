@@ -1,6 +1,7 @@
 """Draft-routes: opbouwen, routeren (met lus-constraint), suggesties, opslag."""
 import copy
 import fcntl
+import inspect
 import json
 import re
 import time
@@ -1050,16 +1051,29 @@ def _candidate_prefilter(d: dict, climb_db: dict, max_detour_km: float,
     return sorted(candidates)
 
 
+# Een optimize-ronde routeerde tot 40 kandidaten x 3-4 calls (~4-5 min); met
+# 12 rondes kwam de Lambda-limiet van 15 min in zicht (live, 6 okt 2026).
+MAX_EXACT_CANDIDATES = 12
+OPTIMIZE_TIME_BUDGET_S = 360.0
+
+
 def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
                 banned=frozenset(), router=gh.route, weighted: bool = False,
-                popular_cells=_LOAD_HEAT) -> list[dict]:
-    """Bereken kandidaat-klimmen dicht bij de huidige route."""
+                popular_cells=_LOAD_HEAT, max_eval: int | None = None) -> list[dict]:
+    """Bereken kandidaat-klimmen dicht bij de huidige route.
+
+    ``max_eval`` begrenst het aantal exact gerouteerde kandidaten (elk ~3-4
+    routercalls van ~2 s in productie); de goedkope schatting rangschikt ze.
+    """
+    from .progress import emit
     candidates = _candidate_prefilter(d, climb_db, max_detour_km, banned=banned)
     legs_meta = d["computed"]["legs"]
     routing = routing_preferences(d)
     zones = place_areas(d)
     per_climb: dict[str, dict] = {}
-    for _est, cid, c, leg_i, a, b in candidates[: max(24, limit * 4)]:
+    selection = candidates[: (max_eval if max_eval is not None else max(24, limit * 4))]
+    for index, (_est, cid, c, leg_i, a, b) in enumerate(selection, start=1):
+        emit("optimizing", f"Ik bereken de omweg via {c.get('name') or cid} ({index} van {len(selection)}).")
         try:
             preferences = {
                 **routing,
@@ -1601,8 +1615,11 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
               min_ratio: float = 8.0, max_rounds: int = 12,
               route_fn=route, candidates_fn=_candidates, fill: bool = True,
               round_trip_fn=gh.round_trip,
-              fill_target_km: float | None = None) -> dict:
+              fill_target_km: float | None = None,
+              time_budget_s: float = OPTIMIZE_TIME_BUDGET_S,
+              clock=time.monotonic) -> dict:
     """Vul een draft greedy met klimmen binnen een hard afstandsbudget."""
+    deadline = clock() + time_budget_s
     if max_km <= 0:
         raise DraftError("max-km moet groter dan 0 zijn")
     if min_ratio < 0:
@@ -1694,14 +1711,17 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
                 stopped_because = "geen klim bereikbaar; round_trip vanaf start"
                 return
 
+            if clock() > deadline:
+                stopped_because = "tijdslimiet bereikt; beste route tot nu toe behouden"
+                return
             candidate_kwargs = {
                 "max_detour_km": budget_km * 0.85,
                 "limit": 10,
                 "banned": frozenset(banned),
             }
+            if "max_eval" in inspect.signature(candidates_fn).parameters:
+                candidate_kwargs["max_eval"] = MAX_EXACT_CANDIDATES
             if weights is not None:
-                import inspect
-
                 if "weighted" in inspect.signature(candidates_fn).parameters:
                     candidate_kwargs["weighted"] = True
             candidates = candidates_fn(d, climb_db, **candidate_kwargs)
