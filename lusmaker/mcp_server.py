@@ -457,6 +457,7 @@ def adjust_route(
     expected_revision: ExpectedRevision | None = None,
     rond_plaats: NonEmptyString | None = None,
     langs_water: NonEmptyString | None = None,
+    request_id: RequestId | None = None,
 ) -> RouteWorkflowResult:
     """Vervolg of wijzig een routeworkflow; kan opnieuw om input vragen."""
     return _structured_errors(intents.adjust_route)(
@@ -476,6 +477,7 @@ def adjust_route(
         expected_revision=expected_revision,
         rond_plaats=rond_plaats,
         langs_water=langs_water,
+        request_id=request_id,
     )
 
 

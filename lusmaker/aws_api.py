@@ -105,8 +105,12 @@ async def route_reroute(request: Request) -> JSONResponse:
     except quotas.QuotaExceeded as exc:
         return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
                             headers={"Retry-After": str(exc.retry_after)})
-    except (requests.RequestConflict, draft.DraftError) as exc:
-        return _error(str(exc), 409)
+    except requests.RequestConflict as exc:
+        return _error(str(exc), 409, "request_conflict")
+    except draft.DraftError as exc:
+        return _error(str(exc), 409, "route_conflict")
+    except coverage.OutOfCoverage as exc:
+        return _coverage_error(exc)
     except (ValueError, ChatError) as exc:
         return _error(str(exc))
 
@@ -299,6 +303,12 @@ async def route_adjust(request: Request) -> JSONResponse:
         await asyncio.to_thread(draft.load, draft_id)
         route_found = True
         body = await _json_body(request)
+        rid = body.get("request_id")
+        if rid is not None:
+            try:
+                requests.request_path(f"adjust:{draft_id}", rid)
+            except ValueError as exc:
+                raise ChatError(str(exc)) from exc
         target_km = body.get("target_km")
         if target_km is not None and (
             isinstance(target_km, bool) or not isinstance(target_km, (int, float))
@@ -324,9 +334,7 @@ async def route_adjust(request: Request) -> JSONResponse:
             else (float(current_km) if current_km is not None else None)
         )
         effective_max = (effective_target + 3.0) if effective_target is not None else None
-        await asyncio.to_thread(
-            _quick(intents.adjust_route),
-            draft_id,
+        adjust_values = dict(
             target_km=float(target_km) if target_km is not None else None,
             max_km=effective_max,
             voeg_klimmen_toe=_string_list(body, "voeg_klimmen_toe"),
@@ -339,19 +347,32 @@ async def route_adjust(request: Request) -> JSONResponse:
             check_readiness=False,
             expected_revision=expected_revision,
         )
-        item = await asyncio.to_thread(draft.load, draft_id)
-        payload = {"route": _route_detail_payload(item)}
-        # Verse voorstellen voor de nieuwe route (zonder routercalls); een
-        # fout of lege lijst mag het aanpassen nooit breken.
-        fresh = await asyncio.to_thread(_fresh_proposals, item)
-        if fresh:
-            payload["voorstellen"] = fresh
+
+        def execute() -> dict:
+            _quick(intents.adjust_route)(draft_id, **adjust_values)
+            item = draft.load(draft_id)
+            payload = {"route": _route_detail_payload(item)}
+            # Verse voorstellen voor de nieuwe route (zonder routercalls); een
+            # fout of lege lijst mag het aanpassen nooit breken.
+            fresh = _fresh_proposals(item)
+            if fresh:
+                payload["voorstellen"] = fresh
+            return payload
+
+        payload = await asyncio.to_thread(
+            requests.once, f"adjust:{draft_id}", rid,
+            # max_km hangt af van de huidige lengte en verandert na de eerste
+            # uitvoering: de digest gebruikt daarom alleen de gevraagde wijziging.
+            {k: v for k, v in adjust_values.items() if k != "max_km"}, execute,
+        )
         return JSONResponse(payload)
     except ChatError as exc:
         return _error(str(exc))
     except quotas.QuotaExceeded as exc:
         return JSONResponse({"error": str(exc), "code": "quota_exceeded"}, status_code=429,
                             headers={"Retry-After": str(exc.retry_after)})
+    except requests.RequestConflict as exc:
+        return _error(str(exc), 409, "request_conflict")
     except coverage.OutOfCoverage as exc:
         return _coverage_error(exc)
     except intents.IntentError as exc:

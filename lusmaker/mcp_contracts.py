@@ -158,10 +158,13 @@ ExpectedRevision = Annotated[
 RequestId = Annotated[
     str,
     Field(
-        min_length=1,
+        min_length=8,
         max_length=128,
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
-        description="Stabiele sleutel waarmee retries dezelfde workflow hervatten.",
+        pattern=r"^[A-Za-z0-9_-]{8,128}$",
+        description=(
+            "Stabiele sleutel waarmee retries dezelfde workflow hervatten: "
+            "8 tot 128 letters, cijfers, streepjes of underscores."
+        ),
     ),
 ]
 NonNegativeWeight = Annotated[

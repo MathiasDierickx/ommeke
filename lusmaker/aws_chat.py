@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import json
 import contextvars
@@ -456,7 +457,14 @@ class RouteToolExecutor:
             values.setdefault("sta_plaatsen_toe", [])
             values.setdefault("rond_plaats", None)
             values.setdefault("langs_water", None)
-            return intents.adjust_route(**values, check_readiness=True)
+            # Stabiel per toolaanroep: dezelfde chatbeurt met dezelfde argumenten
+            # hervat het receipt; andere argumenten geven een eigen id.
+            digest = hashlib.sha256(
+                f"{request_id}:{json.dumps(values, sort_keys=True, ensure_ascii=False)}".encode()
+            ).hexdigest()[:40]
+            return intents.adjust_route(
+                **values, check_readiness=True, request_id=f"adjust-{digest}"
+            )
         if name == "list_routes":
             return {"drafts": draft.list_all()[:50]}
         if name == "route_details":

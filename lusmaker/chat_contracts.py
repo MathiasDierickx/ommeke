@@ -57,6 +57,11 @@ ADJUST_ROUTE_SCHEMA = {
         "verwijder_klimmen": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
         "vermijd_plaatsen": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
         "niet_meer_vermijden": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
+        "sta_plaatsen_toe": {
+            "type": "array", "items": {"type": "string"}, "maxItems": 12,
+            "description": "Plaatsen of passages waar de gebruiker uitdrukkelijk mee akkoord is.",
+        },
+        "profiel_naam": {"type": "string", "minLength": 1, "maxLength": 64},
         "target_km": {"type": "number", "exclusiveMinimum": 0},
         "max_km": {"type": "number", "exclusiveMinimum": 0},
         "tolerance_km": {"type": "number", "minimum": 0},

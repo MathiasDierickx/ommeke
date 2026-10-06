@@ -1004,6 +1004,40 @@ def apply_answers(
 
 @funnel.tracked_adjust
 @quotas.metered("route")
+def _once_per_request(fn):
+    """Laat een `request_id` een retry van `adjust_route` het opgeslagen resultaat geven.
+
+    Zonder S3-state (lokaal) of zonder `request_id` verandert er niets; de
+    revisiecheck blijft daar de bescherming. Dezelfde id met andere invoer geeft
+    `requests.RequestConflict`.
+    """
+    import functools
+    import inspect
+    from . import requests
+
+    signature = inspect.signature(fn)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        request_id = kwargs.get("request_id")
+        if request_id is None:
+            return fn(*args, **kwargs)
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        values = bound.arguments
+        payload = {
+            key: value for key, value in values.items()
+            if key not in {"request_id", "exports_root"} and not key.endswith("_fn")
+        }
+        return requests.once(
+            f"adjust:{values['draft_id']}", request_id, payload,
+            lambda: fn(*args, **kwargs),
+        )
+
+    return wrapper
+
+
+@_once_per_request
 def adjust_route(
     draft_id: str,
     voeg_klimmen_toe: list[str] = [],
@@ -1021,6 +1055,7 @@ def adjust_route(
     expected_revision: int | None = None,
     rond_plaats: str | None = None,
     langs_water: str | None = None,
+    request_id: str | None = None,
     *,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
