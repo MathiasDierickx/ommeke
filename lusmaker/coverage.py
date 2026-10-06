@@ -83,12 +83,24 @@ def dekking(bbox, region=None) -> dict:
 
 
 def message(bbox, region=None) -> str:
+    """Leesbare dekking voor de gebruiker.
+
+    De gemeten graph-bbox is ruim (een België-extract reikt via veerroutes tot
+    Engeland); toon daarom de Vlaanderen-grens als die beschikbaar is.
+    """
     d = dekking(bbox, region)
     b = d["bbox"]
+    try:
+        from .boundary import flanders_bbox
+        min_lat, min_lon, max_lat, max_lon = flanders_bbox(buffer_km=0)
+        b = {"min_lat": min_lat, "min_lon": min_lon, "max_lat": max_lat, "max_lon": max_lon}
+    except (OSError, ValueError):
+        pass
+    deg = lambda value: f"{value:.1f}".replace(".", ",")
     return (
-        f"Ommeke dekt momenteel {d['naam']} ongeveer tussen "
-        f"{b['min_lat']:.2f}°N en {b['max_lat']:.2f}°N en tussen "
-        f"{b['min_lon']:.2f}°O en {b['max_lon']:.2f}°O."
+        f"Ommeke dekt momenteel {d['naam']}, ongeveer tussen "
+        f"{deg(b['min_lat'])} en {deg(b['max_lat'])}° noorderbreedte en tussen "
+        f"{deg(b['min_lon'])} en {deg(b['max_lon'])}° oosterlengte."
     )
 
 

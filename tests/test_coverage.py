@@ -60,7 +60,10 @@ def test_check_point_inside_ok_and_outside_buiten_gebied():
             payload = exc.payload()
             assert payload["code"] == "buiten_gebied"
             assert "Vlaanderen" in payload["error"] and "Bredene" in payload["error"]
-            assert "51.00°N" in payload["error"] and "3.00°O" in payload["error"]
+            # De tekst toont de Vlaanderen-grens (leesbaar, Nederlandse decimalen);
+            # de gestructureerde dekking blijft de gemeten graph-bbox.
+            assert "noorderbreedte" in payload["error"] and "oosterlengte" in payload["error"]
+            assert "°N" not in payload["error"]
             assert payload["dekking"]["bbox"]["max_lon"] == 4.0
         else:
             raise AssertionError("buiten het gebied moet OutOfCoverage geven")
