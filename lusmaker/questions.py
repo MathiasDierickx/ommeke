@@ -356,3 +356,17 @@ def ask(d: dict, profiel: dict, probe: dict) -> list[dict]:
         }
         for rank, (impact, row) in enumerate(scored, start=1)
     ]
+
+
+def start_place(query: str, candidates: list[dict], target: str = "start") -> dict:
+    """Plaatskeuze vóór de locatieafhankelijke terreinvragen."""
+    return {
+        "id": "startplaats", "prioriteit": 1,
+        "vraag": f"Welke {query} bedoel je?",
+        "reden": "Er zijn meerdere plaatsen met deze naam.",
+        "opties": {
+            str(index): {"label": point["label"], "patch": {
+                target: {key: point[key] for key in ("lat", "lon", "label")}
+            }} for index, point in enumerate(candidates[:4])
+        },
+    }

@@ -595,6 +595,64 @@ test("snelle planner: zonder voorstellen blijft het resultaat zoals het was", as
   expectNoStrays(state, "geen voorstellen");
 });
 
+const startplaatsQuestion = {
+  id: "startplaats", vraag: "Welke Kluisbos bedoel je?", opties: {
+    "0": { label: "Kluisbos (Kluisbergen)", patch: { start: { lat: 50.76, lon: 3.50, label: "Kluisbos (Kluisbergen)" } } },
+    "1": { label: "Kluisbos (Halle)", patch: { start: { lat: 50.74, lon: 4.26, label: "Kluisbos (Halle)" } } },
+  },
+};
+
+test("snelle planner: startplaats kiezen vóór vervolgvragen", async ({ page, url }) => {
+  const state = await installBackend(page, { handlers: {
+    "POST /api/routes/stream": () => sse([["result", { status: "needs_input", draft: "d1", vragen: [startplaatsQuestion] }]]),
+    "POST /api/routes/d1/answers/stream": ({ body }) => {
+      if (body.antwoorden.startplaats) {
+        assert.deepEqual(body.antwoorden, { startplaats: "0" });
+        return sse([["result", { status: "needs_input", draft: "d1", vragen: [
+          { id: "heuvels", vraag: "Zoek je heuvels?", opties: { zoek: {}, ok: {}, vlak: {} } },
+        ] }]]);
+      }
+      assert.deepEqual(body.antwoorden, { heuvels: "zoek" });
+      return sse([["result", { status: "ready", draft: "d1", km: 40, constraints: { voldaan: true, waarschuwingen: [] } }]]);
+    },
+  } });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Kluisbos");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByText("Welke Kluisbos bedoel je?").waitFor();
+  assert.equal(await page.getByRole("radiogroup", { name: "Welke Kluisbos bedoel je?" }).getByRole("radio").count(), 2);
+  await page.getByRole("radio", { name: "Kluisbos (Kluisbergen)", exact: true }).check();
+  await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
+  await page.getByText("Zoek je heuvels?").waitFor();
+  await page.getByRole("radio", { name: "Graag heuvels" }).check();
+  await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
+  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  const calls = state.calls.filter(c => c.key.endsWith("answers/stream"));
+  assert.equal(calls.length, 2);
+  assert.notEqual(calls[0].body.request_id, calls[1].body.request_id);
+  expectNoStrays(state, "startplaats planner");
+});
+
+test("routepagina: startplaats met leesbare kandidaatknoppen", async ({ page, url }) => {
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: s.route }),
+    "POST /api/routes/r1/answers/stream": ({ body, state: s }) => {
+      assert.deepEqual(body.antwoorden, { startplaats: "1" });
+      s.route = { ...s.route, start: "Kluisbos (Halle)", ready: true, vragen: [], total_km: 20,
+        geometry: { points: [[50.74, 4.26]], climbs: [], start: null }, revision: s.route.revision + 1 };
+      return sse([["result", { status: "ready", draft: "r1" }]]);
+    },
+  } });
+  state.route = { ...state.route, ready: false, total_km: null, vragen: [startplaatsQuestion] };
+  await openRoute(page, url);
+  await page.getByText("Welke Kluisbos bedoel je?").waitFor();
+  await page.getByRole("radio", { name: "Kluisbos (Halle)", exact: true }).check();
+  await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
+  await page.getByRole("button", { name: "Download GPX" }).waitFor();
+  assert.equal(state.route.start, "Kluisbos (Halle)");
+  expectNoStrays(state, "startplaats routepagina");
+});
+
 test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async ({ page, url }) => {
   const vragen = [
     { id: "ondergrond", vraag: "6,0 km van je verkenningsroute is onverhard. Blijf je liever op verharde wegen?", opties: { verhard: {}, ok: {}, onverhard: {} } },

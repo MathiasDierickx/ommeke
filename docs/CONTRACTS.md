@@ -58,6 +58,12 @@ Bewuste verschillen:
 - Een `null`-voorkeur is onbekend, `ok` is expliciet onverschillig. Geef geen
   `false` door voor een onbekende keuze.
 
+Een dubbelzinnige start of `rond_plaats` geeft eerst alleen de vraag
+`startplaats` (maximaal vier geografisch onderscheiden kandidaten). Opties hebben
+een leesbaar label en een patch met lat/lon/label. De server bewaart de kandidaten;
+de client stuurt alleen de optiesleutel. Pas na de keuze draait de locatieafhankelijke
+probe. Bij twee dubbelzinnige plaatsen volgen de plaatsvragen één voor één.
+
 ## adjust_route
 
 CLI: `lus adjust-route <id>`. MCP/chat: `adjust_route`. Web:
@@ -66,6 +72,7 @@ CLI: `lus adjust-route <id>`. MCP/chat: `adjust_route`. Web:
 | Parameter | CLI | MCP | Chat | Web | Default en opmerking |
 |---|---|---|---|---|---|
 | draft_id | `id` | `draft_id` | `draft_id` | `draft_id` | Verplicht. Web: padparameter. |
+| startplaats | — | `startplaats` | `startplaats` | — | Opgeslagen optiesleutel (0–3); gebruikt dezelfde validatie en hervatting als apply_answers. |
 | voeg_klimmen_toe | `--voeg-klim-toe` | `voeg_klimmen_toe` | `voeg_klimmen_toe` | `voeg_klimmen_toe` | Lijst. |
 | verwijder_klimmen | `--verwijder-klim` | `verwijder_klimmen` | `verwijder_klimmen` | `verwijder_klimmen` | Lijst. |
 | vermijd_plaatsen | `--vermijd-plaats` | `vermijd_plaatsen` | `vermijd_plaatsen` | `vermijd_plaatsen` | Lijst. |
@@ -97,12 +104,13 @@ Antwoorden op situationele vragen (`needs_input`) toepassen zonder taalmodel en
 opnieuw routeren. Enkel beschikbaar via de web-API
 (`POST /api/routes/{draft_id}/answers` en `.../answers/stream`) en de motor
 (`intents.apply_answers`). Chat doet hetzelfde via `update_profile` plus
-`adjust_route`; de CLI en MCP bieden het niet aan.
+`adjust_route`; startplaatskeuzes gaan in chat en MCP via
+`adjust_route(startplaats=...)`. De CLI biedt apply_answers niet aan.
 
 | Parameter | CLI | MCP | Chat | Web | Default en opmerking |
 |---|---|---|---|---|---|
 | draft_id | — | — | — | `draft_id` | Padparameter. |
-| antwoorden | — | — | — | `antwoorden` | Verplicht, niet leeg. Sleutels `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. |
+| antwoorden | — | — | — | `antwoorden` | Verplicht, niet leeg. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. |
 | request_id | — | — | — | `request_id` | Verplicht in de web-API (receipt, scope `answers`). |
 
 De motor kent ook `expected_revision`; de web-endpoint geeft die niet door.

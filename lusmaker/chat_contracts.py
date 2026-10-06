@@ -61,6 +61,7 @@ ADJUST_ROUTE_SCHEMA = {
     "additionalProperties": False,
     "required": ["draft_id"],
     "properties": {
+        "startplaats": {"type": "string", "enum": ["0", "1", "2", "3"]},
         "draft_id": {"type": "string", "minLength": 1, "maxLength": 64},
         "voeg_klimmen_toe": {"type": "array", "items": {"type": "string"}, "maxItems": 12},
         "verwijder_klimmen": {"type": "array", "items": {"type": "string"}, "maxItems": 12},

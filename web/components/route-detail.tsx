@@ -191,7 +191,10 @@ export function RouteDetail({
               <button className="button button-primary" disabled={adjusting || route.vragen.some(q => !answers[q.id || q.vraag])} onClick={async () => {
                 if (adjusting || !route.vragen) return;
                 setAdjusting(true); setAnswerProgress(null);
-                try { await onAnswers(Object.fromEntries(route.vragen.map(q => [q.id || q.vraag, answers[q.id || q.vraag]])), setAnswerProgress); }
+                try {
+                  await onAnswers(Object.fromEntries(route.vragen.map(q => [q.id || q.vraag, answers[q.id || q.vraag]])), setAnswerProgress);
+                  setAnswers({});
+                }
                 finally { setAdjusting(false); }
               }}>{adjusting ? "Route wordt berekend…" : "Maak mijn route met deze keuzes"}</button>
               {adjusting || answerProgress ? <RouteProgress event={answerProgress} /> : null}

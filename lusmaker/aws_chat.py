@@ -335,6 +335,7 @@ Bij een gewone toer zonder klimwens zet je doel=toeren; bij expliciet onverhard 
 Kies de activiteit die bij de vraag past (wandelen, trail, wegloop, stadsfiets, toerfiets, koersfiets, gravel, mtb).
 Stel kasseien, beton_vermijden, strict of doel=hoogtemeters nooit op eigen initiatief in: alleen als de gebruiker ze noemt. Onbekend laat je weg; de tool stelt zo nodig gerichte vragen.
 Bij een wijziging haal je met route_details eerst de actuele revision op als die ontbreekt.
+Bij een vraag startplaats: stel de vraag met de kandidaatlabels en geef de gekozen optiesleutel door via adjust_route(startplaats=...). Verzin geen coördinaten.
 Gebruik update_profile voor expliciete antwoorden op voorkeurenvragen, daarna adjust_route.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.

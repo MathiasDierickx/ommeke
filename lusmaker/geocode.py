@@ -1,4 +1,5 @@
 """Lokale geocoder op basis van OSM-plaatsen en straatnamen."""
+import difflib
 import math
 import pickle
 import re
@@ -194,6 +195,10 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
     ]
     if nearby_landmarks:
         return nearby_landmarks[:limit]
+    nearby_places = [hit for hit in _match_places(gaz["places"], parts[0])
+                     if geo.haversine(hit["lat"], hit["lon"], p0["lat"], p0["lon"]) < 8000]
+    if nearby_places:
+        return nearby_places[:limit]
     pts = gaz["streets"].get(street_q.lower(), [])
     near = [(la, lo, nm) for la, lo, nm in pts if geo.haversine(la, lo, p0["lat"], p0["lon"]) < 6000]
     out = []
@@ -203,6 +208,34 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
     if not out:
         out = [dict(p0, note=f"straat '{street_q}' niet gevonden, plaats zelf gebruikt")]
     return out[:limit]
+
+
+def ambiguous_candidates(query: str, hits: list[dict], gazetteer=None) -> list[dict]:
+    """Gelijkwaardige naammatches, geografisch ontdubbeld op drie kilometer."""
+    if "," in query or len(hits) < 2:
+        return []
+    q = _normalise(query)
+    def rank(hit):
+        name = _normalise(hit["label"])
+        return 0 if name == q else 1 if name.startswith(q) else 2
+    best = hits[0]
+    candidates = []
+    for hit in hits:
+        if rank(hit) != rank(best):
+            continue
+        if difflib.SequenceMatcher(None, _normalise(best["label"]), _normalise(hit["label"])).ratio() < 0.9:
+            continue
+        if any(geo.haversine(hit["lat"], hit["lon"], c["lat"], c["lon"]) <= 3000 for c in candidates):
+            continue
+        candidates.append(dict(hit))
+    if len(candidates) < 2:
+        return []
+    gaz = _load() if gazetteer is None else gazetteer
+    for hit in candidates:
+        place = _nearest_place(gaz.get("places", []), hit["lat"], hit["lon"])
+        if place:
+            hit["label"] = f"{hit['label']} ({place})"
+    return candidates[:4]
 
 
 _DEFAULT_GOOGLE_RESOLVER = object()
@@ -259,7 +292,9 @@ def resolve(
             f"'{query}' niet gevonden — probeer 'straat, plaats' of 'lat,lon'"
         )
     best = hits[0]
+    candidates = ambiguous_candidates(query, hits, gazetteer)
     return (
-        {"lat": best["lat"], "lon": best["lon"], "label": best["label"]},
+        {"lat": best["lat"], "lon": best["lon"], "label": best["label"],
+         **({"candidates": candidates} if candidates else {})},
         hits[1:],
     )

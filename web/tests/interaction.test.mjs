@@ -51,3 +51,13 @@ test('browserfouten worden begrijpelijk Nederlands met herstelactie', () => {
   const own = new Error('Je daglimiet voor chatberichten is bereikt.');
   assert.equal(networkError(own), own);
 });
+
+import { optionLabel } from '../lib/question-labels.ts';
+test('startplaatsopties tonen kandidaatlabels in beide vraagweergaven', () => {
+  const question = { id: 'startplaats', vraag: 'Welke Kluisbos bedoel je?', opties: {
+    '0': { label: 'Kluisbos (Kluisbergen)', patch: { start: { lat: 50.76, lon: 3.5, label: 'Kluisbos (Kluisbergen)' } } },
+    '1': { label: 'Kluisbos (Halle)', patch: { start: { lat: 50.74, lon: 4.26, label: 'Kluisbos (Halle)' } } },
+  } };
+  assert.equal(optionLabel(question, '0'), 'Kluisbos (Kluisbergen)');
+  assert.equal(optionLabel(question, '1'), 'Kluisbos (Halle)');
+});

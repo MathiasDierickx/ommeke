@@ -25,6 +25,7 @@ from . import (
     preview,
     profiles,
     readiness,
+    questions,
 )
 from . import proposals as proposals_mod
 
@@ -469,6 +470,25 @@ def _profile_for_request(request: dict, profile_load_fn) -> dict:
     return profile
 
 
+def _place_input(d, request, save_fn=None):
+    pending = d.get("pending_places") or []
+    if not pending:
+        return None
+    item = pending[0]
+    question = questions.start_place(item["query"], item["candidates"], item["target"])
+    d["open_vragen"] = [question]
+    if save_fn is not None:
+        save_fn(d)
+    return {
+        "status": "needs_input", "draft": d["id"],
+        "revision": int(d.get("revision", 0)), "request_id": request.get("request_id"),
+        "profiel": request.get("profiel_naam"), "onbekend": ["startplaats"],
+        "vragen": [question], "advies": "Kies eerst de bedoelde plaats.",
+        "constraints": constraint_report(d, request),
+        "next_action": {"antwoord_plaatsvragen_met": "adjust_route", "parameter": "startplaats", "draft_id": d["id"]},
+    }
+
+
 def _needs_input(
     d: dict,
     climb_db: dict,
@@ -479,6 +499,9 @@ def _needs_input(
     profile_load_fn,
     save_fn=None,
 ) -> dict | None:
+    pending = _place_input(d, request, save_fn)
+    if pending is not None:
+        return pending
     from .progress import emit
     emit("checking", "Ik controleer de ondergrond, drukke wegen en je voorkeuren.")
     probe_fn(d, climb_db)
@@ -925,6 +948,9 @@ def plan_route(
             )
         request = stored_request
         d = existing
+        pending = _place_input(d, request)
+        if pending is not None:
+            return pending
         with draft.region_scope(d):
             climb_db = climbs_fn()
             if not d.get("computed") and check_readiness:
@@ -982,6 +1008,10 @@ def plan_route(
     created = create_fn(**create_kwargs)
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)
+    candidates = d["start"].pop("candidates", [])
+    if candidates:
+        d["pending_places"] = [{"query": start, "candidates": candidates, "target": "start"}]
+        save_fn(d)
     nearby = _nearby_place(d.get("start"))
     if not naam and nearby and "rond je startpunt" in route_name:
         # Een start uit coördinaten (Mijn locatie) krijgt de dichtste plaatsnaam.
@@ -997,6 +1027,9 @@ def plan_route(
         water_active = _set_water_via(d, request, water_fn)
         if rond_plaats and not water_active:
             anchor, _alternatives = resolve_fn(rond_plaats)
+            candidates = anchor.pop("candidates", [])
+            if candidates:
+                d.setdefault("pending_places", []).append({"query": rond_plaats, "candidates": candidates, "target": "round_trip_anchor"})
             coverage.check_point(anchor, "ankerpunt")
             d["round_trip_anchor"] = anchor
             d["opvullingen"] = []
@@ -1004,6 +1037,9 @@ def plan_route(
             d.pop("_geometry", None)
         d["route_request"] = request
         save_fn(d)
+        pending = _place_input(d, request, save_fn)
+        if pending is not None:
+            return pending
         if check_readiness:
             if profiel_naam is None:
                 raise IntentError(
@@ -1042,6 +1078,7 @@ def plan_route(
 
 # Antwoorden op de situationele vragen (lusmaker/questions.py).
 ANSWER_VALUES = {
+    "startplaats": {"0", "1", "2", "3"},
     "kasseien": {"graag", "ok", "vermijd"},
     "heuvels": {"zoek", "ok", "vlak"},
     "ondergrond": {"verhard", "ok", "onverhard"},
@@ -1068,13 +1105,37 @@ def apply_answers(
     if not isinstance(antwoorden, dict) or not antwoorden:
         raise IntentError("geef minstens één antwoord")
     for key, value in antwoorden.items():
-        if key not in ANSWER_VALUES or value not in ANSWER_VALUES[key]:
+        if key not in ANSWER_VALUES or not isinstance(value, str) or value not in ANSWER_VALUES[key]:
             raise IntentError(f"onbekend antwoord: {key}={value}")
     d = load_fn(draft_id)
     draft.require_revision(d, expected_revision)
     request = dict(d.get("route_request") or {})
     if not request:
         raise IntentError("deze route heeft geen routewens om aan te vullen")
+    pending = d.get("pending_places") or []
+    choosing_place = bool(pending)
+    if pending:
+        if set(antwoorden) != {"startplaats"}:
+            raise IntentError("kies eerst de startplaats")
+        item = pending[0]
+        index = int(antwoorden["startplaats"])
+        if index >= len(item["candidates"]):
+            raise IntentError("de gekozen startplaats hoort niet bij deze vraag")
+        point = {key: item["candidates"][index][key] for key in ("lat", "lon", "label")}
+        with draft.region_scope(d):
+            coverage.check_point(point, "startpunt" if item["target"] == "start" else "ankerpunt")
+        d[item["target"]] = point
+        if item["target"] == "round_trip_anchor":
+            request["resolved_round_place"] = {"query": item["query"], "point": point}
+        d["pending_places"] = pending[1:]
+        d["computed"] = None
+        d["opvullingen"] = []
+        d["water_via"] = []
+        for key in ("_probe", "_geometry", "open_vragen"):
+            d.pop(key, None)
+        antwoorden = {}
+    elif "startplaats" in antwoorden:
+        raise IntentError("deze route heeft geen open startplaatsvraag")
     request["expliciete_voorkeuren"] = {**(request.get("expliciete_voorkeuren") or {}), **antwoorden}
     d["route_request"] = request
     if "kasseien" in antwoorden:
@@ -1091,7 +1152,8 @@ def apply_answers(
     save_fn(d)
     adjust = adjust_fn or adjust_route
     with funnel.adjust_kind("answers"):
-        return adjust(draft_id, doel=goal, check_readiness=True)
+        return adjust(draft_id, doel=goal,
+                      check_readiness=not choosing_place or request.get("profiel_naam") is not None)
 
 
 @funnel.tracked_adjust
@@ -1148,6 +1210,7 @@ def adjust_route(
     rond_plaats: str | None = None,
     langs_water: str | None = None,
     request_id: str | None = None,
+    startplaats: str | None = None,
     *,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -1168,9 +1231,26 @@ def adjust_route(
     exports_root: Path | None = None,
 ) -> dict:
     """Pas meerdere routewensen toe, routeer eenmaal en exporteer opnieuw."""
+    if startplaats is not None:
+        # Hergebruik validatie en hervatting; behoud de geïnjecteerde router/probe.
+        def resume(selected_id, **kwargs):
+            return adjust_route(
+                selected_id, load_fn=load_fn, save_fn=save_fn,
+                route_fn=route_fn, optimize_fn=optimize_fn, climbs_fn=climbs_fn,
+                export_gpx_fn=export_gpx_fn, export_preview_fn=export_preview_fn,
+                probe_fn=probe_fn, assess_fn=assess_fn, profile_load_fn=profile_load_fn,
+                resolve_fn=resolve_fn, water_fn=water_fn, exports_root=exports_root,
+                **kwargs,
+            )
+        return apply_answers(draft_id, {"startplaats": startplaats},
+                             expected_revision=expected_revision, load_fn=load_fn,
+                             save_fn=save_fn, adjust_fn=resume)
     d = load_fn(draft_id)
     draft.require_revision(d, expected_revision)
     previous_request = d.get("route_request") or {}
+    pending = _place_input(d, previous_request)
+    if pending is not None:
+        return pending
     if rond_plaats is not None:
         rond_plaats = rond_plaats.strip()
         if not rond_plaats:
@@ -1291,7 +1371,14 @@ def adjust_route(
             d.pop("optimize_note", None)
         water_active = _set_water_via(d, request, water_fn)
         if effective_round_place and not water_active:
-            anchor, _alternatives = resolve_fn(effective_round_place)
+            resolved = request.get("resolved_round_place") or {}
+            if resolved.get("query") == effective_round_place:
+                anchor = dict(resolved["point"])
+            else:
+                anchor, _alternatives = resolve_fn(effective_round_place)
+                candidates = anchor.pop("candidates", [])
+                if candidates:
+                    d["pending_places"] = [{"query": effective_round_place, "candidates": candidates, "target": "round_trip_anchor"}]
             coverage.check_point(anchor, "ankerpunt")
             if d.get("round_trip_anchor") != anchor:
                 d["round_trip_anchor"] = anchor
@@ -1300,6 +1387,9 @@ def adjust_route(
                 d.pop("_geometry", None)
         d["route_request"] = request
         save_fn(d)
+        pending = _place_input(d, request, save_fn)
+        if pending is not None:
+            return pending
         if check_readiness:
             if effective_profile is None:
                 raise IntentError(
