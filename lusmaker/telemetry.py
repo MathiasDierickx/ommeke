@@ -10,6 +10,9 @@ import logging
 import re
 import time
 import uuid
+from threading import Lock
+
+_router_stats_lock = Lock()
 
 request_id = ContextVar('request_id', default=None)
 # Per request: {'calls', 'ms', 'wait_ms'} voor GraphHopper-aanroepen (geen inhoud).
@@ -34,9 +37,10 @@ def actor_id():
 def router_record(*, calls=0, ms=0.0, wait_ms=0.0):
     stats = router_stats.get()
     if stats is not None:
-        stats['calls'] += calls
-        stats['ms'] += ms
-        stats['wait_ms'] += wait_ms
+        with _router_stats_lock:
+            stats['calls'] += calls
+            stats['ms'] += ms
+            stats['wait_ms'] += wait_ms
 
 
 def emit(event, **values):

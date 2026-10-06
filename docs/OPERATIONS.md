@@ -208,3 +208,7 @@ de standaard `enable_application_monitoring=true` voor andere installaties.
 Schakel dit niet uit op een installatie met bestaande alarmen: Terraform zal
 die dan verwijderen. In deze productieomgeving waren de nieuwe alarmen en
 het dashboard nog niet aangemaakt door de eerdere AccessDenied-fout.
+
+## Routerconcurrency
+
+`LUSMAKER_ROUTER_CONCURRENCY` (standaard 4) bepaalt hoeveel onafhankelijke GraphHopper-calls de optimizer tegelijk uitvoert (kandidaat-klimmen en round-trip-seeds). Zet 1 voor sequentieel gedrag, bijvoorbeeld bij geheugendruk op de Lambda.

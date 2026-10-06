@@ -30,3 +30,27 @@ def test_route_cache_never_caches_failures_and_is_bounded():
     assert cache([1])['distance_m']==2
     cache([2]); cache([2])
     assert count[0]==4 and len(cache.values)==1
+
+
+def test_route_cache_parallel_misses_remain_bounded_without_serializing_router():
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    barrier = Barrier(4)
+
+    def router(points, **kwargs):
+        barrier.wait(timeout=5)
+        return {'coords': [[points[0], 3]], 'distance_m': 100}
+
+    cache = RouteCache(router, max_entries=2)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        values = list(pool.map(lambda i: cache([i]), range(4)))
+    assert cache.misses == 4 and cache.hits == 0
+    assert len(cache.values) == 2
+    for key, value in list(cache.values.items()):
+        import json
+        points, kwargs = json.loads(key)
+        result = cache(points, **kwargs)
+        result['coords'].append([0, 0])
+        assert len(value['coords']) == 1
+    assert cache.hits == 2
+    assert all(len(value['coords']) == 1 for value in values)

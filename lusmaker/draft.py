@@ -1,5 +1,9 @@
 """Draft-routes: opbouwen, routeren (met lus-constraint), suggesties, opslag."""
 import copy
+import os
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
+from itertools import islice
 import fcntl
 import inspect
 import json
@@ -1057,6 +1061,29 @@ MAX_EXACT_CANDIDATES = 8
 OPTIMIZE_TIME_BUDGET_S = 360.0
 
 
+def _router_concurrency() -> int:
+    """Lees de poolgrootte per uitvoering; ongeldige waarden gebruiken de default."""
+    try:
+        return max(1, int(os.environ.get("LUSMAKER_ROUTER_CONCURRENCY", "4")))
+    except ValueError:
+        return 4
+
+
+def _router_results(evaluate, items):
+    """Begrensde batches met een eigen requestcontext per taak, in invoervolgorde."""
+    concurrency = _router_concurrency()
+    if concurrency == 1:
+        for item in items:
+            yield evaluate(item)
+        return
+    items = iter(items)
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        while batch := list(islice(items, concurrency)):
+            futures = [pool.submit(copy_context().run, evaluate, item) for item in batch]
+            for future in futures:
+                yield future.result()
+
+
 def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
                 banned=frozenset(), router=gh.route, weighted: bool = False,
                 popular_cells=_LOAD_HEAT, max_eval: int | None = None) -> list[dict]:
@@ -1072,7 +1099,8 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
     zones = place_areas(d)
     per_climb: dict[str, dict] = {}
     selection = candidates[: (max_eval if max_eval is not None else max(24, limit * 4))]
-    for index, (_est, cid, c, leg_i, a, b) in enumerate(selection, start=1):
+    def evaluate(item):
+        index, (_est, cid, c, leg_i, a, b) = item
         emit("optimizing", f"Ik bereken de omweg via {c.get('name') or cid} ({index} van {len(selection)}).")
         try:
             preferences = {
@@ -1099,8 +1127,15 @@ def _candidates(d: dict, climb_db: dict, max_detour_km: float, limit: int,
             # eerlijke baseline: zelfde leg zonder corridor-constraint, anders
             # vertekent een omweg-leg de vergelijking (negatieve extra's)
             base_r = router([a, b], avoid_polygons=zones, **preferences)
-        except gh.GhError:
+        except (gh.GhError, DraftError):
+            return None
+        return r1, r2, r3, base_r
+
+    results = _router_results(evaluate, enumerate(selection, start=1))
+    for (_est, cid, c, leg_i, a, b), result in zip(selection, results):
+        if result is None:
             continue
+        r1, r2, r3, base_r = result
         extra_m = r1["distance_m"] + r2["distance_m"] + r3["distance_m"] - base_r["distance_m"]
         extra_up = r1["ascend_m"] + r2["ascend_m"] + r3["ascend_m"] - base_r["ascend_m"]
         if extra_m / 1000 > max_detour_km:
@@ -1488,10 +1523,15 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             )
         return {"filled": False, "reason": reason}
 
-    for seed in range(seed_start, 5 if seed_start == 0 else 20):
-        # Na de deadline geen extra varianten meer; de eerste poging mag altijd.
-        if deadline is not None and seed > seed_start and clock() > deadline:
-            break
+    def seeds():
+        for seed in range(seed_start, 5 if seed_start == 0 else 20):
+            # Controleer vóór het inplannen van elke seed in een nieuwe batch.
+            # De eerste poging mag altijd, ook wanneer de deadline verstreken is.
+            if deadline is not None and seed > seed_start and clock() > deadline:
+                break
+            yield seed
+
+    def evaluate(seed):
         from .progress import emit
         emit("variants", f"Ik toets lusvariant {seed + 1} aan je gewenste afstand.")
         try:
@@ -1502,7 +1542,12 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                 details=(weights is not None),
                 **preferences,
             )
-        except gh.GhError:
+        except (gh.GhError, DraftError):
+            return seed, None
+        return seed, candidate
+
+    for seed, candidate in _router_results(evaluate, seeds()):
+        if candidate is None:
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
         if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:

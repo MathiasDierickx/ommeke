@@ -453,14 +453,16 @@ def test_optimize_without_fill_keeps_existing_budget_and_skips_round_trip():
     def unexpected(*_args, **_kwargs):
         raise AssertionError("round_trip mag niet worden aangeroepen")
 
-    result = draft._optimize(
-        routed,
-        {},
-        max_km=10,
-        max_rounds=0,
-        fill=False,
-        round_trip_fn=unexpected,
-    )
+    from unittest import mock
+    with tempfile.TemporaryDirectory() as root, mock.patch.dict(os.environ, LUSMAKER_HOME=root):
+        result = draft._optimize(
+            routed,
+            {},
+            max_km=10,
+            max_rounds=0,
+            fill=False,
+            round_trip_fn=unexpected,
+        )
 
     assert result["resultaat"]["computed"]["total_km"] == 5.0
     assert result["rondes"] == []
@@ -598,7 +600,7 @@ def test_failed_first_candidates_retry_bounded_extra_seeds():
                                        round_trip_fn=round_trip, target_total_m=3000,
                                        objective='toeren')
     assert result['filled'] and result['seed'] == 7
-    assert attempts == list(range(20))
+    assert sorted(attempts) == list(range(20))
     assert routed['computed']['total_km'] == 3
 
 
@@ -621,7 +623,7 @@ def test_short_first_batch_does_not_hide_a_matching_later_round_trip():
     result = draft._fill_with_round_trip(routed,{},3300,router=router,
         round_trip_fn=round_trip,target_total_m=3000,objective='toeren')
     assert result['seed']==7 and routed['computed']['total_km']==3
-    assert attempts==list(range(20))
+    assert sorted(attempts)==list(range(20))
     assert len(routed['opvullingen'])==1
 
 
@@ -856,7 +858,8 @@ def test_exact_candidate_evaluation_is_capped_and_reports_progress():
     climbs_routed = {tuple(points[1]) for points in calls if len(points) == 3}
     assert len(climbs_routed) <= 5
     texts = [e["message"] for e in events if e["stage"] == "optimizing"]
-    assert texts and texts[0].endswith("(1 van 5).") and len(texts) == 5
+    assert len(texts) == 5
+    assert all(any(text.endswith(f"({index} van 5).") for text in texts) for index in range(1, 6))
 
 
 def test_optimize_stops_at_the_time_budget_and_keeps_the_route():
@@ -910,3 +913,218 @@ def test_round_trip_fill_falls_back_to_least_overlap_instead_of_failing():
                                              target_total_m=30000, objective='toeren')
     assert start_km < 30 and result['filled'] and routed['computed']['total_km'] == 30.0
     assert 'dezelfde wegen' in routed['fill_note'] and '0,8 km' in routed['fill_note']
+
+
+def _parallel_candidate_fixture():
+    routed = {
+        'id': 'parallel', 'climbs': [],
+        'computed': {'total_km': 40.0, 'legs': [{'km': 20.0}, {'km': 20.0}]},
+        '_geometry': [[(50.80, 3.60), (50.90, 3.60)],
+                      [(50.90, 3.60), (50.80, 3.60)]],
+    }
+    climbs = {
+        f'k{i}': {
+            'id': f'k{i}', 'name': f'Klim {i}', 'town': '',
+            'avg_pct': 7.0, 'max_pct': 10.0, 'warnings': [],
+            'foot': [50.85, 3.60 + i * .002],
+            'mid': [50.851, 3.60 + i * .002],
+            'top': [50.852, 3.60 + i * .002],
+            'length_m': 800, 'gain_m': 60,
+        } for i in range(8)
+    }
+    return routed, climbs
+
+
+def test_parallel_candidates_are_faster_with_identical_ordered_results():
+    import time
+    from threading import Lock
+    from unittest import mock
+    routed, climbs = _parallel_candidate_fixture()
+    active = peak = 0
+    lock = Lock()
+
+    def slow_router(points, **kwargs):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        try:
+            time.sleep(.05)
+            return {'distance_m': 1000.0, 'ascend_m': 10.0}
+        finally:
+            with lock:
+                active -= 1
+
+    results, durations = [], []
+    for concurrency in (1, 4):
+        peak = 0
+        with mock.patch.dict(os.environ, LUSMAKER_ROUTER_CONCURRENCY=str(concurrency)):
+            began = time.monotonic()
+            results.append(draft._candidates(routed, climbs, 8.0, 10,
+                                            router=slow_router, max_eval=8))
+            durations.append(time.monotonic() - began)
+        assert peak == concurrency
+    assert len(results[0]) >= 3
+    assert results[0] == results[1]
+    assert durations[1] < durations[0] * .65, durations
+    print(f'Kandidaten: sequentieel {durations[0]:.3f}s, parallel {durations[1]:.3f}s')
+
+
+def test_candidate_workers_keep_progress_and_telemetry_context():
+    import threading
+    from unittest import mock
+    from lusmaker import progress, telemetry
+    routed, climbs = _parallel_candidate_fixture()
+    main_thread = threading.get_ident()
+    events, worker_ids = [], []
+    stats = {'calls': 0, 'ms': 0.0, 'wait_ms': 0.0}
+    token = telemetry.router_stats.set(stats)
+    request_token = telemetry.request_id.set('parallel-request')
+
+    def sink(event):
+        worker_ids.append(threading.get_ident())
+        events.append(event)
+
+    def router(points, **kwargs):
+        assert telemetry.router_stats.get() is stats
+        assert telemetry.request_id.get() == 'parallel-request'
+        progress.emit('router', 'Routercall in worker.')
+        telemetry.router_record(calls=1, ms=2, wait_ms=1)
+        return {'distance_m': 1000, 'ascend_m': 10}
+
+    try:
+        with mock.patch.dict(os.environ, LUSMAKER_ROUTER_CONCURRENCY='4'), progress.capture(sink):
+            draft._candidates(routed, climbs, 8, 10, router=router, max_eval=8)
+    finally:
+        telemetry.router_stats.reset(token)
+        telemetry.request_id.reset(request_token)
+    optimizing = [event for event in events if event['stage'] == 'optimizing']
+    assert len(optimizing) == 8
+    assert len([event for event in events if event['stage'] == 'router']) == 32
+    assert main_thread not in worker_ids
+    assert stats == {'calls': 32, 'ms': 64.0, 'wait_ms': 32.0}
+
+
+def test_concurrency_one_keeps_candidate_call_and_progress_order():
+    import threading
+    from unittest import mock
+    from lusmaker import progress
+    routed, climbs = _parallel_candidate_fixture()
+    selected = draft._candidate_prefilter(routed, climbs, 8)[:8]
+    expected_calls = []
+    for _est, _cid, climb, _leg, a, b in selected:
+        expected_calls.extend([[a, tuple(climb['foot'])],
+                               [tuple(climb['foot']), tuple(climb['mid']), tuple(climb['top'])],
+                               [tuple(climb['top']), b], [a, b]])
+    calls, events = [], []
+    main_thread = threading.get_ident()
+
+    def router(points, **kwargs):
+        assert threading.get_ident() == main_thread
+        calls.append(points)
+        return {'distance_m': 1000, 'ascend_m': 10}
+
+    with mock.patch.dict(os.environ, LUSMAKER_ROUTER_CONCURRENCY='1'), progress.capture(events.append):
+        result = draft._candidates(routed, climbs, 8, 10, router=router, max_eval=8)
+    assert calls == expected_calls
+    assert [event['message'] for event in events] == [
+        f"Ik bereken de omweg via {climb['name']} ({index} van 8)."
+        for index, (_est, _cid, climb, _leg, _a, _b) in enumerate(selected, 1)
+    ]
+    ids = list(dict.fromkeys(item[1] for item in selected))
+    assert [candidate['id'] for candidate in result] == ids
+    assert all(candidate['extra_km'] == 2 and candidate['extra_hm'] == 20 for candidate in result)
+
+
+def test_parallel_candidate_errors_are_local_to_the_candidate():
+    from unittest import mock
+    from lusmaker import gh
+    routed, climbs = _parallel_candidate_fixture()
+    failures = {tuple(climbs['k0']['foot']): gh.GhError,
+                tuple(climbs['k1']['foot']): draft.DraftError}
+
+    def router(points, **kwargs):
+        if points[-1] in failures:
+            raise failures[points[-1]]('geen route')
+        return {'distance_m': 1000, 'ascend_m': 10}
+
+    results = []
+    for concurrency in (1, 4):
+        with mock.patch.dict(os.environ, LUSMAKER_ROUTER_CONCURRENCY=str(concurrency)):
+            results.append(draft._candidates(routed, climbs, 8, 10, router=router, max_eval=8))
+    assert results[0] == results[1] and results[0]
+    assert not {'k0', 'k1'} & {candidate['id'] for candidate in results[0]}
+
+
+def test_round_trip_batches_keep_seed_tiebreak_and_context():
+    import copy
+    import threading
+    import time
+    from unittest import mock
+    from lusmaker import progress, telemetry
+    source = _synthetic_routed_draft()
+    source['climbs'] = []
+    source['computed'] = {'total_km': 0, 'ascend_m': 0, 'legs': []}
+    source['_geometry'] = []
+    results, final_drafts = [], []
+    main_thread = threading.get_ident()
+    for concurrency in (1, 4):
+        routed = copy.deepcopy(source)
+        events, worker_ids = [], []
+        stats = {'calls': 0, 'ms': 0.0, 'wait_ms': 0.0}
+        token = telemetry.router_stats.set(stats)
+
+        def round_trip(anchor, distance_m, seed, **kwargs):
+            worker_ids.append(threading.get_ident())
+            assert telemetry.router_stats.get() is stats
+            telemetry.router_record(calls=1)
+            # Laat latere seeds eerder eindigen; seed 0 moet de tie blijven winnen.
+            time.sleep(.01 * (5 - seed))
+            return {'distance_m': 2000, 'ascend_m': 20,
+                    'coords': [anchor, (50.01, 4.0), (50.01, 4.01), anchor]}
+
+        def router(current, _db):
+            assert threading.get_ident() == main_thread
+            current['computed'] = {'total_km': 2, 'ascend_m': 20}
+
+        try:
+            with mock.patch.dict(os.environ, LUSMAKER_ROUTER_CONCURRENCY=str(concurrency)), progress.capture(events.append):
+                results.append(draft._fill_with_round_trip(routed, {}, 3000,
+                                                          router=router, round_trip_fn=round_trip))
+        finally:
+            telemetry.router_stats.reset(token)
+        final_drafts.append(routed)
+        assert len(events) == 5 and all(event['stage'] == 'variants' for event in events)
+        assert stats['calls'] == 5
+        assert (main_thread in worker_ids) == (concurrency == 1)
+    assert results[0] == results[1] and results[0]['seed'] == 0
+    assert final_drafts[0] == final_drafts[1]
+
+
+def test_round_trip_deadline_prevents_a_new_parallel_batch():
+    from unittest import mock
+    from lusmaker import gh
+    routed = _synthetic_routed_draft()
+    routed['climbs'] = []
+    attempts = []
+
+    def round_trip(anchor, distance_m, seed, **kwargs):
+        attempts.append(seed)
+        raise gh.GhError('geen kandidaat')
+
+    with mock.patch.dict(os.environ, LUSMAKER_ROUTER_CONCURRENCY='4'):
+        result = draft._fill_with_round_trip(routed, {}, 40000,
+            round_trip_fn=round_trip, deadline=10,
+            clock=lambda: 100 if attempts else 0)
+    assert not result['filled']
+    assert sorted(attempts) == [0, 1, 2, 3]
+
+
+def test_router_concurrency_defaults_and_invalid_values():
+    from unittest import mock
+    with mock.patch.dict(os.environ):
+        os.environ.pop('LUSMAKER_ROUTER_CONCURRENCY', None)
+        assert draft._router_concurrency() == 4
+        for value, expected in [('1', 1), ('4', 4), ('0', 1), ('-2', 1), ('bad', 4)]:
+            os.environ['LUSMAKER_ROUTER_CONCURRENCY'] = value
+            assert draft._router_concurrency() == expected
