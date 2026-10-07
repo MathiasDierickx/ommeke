@@ -703,6 +703,8 @@ test("chat: open vragen als knoppen beantwoorden", async ({ page, url }) => {
       if (s.route.ready) await refreshed;
       return json(200, { route: s.route });
     },
+    // Zoals de echte bibliotheek: compacte metadata zonder open vragen of voorstellen.
+    "GET /api/routes": ({ state: s }) => { const { vragen, voorstellen, ...compact } = s.route; return json(200, { routes: [compact], next_cursor: null }); },
     "GET /api/conversations/c1/messages": () => json(200, { conversation, messages: [oldMessage] }),
     "POST /api/conversations/c1/messages/stream": () => sse([["result", { message: { ...oldMessage, id: "new" }, route_ids: ["r1"] }]]),
     "POST /api/routes/r1/answers/stream": async ({ body, state: s }) => {

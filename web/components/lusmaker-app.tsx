@@ -92,7 +92,11 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     ]);
     if (version !== libraryVersion.current) return;
     setConversations(conversationData.conversations);
-    setRoutes(routeData.routes);
+    // De lijst is compact: behoud geladen vragen/voorstellen zolang de route niet veranderde.
+    setRoutes(current => routeData.routes.map(route => {
+      const known = current.find(item => item.id === route.id && item.revision === route.revision);
+      return known ? { ...route, vragen: route.vragen ?? known.vragen, voorstellen: route.voorstellen ?? known.voorstellen } : route;
+    }));
     setRouteCursor(routeData.next_cursor ?? null);
     setWorkspaceLoaded(true);
   }, []);
@@ -114,9 +118,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     loadWorkspace(session.accessToken).catch((cause) => { setWorkspaceLoaded(true); setError(cause instanceof Error ? cause.message : "Werkruimte laden mislukt."); });
   }, [session, loadWorkspace]);
 
-  // De bibliotheek heeft compacte metadata; voorstellen horen bij het actuele routedetail.
+  // De bibliotheek heeft compacte metadata; open vragen en voorstellen horen bij het actuele routedetail.
   const proposalDetails = JSON.stringify([...new Set(messages.filter(message => message.role === "assistant").flatMap(message => message.route_ids ?? []))]
-    .filter(id => { const route = routes.find(route => route.id === id); return !route || (route.ready && route.voorstellen === undefined); }));
+    .filter(id => { const route = routes.find(route => route.id === id); return !route || (route.ready ? route.voorstellen === undefined : route.vragen === undefined); }));
   useEffect(() => {
     if (!session) return;
     let active = true;
@@ -124,7 +128,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     void Promise.all(ids.map(async id => {
       try {
         const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(id)}`, session.accessToken);
-        if (active) setRoutes(current => mergeById(current, [{ ...data.route, voorstellen: data.route.voorstellen ?? [] }]));
+        if (active) setRoutes(current => mergeById(current, [{ ...data.route, vragen: data.route.vragen ?? [], voorstellen: data.route.voorstellen ?? [] }]));
       } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : "Voorstellen laden mislukt."); }
     }));
     return () => { active = false; };
