@@ -126,10 +126,15 @@ async function installBackend(page, { handlers = {}, session = true } = {}) {
   return state;
 }
 
+// Een klare snelplanner-route opent meteen de routepagina; de mock-backend kent die route dan als d1.
+const readyRoute = (over = {}) => ({ id: "d1", revision: 1, name: "Rondrit d1", activity: "koersfiets", climbs: [], total_km: 40.4, elevation_gain_m: 300, ready: true, download_url: "/api/routes/d1/gpx", geometry: null, voorstellen: [], ...over }); // geen geometrie: anders laadt de kaart tegels van buiten
+const openedRoute = async (page, id = "d1") => { await page.waitForURL(new RegExp(`/routes/${id}/?$`)); await page.getByRole("button", { name: "Neem mee" }).waitFor(); };
+
 const defaultHandlers = {
   "GET /api/conversations": () => json(200, { conversations: [] }),
   "GET /api/routes": ({ state }) => json(200, { routes: [state.route], next_cursor: null }),
   "GET /api/routes/r1": ({ state }) => json(200, { route: state.route }),
+  "GET /api/routes/d1": () => json(200, { route: readyRoute() }),
   "POST /api/routes/r1/adjust": ({ body, state }) => {
     state.route = { ...state.route, total_km: body.target_km ?? state.route.total_km, revision: state.route.revision + 1 };
     return json(200, { route: state.route });
@@ -491,8 +496,7 @@ test("snelle planner: validatie, voortgang en buiten_gebied (422)", async ({ pag
   // Nieuwe poging met een geldige plaats lukt en kondigt het resultaat aan.
   await start.fill("Wetteren");
   await page.getByRole("button", { name: "Maak mijn route" }).click();
-  await page.getByRole("status").filter({ hasText: "Je route is klaar" }).waitFor();
-  assert.ok(await page.getByRole("button", { name: "Bekijk mijn route" }).isVisible());
+  await openedRoute(page, "r1");
   assert.equal(state.calls.filter((c) => c.key === "POST /api/routes/stream").length, 2);
   const ids = state.calls.filter((c) => c.key === "POST /api/routes/stream").map((c) => c.body.request_id);
   assert.notEqual(ids[0], ids[1], `[${vp.name}] nieuwe invoer krijgt een nieuw request_id`);
@@ -575,9 +579,7 @@ test("startscherm zonder interactie landt op de laatste route", async ({ page, u
   expectNoStrays(state, "landing");
 });
 
-test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async ({ page, url }) => {
-  let release;
-  const gate = new Promise(resolve => { release = resolve; });
+test("snelle planner: klare route opent de kaart; voorstellen zijn bijstuurchips", async ({ page, url }) => {
   const voorstellen = [
     { titel: "Voeg Molenberg toe", uitleg: "Ongeveer 2,0 km extra voor 60 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["molenberg"], target_km: 43 } },
     { titel: "Voeg Kapelmuur toe", uitleg: "Ongeveer 4,0 km extra voor 70 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["kapelmuur"], target_km: 45 } },
@@ -585,42 +587,24 @@ test("snelle planner: voorstellen bij het resultaat toepassen via adjust", async
   const state = await installBackend(page, {
     handlers: {
       "POST /api/routes/stream": () => sse([["result", { status: "ready", draft: "d1", km: 40.4, voorstellen, constraints: { voldaan: true, waarschuwingen: [] } }]]),
-      // Na de eerste aanpassing geeft de backend verse voorstellen voor de nieuwe route; na de tweede geen meer.
-      "POST /api/routes/d1/adjust": async ({ state: s }) => {
-        await gate;
-        const first = s.calls.filter((c) => c.key === "POST /api/routes/d1/adjust").length === 1;
-        return json(200, first
-          ? { route: { id: "d1", total_km: 42.6 }, voorstellen: [{ titel: "Voeg Paterberg toe", uitleg: "Ongeveer 1,5 km extra voor 50 hoogtemeters erbij.", adjust_route: { voeg_klimmen_toe: ["paterberg"], target_km: 44 } }] }
-          : { route: { id: "d1", total_km: 44.1, constraints: { voldaan: false, waarschuwingen: ["Er paste geen extra lus die bij je wensen past."] } } });
-      },
+      "GET /api/routes/d1": () => json(200, { route: readyRoute({ voorstellen }) }),
+      // Na de aanpassing geeft de backend verse voorstellen voor de nieuwe route.
+      "POST /api/routes/d1/adjust": () => json(200, { route: readyRoute({ revision: 2, total_km: 42.6, voorstellen: [{ titel: "Voeg Paterberg toe", uitleg: "Ongeveer 1,5 km extra.", adjust_route: { voeg_klimmen_toe: ["paterberg"], target_km: 44 } }] }) }),
     },
   });
   await openHome(page, url);
   await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
   await page.getByRole("button", { name: "Maak mijn route" }).click();
-  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
-  const group = page.getByRole("group", { name: "Voorstellen voor je route" });
-  assert.equal(await group.getByRole("button").count(), 2, "hooguit twee voorstellen");
-  assert.match(await group.innerText(), /60 hoogtemeters/);
-  await group.getByRole("button", { name: "Voeg Molenberg toe" }).click();
-  await page.getByRole("status").filter({ hasText: "Ik voeg Molenberg toe en bereken je route opnieuw." }).waitFor();
-  release();
-  await page.getByText("Aangepast: Voeg Molenberg toe.").waitFor();
-  assert.match(await page.locator(".quick-result").innerText(), /42,6 km/);
-  const fresh = page.getByRole("group", { name: "Voorstellen voor je route" });
-  await fresh.getByRole("button", { name: "Voeg Paterberg toe" }).waitFor();
-  assert.equal(await fresh.getByRole("button").count(), 1, "alleen de verse voorstellen, niet de oude");
-  assert.equal(await fresh.getByRole("button", { name: "Voeg Kapelmuur toe" }).count(), 0, "oude voorstellen vervallen na aanpassing");
+  await openedRoute(page);
+  const steer = page.getByRole("region", { name: "Bijsturen" });
+  await steer.getByRole("button", { name: "Voeg Molenberg toe" }).click();
+  await page.getByLabel("Routedetails").getByText("42,6 km").first().waitFor();
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/adjust");
   const { request_id: proposalId, ...proposalBody } = call.body;
-  assert.deepEqual(proposalBody, { voeg_klimmen_toe: ["molenberg"], target_km: 43 });
+  assert.deepEqual(proposalBody, { voeg_klimmen_toe: ["molenberg"], target_km: 43, expected_revision: 1 });
   assert.match(proposalId, /^[A-Za-z0-9_-]{8,128}$/, "voorstel stuurt een verzoeknummer mee");
-  await fresh.getByRole("button", { name: "Voeg Paterberg toe" }).click();
-  await page.getByText("Aangepast: Voeg Paterberg toe.").waitFor();
-  assert.equal(await page.getByRole("group", { name: "Voorstellen voor je route" }).count(), 0, "geen voorstellen meer als de backend er geen geeft");
-  assert.match(await page.locator(".quick-result").innerText(), /44,1 km/);
-  await page.getByRole("heading", { name: "Route gevonden — controleer je wensen" }).waitFor();
-  assert.ok(await page.getByText("Er paste geen extra lus die bij je wensen past.").isVisible());
+  await steer.getByRole("button", { name: "Voeg Paterberg toe" }).waitFor();
+  assert.equal(await steer.getByRole("button", { name: "Voeg Kapelmuur toe" }).count(), 0, "oude voorstellen vervallen na aanpassing");
   expectNoStrays(state, "voorstellen");
 });
 
@@ -631,8 +615,8 @@ test("snelle planner: zonder voorstellen blijft het resultaat zoals het was", as
   await openHome(page, url);
   await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
   await page.getByRole("button", { name: "Maak mijn route" }).click();
-  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
-  assert.equal(await page.locator(".quick-proposals").count(), 0);
+  await openedRoute(page);
+  assert.equal(await page.getByRole("region", { name: "Bijsturen" }).getByRole("button").count(), 2, "alleen Korter en Langer zonder voorstellen");
   expectNoStrays(state, "geen voorstellen");
 });
 
@@ -795,7 +779,7 @@ test("snelle planner: startplaats kiezen vóór vervolgvragen", async ({ page, u
   await page.getByText("Zoek je heuvels?").waitFor();
   await page.getByRole("button", { name: "Graag heuvels" }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
-  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  await openedRoute(page);
   const calls = state.calls.filter(c => c.key.endsWith("answers/stream"));
   assert.equal(calls.length, 2);
   assert.notEqual(calls[0].body.request_id, calls[1].body.request_id);
@@ -838,6 +822,8 @@ test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async
   await page.getByRole("button", { name: "Maak mijn route" }).click();
   await page.getByRole("heading", { name: "Nog even je wensen aanvullen" }).waitFor();
   await page.getByText("Vraag 1 van 2").waitFor();
+  assert.equal(await page.getByLabel("Startplaats").isVisible(), false, "formulier dicht zolang er vragen open staan");
+  assert.ok(await page.getByRole("button", { name: "Wijzig" }).isVisible(), "samenvatting met Wijzig");
   await page.getByRole("button", { name: "Liever verhard" }).click();
   // Terug en opnieuw kiezen blijft mogelijk vóór het versturen.
   await page.getByRole("button", { name: "Vorige" }).click();
@@ -845,8 +831,8 @@ test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async
   await page.getByRole("button", { name: "Liever verhard" }).click();
   await page.getByRole("button", { name: "Liever vlak" }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
-  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
-  assert.match(await page.locator(".quick-result").innerText(), /40,4 km/);
+  await openedRoute(page);
+  await page.getByLabel("Routedetails").getByText("40,4 km").first().waitFor();
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/answers/stream");
   assert.deepEqual(call.body.antwoorden, { ondergrond: "verhard", heuvels: "vlak" });
   assert.ok(call.body.request_id, "verzoeknummer voor idempotentie");
@@ -871,7 +857,7 @@ test("snelle planner: fietspad- en oversteekvragen krijgen leesbare knoppen", as
   await page.getByRole("button", { name: "Liefst op fietspaden" }).click();
   await page.getByRole("button", { name: "Liever weinig oversteken" }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
-  await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
+  await openedRoute(page);
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/answers/stream");
   assert.deepEqual(call.body.antwoorden, { fietspaden: "belangrijk", oversteken: "vermijd" });
   expectNoStrays(state, "fietspaden en oversteken");

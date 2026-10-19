@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { filterRoutes, type ActivityFilter } from "@/lib/route-library";
+import { activityKind, activityLabel, conversationPreview, filterRoutes, type ActivityFilter } from "@/lib/route-library";
+import { estimateMinutes, formatDuration } from "@/lib/route-summary";
 import { OFFLINE_EVENT, readOffline } from "@/lib/offline-routes";
 
-import { LogOut, Map, MessageSquare, Plus, WifiOff, X } from "lucide-react";
+import { Bike, Footprints, LogOut, Map, MessageSquare, Plus, WifiOff, X } from "lucide-react";
 
 import type { AuthSession, Conversation, Route } from "@/lib/types";
 import { AccountControls } from "./account-controls";
@@ -54,7 +55,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
           <div className="nav-label"><span>Gesprekken</span><MessageSquare /></div>
           <div className="nav-items conversation-nav-items">
             {!conversations.length ? <p className="nav-empty">{loading ? "Gesprekken laden…" : "Nog geen gesprekken"}</p> : null}
-            {conversations.slice(0, 15).map((conversation) => <button key={conversation.id} className={selectedConversation === conversation.id ? "active" : ""} onClick={() => onConversation(conversation.id)}><span className="nav-title">{conversation.title}</span><span className="nav-meta">{conversation.preview || formatDate(conversation.created_at)}</span></button>)}
+            {conversations.slice(0, 15).map((conversation) => <button key={conversation.id} className={selectedConversation === conversation.id ? "active" : ""} onClick={() => onConversation(conversation.id)}><span className="nav-title">{conversation.title}</span><span className="nav-meta">{conversationPreview(conversation.preview) || formatDate(conversation.created_at)}</span></button>)}
           </div>
         </section>
         <section>
@@ -67,7 +68,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
           <div className="nav-items route-nav-items">
             {routes.length > 0 && !visibleRoutes.length ? <p className="nav-empty">Geen overeenkomst in de geladen routes. Pas je zoekterm aan of laad meer routes.</p> : null}
             {!routes.length && !loading ? <p className="nav-empty">Je eerste route verschijnt hier</p> : null}
-            {visibleRoutes.map((route) => <button key={route.id} className={selectedRoute === route.id ? "active" : ""} onClick={() => onRoute(route)}><span className="nav-title">{route.name}</span><span className="nav-meta">{route.ready && route.total_km != null ? `${route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km` : "Concept"}{route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}{offlineIds.has(route.id) ? <span className="offline-badge"><WifiOff aria-hidden="true" /> Offline beschikbaar</span> : null}</span></button>)}
+            {visibleRoutes.map((route) => <button key={route.id} className={`route-card${selectedRoute === route.id ? " active" : ""}`} onClick={() => onRoute(route)}><span className="route-card-icon" aria-hidden="true">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}</span><span className="route-card-body"><span className="nav-title">{route.name}</span><span className="nav-meta">{route.ready && route.total_km != null ? `${route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km · ${formatDuration(estimateMinutes(route.total_km, route.elevation_gain_m, route.activity))}` : "Concept · nog vragen open"}{route.ready && route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}<span className="sr-only"> · {activityLabel(route.activity)}</span>{offlineIds.has(route.id) ? <span className="offline-badge"><WifiOff aria-hidden="true" /> Offline beschikbaar</span> : null}</span></span></button>)}
           </div>
           {hasMoreRoutes ? <button className="new-chat" disabled={loadingMoreRoutes} onClick={onMoreRoutes}>{loadingMoreRoutes ? "Routes laden…" : "Meer routes laden"}</button> : null}
         </section>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Route } from "@/lib/types";
-import { optionLabel, type RouteQuestion } from "@/lib/question-labels";
+import { optionLabel, reasonText, type RouteQuestion } from "@/lib/question-labels";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { RouteProgress } from "./route-progress";
 
@@ -57,7 +57,7 @@ export function RouteQuestions({ route, onAnswers, onFreeText, disabled = false,
     </> : <>
       <p className="question-step">Vraag {index + 1} van {list.length}</p>
       <h3>{current.vraag}</h3>
-      {current.reden ? <p className="question-reason">{current.reden}</p> : null}
+      {reasonText(current.reden) ? <p className="question-reason">{reasonText(current.reden)}</p> : null}
       <ol className="question-options">{options.map((option, at) => <li key={option}><button type="button" className="question-option" disabled={busy} aria-pressed={answers[key(current)] === option} onClick={() => choose(option)}><span className="question-number" aria-hidden="true">{at + 1}</span>{optionLabel(current, option)}</button></li>)}</ol>
       {onFreeText ? <form className="question-note" onSubmit={event => { event.preventDefault(); const text = note.trim(); if (text) { onFreeText(text); setNote(""); } }}>
         <input value={note} onChange={event => setNote(event.target.value)} maxLength={500} disabled={busy} placeholder="of typ je eigen antwoord…" aria-label="Eigen antwoord" />

@@ -29,3 +29,8 @@ export function filterRoutes(routes: Route[], query: string, activity: ActivityF
     return words.every(word => text.includes(word));
   });
 }
+
+/** Gesprekspreview zonder interne concept-id's en markdown. */
+export function conversationPreview(preview?: string | null): string {
+  return (preview || "").replace(/^Routeconcept\s+[0-9a-f]+\s+heeft nog aanvullende wensen nodig\.?\s*/i, "").replace(/[*_`]/g, "").trim();
+}

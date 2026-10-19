@@ -20,3 +20,9 @@ export function optionLabel(question: RouteQuestion, option: string): string {
   const text = option.replaceAll("_", " ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/** De reden van de engine leesbaar: hoofdletter, zonder het technische staartje "; …voorkeur onbekend". */
+export function reasonText(reden?: string | null): string {
+  const text = (reden || "").replace(/;\s*[^;]*onbekend\.?\s*$/i, "").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}

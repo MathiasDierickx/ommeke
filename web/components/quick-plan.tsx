@@ -10,9 +10,7 @@ import type { RouteQuestion } from "@/lib/question-labels";
 import { RouteQuestions } from "./route-questions";
 
 type Question = RouteQuestion;
-import type { RouteProposal as Proposal } from "@/lib/types";
-import { RouteProposals } from "./route-proposals";
-type Result = { voorstellen?: Proposal[]; aangepast?: string; km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
+type Result = { km?: number; constraints?: { voldaan?: boolean | null; waarschuwingen: string[] }; status: string; draft: string; conversation_id?: string; vragen?: Question[] };
 
 type Activity = { value: string; label: string; verb: string; km: number; max: number };
 
@@ -98,6 +96,12 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
       { timeout: 12000, maximumAge: 60000 },
     );
   }
+  // Een klare route is een kaart, geen tekstkaartje: meteen door naar de routepagina.
+  function finish(next: Result) {
+    if (next.status === "ready") { onResultChange?.(true); onRoute(next.draft); return; }
+    setResult(next);
+    onResultChange?.(true);
+  }
   // Eigen notities gaan via het gesprek: het taalmodel vertaalt ze naar criteria en vragen.
   function promptFromForm(): string {
     const label = current.label.toLowerCase();
@@ -115,8 +119,7 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
       const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
       if (!coordinates) { rememberStart(start.trim()); setRecent(readRecent()); }
-      setResult(next);
-      onResultChange?.(true);
+      finish(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Route maken mislukt.");
       const isOutside = isOutOfCoverage(e);
@@ -136,8 +139,7 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
     try {
       const next = await apiStream<Result>(`/api/routes/${encodeURIComponent(result.draft)}/answers/stream`, token, { antwoorden, request_id: pending.current.id }, event => { setProgress(event); onProgress(event); });
       pending.current = null;
-      setResult(next);
-      onResultChange?.(true);
+      finish(next);
     } catch (e) {
       setCanRestart(e instanceof StreamFailure);
       throw e;
@@ -147,7 +149,8 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
   const coordinates = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(start.trim());
   return <section className="planner" aria-labelledby="planner-title">
     <h2 id="planner-title" className="planner-title">Waar wil je {current.verb}?</h2>
-    <form hidden={result?.status === "ready"} onSubmit={e => void submit(e)}>
+    {result ? <div className="planner-summary"><span><strong>{current.label}</strong> · {km} km vanuit {start.trim() || "je locatie"}</span><button type="button" className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Wijzig</button></div> : null}
+    <form hidden={Boolean(result)} onSubmit={e => void submit(e)}>
       <fieldset disabled={busy}>
         <legend className="sr-only">Je lus</legend>
         <ol className="planner-steps">
@@ -197,22 +200,6 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
       </fieldset>
     </form>
     {busy && <div ref={progressBox}><RouteProgress event={progress} /></div>}
-    {result?.status === "ready" && <div className="quick-result">
-      <div role="status"><h3 tabIndex={-1} ref={resultHeading}>{result.constraints?.voldaan === false ? "Route gevonden — controleer je wensen" : "Je route is klaar"}</h3></div>
-      <p>{typeof result.km === "number" ? `${result.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km. ` : ""}Bekijk de kaart en download je GPX of FIT.</p>
-      {result.aangepast ? <p className="quick-result-applied" role="status">Aangepast: {result.aangepast}.</p> : null}
-      {result.constraints?.waarschuwingen.map(warning => <p className="route-result-warning" key={warning}>{warning}</p>)}
-      <RouteProposals routeId={result.draft} proposals={result.voorstellen} token={token} disabled={busy}
-        onProgress={setProgress} onBusyChange={value => { lock.current = value; setBusy(value); onBusyChange?.(value); }}
-        onApplied={(data, proposal) => {
-          setResult({ ...result, km: data.route.total_km ?? result.km, constraints: data.route.constraints ?? result.constraints, voorstellen: data.voorstellen ?? data.route.voorstellen ?? [], aangepast: proposal.titel });
-          onResultChange?.(true);
-        }} />
-      <div className="quick-result-actions">
-        <button className="planner-submit" onClick={() => onRoute(result.draft)}>Bekijk mijn route</button>
-        <button className="quick-plan-again" onClick={() => { setResult(undefined); onResultChange?.(false); }}>Andere route plannen</button>
-      </div>
-    </div>}
     {result && result.status !== "ready" && <div role="status"><h3 className="planner-followup" tabIndex={-1} ref={resultHeading}>Nog even je wensen aanvullen</h3></div>}
     {error && <p role="alert" className={outside ? "planner-error quick-plan-outside" : "planner-error"}>{error}{outside ? " Pas je startplaats aan en probeer opnieuw." : ""}</p>}
     {canRestart && <button className="quick-plan-again" onClick={()=>{pending.current=null;setCanRestart(false);setError("De vorige poging is gestopt. Controleer Mijn routes: er kan al een concept bestaan. Met Maak mijn route start je bewust een nieuwe poging.");}}>Nieuwe poging voorbereiden</button>}
