@@ -34,7 +34,7 @@ def _draft(
     busy_data=False,
     places=None,
     km=20,
-    hm=100,
+    hm=60,
     unpaved=0,
 ):
     return {
@@ -83,15 +83,15 @@ def test_explicit_touring_goal_does_not_require_climbing_weights():
 def test_cobble_rule_is_material_only_above_300_meter_2_percent_and_when_unknown():
     profile = profiles.default_document()
 
-    # 20 km: 2% = 400 m, dus 401 m is net materieel.
-    assert _question_ids(readiness.assess(_draft(cobble=401), profile, {})) == [
+    # 20 km: 1% = 200 m, dus 201 m is net materieel.
+    assert _question_ids(readiness.assess(_draft(cobble=201), profile, {})) == [
         "kasseien"
     ]
-    assert _question_ids(readiness.assess(_draft(cobble=400), profile, {})) == []
-    assert _question_ids(readiness.assess(_draft(cobble=300), profile, {})) == []
-    # Korte route: de absolute drempel van 300 m blijft gelden.
-    assert _question_ids(readiness.assess(_draft(cobble=300, km=5, hm=10), profile, {})) == []
-    assert _question_ids(readiness.assess(_draft(cobble=301, km=5, hm=10), profile, {})) == ["kasseien"]
+    assert _question_ids(readiness.assess(_draft(cobble=200), profile, {})) == []
+    assert _question_ids(readiness.assess(_draft(cobble=150), profile, {})) == []
+    # Korte route: de absolute drempel van 150 m blijft gelden.
+    assert _question_ids(readiness.assess(_draft(cobble=150, km=5, hm=10), profile, {})) == []
+    assert _question_ids(readiness.assess(_draft(cobble=151, km=5, hm=10), profile, {})) == ["kasseien"]
     profile["voorkeuren"]["kasseien"] = "ok"
     assert _question_ids(readiness.assess(_draft(cobble=1800), profile, {})) == []
 

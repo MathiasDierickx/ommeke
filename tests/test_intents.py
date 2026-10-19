@@ -448,7 +448,7 @@ def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
 
 
 def test_adjust_route_replaces_waterway_via_before_one_reroute():
-    river = [(51.0, 3.5 + index * 0.01) for index in range(11)]
+    river = [(50.0, 4.0 + index * 0.01) for index in range(11)]  # vlak bij de start (50.0, 4.0)
     state = _routed_draft()
     state["climbs"] = []
     state["route_request"] = {

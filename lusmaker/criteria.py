@@ -30,6 +30,10 @@ def _pct(key):
     return lambda q, c: None if q.get(key) is None else q[key] / 100.0
 
 
+def _pct_text(q, key, suffix):
+    return f"{q.get(key) or 0:g} % {suffix}".replace(".", ",")
+
+
 def _meters(key):
     def value(q, c):
         km = c.get("total_km") or 0.0
@@ -53,17 +57,22 @@ def _crossings(q, c):
 METRICS = {
     "hoogtemeters": ("Hoogtemeters", "hoogtemeters", _ascend_per_km, lambda q, c: f"{round(c.get('ascend_m') or 0)} m"),
     "kort": ("Korte omweg", "kort", None, None),
-    "offroad": ("Paden en onverharde wegen", "offroad", _pct("offroad_pct"), lambda q, c: f"{q.get('offroad_pct', 0):g} % pad"),
+    "offroad": ("Paden en onverharde wegen", "offroad", _pct("offroad_pct"), lambda q, c: _pct_text(q, "offroad_pct", "pad")),
     "onverhard": ("Onverhard", "onverhard", _meters("onverhard_m"), lambda q, c: f"{(q.get('onverhard_m') or 0) / 1000:.1f} km onverhard".replace(".", ",")),
-    "populair": ("Populaire wegen", "populair", _pct("populair_pct"), lambda q, c: f"{q.get('populair_pct', 0):g} % bekende wegen"),
-    "autovrij": ("Autovrij", "autovrij", _pct("autovrij_pct"), lambda q, c: f"{q.get('autovrij_pct', 0):g} % autovrij"),
-    "stil": ("Rustige wegen", "stil", _pct("stil_pct"), lambda q, c: f"{q.get('stil_pct', 0):g} % rustige wegen"),
+    "populair": ("Populaire wegen", "populair", _pct("populair_pct"), lambda q, c: _pct_text(q, "populair_pct", "bekende wegen")),
+    "autovrij": ("Autovrij", "autovrij", _pct("autovrij_pct"), lambda q, c: _pct_text(q, "autovrij_pct", "autovrij")),
+    "stil": ("Rustige wegen", "stil", _pct("stil_pct"), lambda q, c: _pct_text(q, "stil_pct", "rustige wegen")),
     "kassei": ("Kasseien", "kassei", _meters("kassei_m"), lambda q, c: f"{(q.get('kassei_m') or 0) / 1000:.1f} km kassei".replace(".", ",")),
     "beton": ("Betonbanen", "beton", _meters("beton_m"), lambda q, c: f"{(q.get('beton_m') or 0) / 1000:.1f} km beton".replace(".", ",")),
     "steenweg": ("Steenwegen", "steenweg", _meters("steenweg_m"), lambda q, c: f"{(q.get('steenweg_m') or 0) / 1000:.1f} km steenweg".replace(".", ",")),
-    "fietspad": ("Fietspaden", "fietspad", _pct("fietspad_pct"), lambda q, c: f"{q.get('fietspad_pct', 0):g} % fietspad"),
+    "fietspad": ("Fietspaden", "fietspad", _pct("fietspad_pct"), lambda q, c: _pct_text(q, "fietspad_pct", "fietspad")),
     "oversteken": ("Drukke oversteken", None, _crossings, lambda q, c: f"{q.get('steenweg_kruisingen') or 0} drukke oversteken"),
 }
+# Natuurlijke richting per metriek. Vast = de andere richting is nooit zinvol
+# ('weinig rustige wegen' wil niemand); standaard = overschrijfbaar (kasseien graag, vlak).
+FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog"}
+DEFAULT_DIRECTION = {"kassei": "laag", "beton": "laag", "steenweg": "laag", "oversteken": "laag",
+                     "hoogtemeters": "hoog", "offroad": "hoog", "onverhard": "hoog", "populair": "hoog"}
 # Standaarddrempel voor de uitleg wanneer het criterium er geen meegeeft.
 _DEFAULT_THRESHOLD = {"hoog": 0.4, "laag": 0.1}
 
@@ -87,9 +96,10 @@ def parse(raw) -> list[dict]:
         if cid in seen:
             raise CriteriaError(f"criterium {cid} staat dubbel")
         seen.add(cid)
-        direction = item.get("richting", "hoog")
+        direction = item.get("richting") or DEFAULT_DIRECTION.get(metric, "hoog")
         if direction not in RICHTINGEN:
             raise CriteriaError("richting moet 'hoog' of 'laag' zijn")
+        direction = FIXED_DIRECTION.get(metric, direction)
         weight = item.get("gewicht", 1.0)
         if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(weight) or weight < 0:
             raise CriteriaError("gewicht moet een getal >= 0 zijn")

@@ -257,6 +257,7 @@ def _route_detail_payload(item: dict[str, Any], *, proposals_fn=None) -> dict[st
     result["computed"] = item.get("computed")
     result["geometry"] = _route_geometry(item) if result["ready"] else _probe_geometry(item)
     result["waarom"] = intents.explain_route(item) if result["ready"] else []
+    result["conversation_id"] = item.get("conversation_id")
     result["vragen"] = (item.get("open_vragen") or []) if not result["ready"] and item.get("route_request") else []
     result["voorstellen"] = (proposals_fn or _fresh_proposals)(item) if result["ready"] else []
     return result

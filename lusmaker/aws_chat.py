@@ -360,6 +360,10 @@ Als de gebruiker vraagt om rond/langs een specifieke plek (park, plas, domein) t
 zet die plek in rond_plaats.
 Als de gebruiker zo lang mogelijk langs een benoemde waterloop (rivier of kanaal, bv. de Schelde,
 de Leie, een kanaal) wil rijden of lopen, zet die naam in `langs_water` (niet in `rond_plaats`).
+Noemt de gebruiker geen waterloop bij naam ("langs het water"), zet dan GEEN langs_water en verzin
+geen naam; plan gewoon en bied daarna het waterloopvoorstel uit het resultaat aan.
+Laat `richting` in criteria weg tenzij de gebruiker uitdrukkelijk het omgekeerde wil (kasseien
+graag, zo vlak mogelijk); "rustig" is stil zonder richting.
 Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in maximaal 80
 tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
 Als een tool status needs_input teruggeeft, vat de meegegeven vragen samen in één of twee zinnen en verwijs naar de knoppen.
@@ -404,6 +408,10 @@ Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een u
 _USER_TEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "lusmaker_chat_user_text", default=None
 )
+# Gesprek van de lopende beurt, zodat een nieuwe route eraan gekoppeld wordt.
+_CONVERSATION_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "lusmaker_chat_conversation_id", default=None
+)
 
 
 def _latest_user_text(history: list[dict[str, Any]]) -> str | None:
@@ -411,6 +419,14 @@ def _latest_user_text(history: list[dict[str, Any]]) -> str | None:
         if item.get("role") == "user" and item.get("content"):
             return str(item["content"])
     return None
+
+
+def _safe_link(draft_id: str, conversation_id: str | None) -> None:
+    try:
+        from . import draft as draft_mod
+        draft_mod.link_conversation(draft_id, conversation_id)
+    except Exception:
+        logging.getLogger(__name__).warning("gesprek koppelen aan route mislukt", exc_info=True)
 
 
 class RouteToolExecutor:
@@ -652,6 +668,7 @@ class BedrockRouteAgent:
                     draft_id = output.get("draft") if isinstance(output, dict) else None
                     if isinstance(draft_id, str):
                         route_ids.add(draft_id)
+                        _safe_link(draft_id, _CONVERSATION_ID.get())
                         if output.get("status") == "ready":
                             ready_route_ids.add(draft_id)
                         elif output.get("status") == "needs_input":
@@ -729,6 +746,7 @@ def send_message(
         user_message = store.add_message(conversation_id, "user", clean_content)
         history = store.messages(conversation_id)
         route_agent = agent or BedrockRouteAgent()
+        token = _CONVERSATION_ID.set(conversation_id)
         try:
             result = route_agent.reply(
                 history,
@@ -741,6 +759,8 @@ def send_message(
                            iterations=getattr(exc, "chat_iterations", 0), success=False,
                            error_class=type(exc).__name__)
             raise
+        finally:
+            _CONVERSATION_ID.reset(token)
         progress.emit("saving", "Ik sla het antwoord en je routegegevens op.")
         assistant_message = store.add_message(
             conversation_id,

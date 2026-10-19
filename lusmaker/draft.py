@@ -961,6 +961,17 @@ def summary(d: dict) -> dict:
 
 
 
+def link_conversation(draft_id: str, conversation_id: str | None) -> None:
+    """Onthoud (eenmalig) in welk gesprek een route is gemaakt, voor vrije tekst vanaf de routepagina."""
+    if not conversation_id:
+        return
+    d = load(draft_id)
+    if d.get("conversation_id"):
+        return
+    d["conversation_id"] = conversation_id
+    save(d)
+
+
 def probe(
     d: dict,
     climb_db: dict,

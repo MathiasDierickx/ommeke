@@ -133,3 +133,49 @@ def test_readiness_skips_questions_already_covered_by_criteria():
 def test_auto_route_name_uses_a_decimal_comma():
     assert intents.suggest_route_name("Wetteren", target_km=3.1, max_km=None, doel="toeren", activiteit="wandelen").endswith("· 3,1 km")
     assert intents.suggest_route_name("Wetteren", target_km=38, max_km=None, doel="toeren", activiteit="toerfiets").endswith("· 38 km")
+
+
+def test_water_too_far_from_start_is_not_planned_and_explained():
+    state = _state() | {"computed": None}
+    saved = []
+
+    def route_fn(d, _db):
+        assert not d.get("water_via"), "te verre waterloop mag geen via-punten geven"
+        d["computed"] = _state()["computed"]
+
+    def optimize_fn(d, _db, **_k):
+        d["computed"] = _state()["computed"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        result = intents.plan_route(
+            "Wetteren", target_km=5, activiteit="wandelen", langs_water="Dender",
+            create_fn=lambda **_k: {"id": "abc123"}, load_fn=lambda _i: state,
+            route_fn=route_fn, optimize_fn=optimize_fn, climbs_fn=dict, export_gpx_fn=_export,
+            export_preview_fn=_export, save_fn=lambda d: saved.append(True),
+            water_fn=lambda _name: [[(50.96, 4.04), (50.97, 4.05)]],  # ~13 km verderop
+            exports_root=Path(tmp),
+        )
+    assert result["status"] == "ready"
+    assert result["constraints"]["langs_water_gepland"] is False
+    assert any("te ver" in w for w in result["constraints"]["waarschuwingen"])
+
+
+def test_route_over_hard_maximum_never_stays_ready_in_the_draft():
+    state = _state() | {"computed": None, "water_via": [(50.0, 4.0)]}
+
+    def route_fn(d, _db):
+        d["computed"] = _state()["computed"] | {"total_km": 45.5}
+
+    try:
+        intents.plan_route(
+            "Wetteren", target_km=5, max_km=5, activiteit="wandelen", langs_water="Schelde",
+            create_fn=lambda **_k: {"id": "abc123"}, load_fn=lambda _i: state,
+            route_fn=route_fn, optimize_fn=lambda *_a, **_k: None, climbs_fn=dict,
+            export_gpx_fn=_export, export_preview_fn=_export, save_fn=lambda _d: None,
+            water_fn=lambda _name: [[(50.0, 4.0), (50.001, 4.001)]],
+        )
+    except intents.IntentError as exc:
+        assert "harde maximum" in str(exc)
+    else:
+        raise AssertionError("IntentError verwacht")
+    assert state.get("computed") is None, "een te lange route mag niet als klaar achterblijven"

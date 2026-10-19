@@ -1,7 +1,7 @@
 """Modelvrij plannen met hetzelfde domeincontract en persistente receipts."""
 from __future__ import annotations
 import math
-from . import activities, funnel, intents, requests
+from . import draft, activities, funnel, intents, requests
 
 
 def parameters(body: dict) -> dict:
@@ -34,13 +34,23 @@ def plan(body, *, planner=intents.plan_route, once=requests.once, store_factory=
         emit("routing", "Ik zoek het vertrekpunt en bereken je lus.")
         with funnel.channel('quick'):
             result = planner(**values, request_id=rid)
-        if store_factory is not None and result.get('status') == 'needs_input':
+        if store_factory is not None and result.get('draft'):
+            # Elke snelplanner-route krijgt een gesprek, zodat vrije tekst vanaf de
+            # routepagina met de route in context verder kan.
             store = store_factory()
             conversation = store.create('Routewensen aanvullen')
             cid = conversation['id']
             store.add_message(cid, 'user', f"Plan {values['activiteit']} vanaf {values['start']}, ongeveer {values['target_km']} km, doel {values['doel']}.")
-            questions = '\n'.join(q['vraag'] for q in result.get('vragen', []))
-            store.add_message(cid, 'assistant', f"Routeconcept {result['draft']} heeft nog aanvullende wensen nodig. {questions}", route_ids=[result['draft']])
+            if result.get('status') == 'needs_input':
+                questions = '\n'.join(q['vraag'] for q in result.get('vragen', []))
+                text = f"Routeconcept {result['draft']} heeft nog aanvullende wensen nodig. {questions}"
+            else:
+                text = f"Route {result['draft']} is klaar: {result.get('samenvatting', '')}".strip()
+            store.add_message(cid, 'assistant', text, route_ids=[result['draft']])
+            try:
+                draft.link_conversation(result['draft'], cid)
+            except draft.DraftError:
+                pass  # geïnjecteerde planner zonder opgeslagen draft
             result = {**result, 'conversation_id': cid}
         return result
     return once('quick-plan', rid, values, execute)

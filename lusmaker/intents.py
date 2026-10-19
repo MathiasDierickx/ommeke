@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import (
     criteria,
+    geo,
     activities,
     artifacts,
     aws_state,
@@ -309,7 +310,7 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
         )
     water_planned = bool(d.get("water_via")) if request.get("langs_water") else None
     if water_planned is False:
-        warnings.append("de gevraagde waterloop is niet gevonden in de regiogegevens; de route garandeert geen traject langs water")
+        warnings.append(d.get("water_note") or "de gevraagde waterloop is niet gevonden in de regiogegevens; de route garandeert geen traject langs water")
         checks.append(False)
     return {
         "binnen_hard_maximum": within_hard_max,
@@ -734,13 +735,9 @@ def _route_for_request(
             )
         return
     if d.get("water_via"):
+        # Het harde maximum wordt in _execute_request bewaakt, dat ook de te lange
+        # route uit de draft haalt; hier raisen liet 45 km als 'klaar' achter.
         route_fn(d, climb_db)
-        actual = (d.get("computed") or {}).get("total_km") or 0.0
-        if max_explicit and hard_max is not None and actual > hard_max:
-            raise IntentError(
-                f"route is {actual:.1f} km en overschrijdt het harde "
-                f"maximum van {hard_max:.1f} km"
-            )
         return
     if (goal == "kort" or hard_max is None) and not request.get("rond_plaats"):
         route_fn(d, climb_db)
@@ -768,12 +765,7 @@ def _route_for_request(
                     "startplaats. Probeer een iets grotere afstand of een andere start."
                 )
             return
-        if hard_max is not None and actual > hard_max:
-            raise IntentError(
-                f"kortste route is {actual:.1f} km en overschrijdt het harde "
-                f"maximum van {hard_max:.1f} km"
-            )
-        return
+        return  # te lang voor het harde maximum? _execute_request meldt en ruimt op
 
     # Een 'target_km' is een zacht doel ("ongeveer N km"), geen harde limiet.
     # Zonder expliciete max_km is hard_max afgeleid als target+tolerance, maar
@@ -883,6 +875,13 @@ def _set_water_via(d: dict, request: dict, water_fn) -> bool:
         distance_km,
     )
     if not via:
+        return False
+    first = via[0]
+    first_lat, first_lon = (first["lat"], first["lon"]) if isinstance(first, dict) else first
+    reach_km = geo.haversine(d["start"]["lat"], d["start"]["lon"], first_lat, first_lon) / 1000.0
+    if reach_km > max(1.5, 0.5 * distance_km):
+        # De waterloop ligt te ver om binnen de gevraagde afstand te halen (Dender vanuit Wetteren).
+        d["water_note"] = f"{name} ligt {reach_km:.0f} km van je start, te ver voor {distance_km:g} km"
         return False
     for point in via:
         lat, lon = (point["lat"], point["lon"]) if isinstance(point, dict) else point

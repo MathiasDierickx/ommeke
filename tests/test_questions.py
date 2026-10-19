@@ -58,12 +58,12 @@ def test_touring_bike_in_the_polders_asks_no_hills_question():
     assert _ids(d, _profile("toerfiets")) == []
 
 
-def test_hill_threshold_is_8_for_bikes_and_12_for_foot():
-    assert "heuvels" not in _ids(_draft(km=10, hm=79), _profile("toerfiets"))
-    assert "heuvels" in _ids(_draft(km=10, hm=80), _profile("toerfiets"))
-    assert "heuvels" not in _ids(_draft(km=10, hm=119), _profile("wandelen"))
-    assert "heuvels" in _ids(_draft(km=10, hm=120), _profile("wandelen"))
-    assert "heuvels" in _ids(_draft(km=10, hm=120), _profile("wegloop"))
+def test_hill_threshold_is_4_for_bikes_and_6_for_foot():
+    assert "heuvels" not in _ids(_draft(km=10, hm=39), _profile("toerfiets"))
+    assert "heuvels" in _ids(_draft(km=10, hm=40), _profile("toerfiets"))
+    assert "heuvels" not in _ids(_draft(km=10, hm=59), _profile("wandelen"))
+    assert "heuvels" in _ids(_draft(km=10, hm=60), _profile("wandelen"))
+    assert "heuvels" in _ids(_draft(km=10, hm=60), _profile("wegloop"))
 
 
 def test_cobbles_only_ask_for_paved_bikes_and_road_running():
@@ -74,11 +74,11 @@ def test_cobbles_only_ask_for_paved_bikes_and_road_running():
         assert "kasseien" not in _ids(d, _profile(activity)), activity
 
 
-def test_cobble_trigger_needs_300_meter_and_two_percent():
-    assert "kasseien" not in _ids(_draft(km=5, hm=5, cobble=300), _profile("koersfiets"))
-    assert "kasseien" in _ids(_draft(km=5, hm=5, cobble=301), _profile("koersfiets"))
-    assert "kasseien" not in _ids(_draft(km=50, hm=50, cobble=900), _profile("koersfiets"))  # 1,8%
-    assert "kasseien" in _ids(_draft(km=50, hm=50, cobble=1100), _profile("koersfiets"))
+def test_cobble_trigger_needs_150_meter_and_one_percent():
+    assert "kasseien" not in _ids(_draft(km=5, hm=5, cobble=150), _profile("koersfiets"))
+    assert "kasseien" in _ids(_draft(km=5, hm=5, cobble=151), _profile("koersfiets"))
+    assert "kasseien" not in _ids(_draft(km=50, hm=50, cobble=450), _profile("koersfiets"))  # 0,9%
+    assert "kasseien" in _ids(_draft(km=50, hm=50, cobble=550), _profile("koersfiets"))
 
 
 # -- al beantwoord ---------------------------------------------------------
@@ -313,7 +313,8 @@ def test_crossing_question_for_walking_and_road_running_above_three():
 
 
 def test_crossing_question_is_not_asked_without_reason():
-    assert "oversteken" not in _ids(_urban(0, crossings=3), _profile("wandelen"))
+    assert "oversteken" not in _ids(_urban(0, crossings=1), _profile("wandelen"))
+    assert "oversteken" in _ids(_urban(0, crossings=2), _profile("wandelen"))
     assert "oversteken" not in _ids(_urban(0, crossings=None), _profile("wandelen"))
     assert "oversteken" not in _ids(_urban(0, crossings=9), _profile("toerfiets"))
     for answer in ("ok", "vermijd"):

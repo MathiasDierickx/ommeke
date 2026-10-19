@@ -128,7 +128,7 @@ _COBBLE_RELEVANCE = {
 
 
 def _cobble_threshold(ctx: Context) -> float:
-    return max(300.0, 0.02 * ctx.km_m)
+    return max(150.0, 0.01 * ctx.km_m)
 
 
 def _cobble_reason(ctx: Context) -> str:
@@ -160,8 +160,9 @@ KASSEIEN = Row(
 # -- heuvels --------------------------------------------------------------
 
 def _hills_threshold(ctx: Context) -> float:
+    # De helft van de 'heuvelachtig'-grens: vraag ook bij licht golvend terrein.
     activity = activities.get(ctx.activity)
-    return activity.hills_hm_per_km if activity else 8.0
+    return 0.5 * (activity.hills_hm_per_km if activity else 8.0)
 
 
 HEUVELS = Row(
@@ -210,8 +211,8 @@ def _ground_measure(ctx: Context) -> float | None:
 
 def _ground_threshold(ctx: Context) -> float:
     if ctx.activity in _UNPAVED_RELEVANCE:
-        return 0.5 * ctx.km_m          # meer dan de helft verhard
-    return min(1000.0, 0.10 * ctx.km_m)  # >1 km of >10% onverhard
+        return 0.35 * ctx.km_m         # meer dan een derde verhard
+    return min(500.0, 0.05 * ctx.km_m)  # >500 m of >5% onverhard
 
 
 def _ground_reason(ctx: Context) -> str:
@@ -269,7 +270,7 @@ ONDERGROND = Row(
 # -- fietspaden -----------------------------------------------------------
 
 _CYCLEWAY_RELEVANCE = {"stadsfiets": 1.0, "toerfiets": 0.6}
-_CYCLEWAY_MIN_PCT = 15.0   # minder fietspad dan dit telt als 'weinig'
+_CYCLEWAY_MIN_PCT = 25.0   # minder fietspad dan dit telt als 'weinig'
 
 
 def _noncycleway_pct(ctx: Context) -> float | None:
@@ -305,7 +306,7 @@ FIETSPADEN = Row(
 # -- oversteken -----------------------------------------------------------
 
 _CROSSING_RELEVANCE = {"wandelen": 1.0, "wegloop": 0.8}
-_CROSSING_MAX = 3.0
+_CROSSING_MAX = 2.0
 
 
 OVERSTEKEN = Row(
@@ -315,6 +316,7 @@ OVERSTEKEN = Row(
     relevance=lambda ctx: _CROSSING_RELEVANCE.get(ctx.activity, 0.0),
     measure=lambda ctx: ctx.crossings,
     threshold=lambda ctx: _CROSSING_MAX,
+    inclusive=True,
     reason=lambda ctx: (
         f"je verkenningsroute steekt {fmt(ctx.crossings, 0)} keer een drukke "
         "steenweg over; oversteekvoorkeur onbekend"
@@ -336,7 +338,7 @@ _QUIET_RELEVANCE = {
     "wandelen": 1.0, "wegloop": 1.0, "stadsfiets": 0.8, "toerfiets": 0.6,
     "gravel": 0.4, "koersfiets": 0.3, "trail": 0.3, "mtb": 0.3,
 }
-_BUSY_MAX_PCT = 40.0   # meer dan dit op doorgaande wegen telt als 'druk'
+_BUSY_MAX_PCT = 25.0   # meer dan dit op doorgaande wegen telt als 'druk'
 
 
 STIL = Row(
