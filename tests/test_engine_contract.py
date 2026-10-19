@@ -211,3 +211,32 @@ def test_routing_draft_errors_are_400_not_404():
     missing = aws_api._draft_error(draft_mod.DraftError("draft 'x' bestaat niet — zie `lus draft list`"))
     assert too_long.status_code == 400 and _json.loads(too_long.body)["code"] == "route_failed"
     assert missing.status_code == 404 and _json.loads(missing.body)["code"] == "route_not_found"
+
+
+def test_goal_is_never_pushed_out_by_answer_criteria():
+    from lusmaker import criteria as crit
+    quiet_only = crit.parse([{"metriek": "stil", "drempel": 0.6}])
+    merged = crit.with_goal(quiet_only, "hoogtemeters")
+    assert [(c["metriek"], round(c["gewicht"], 2)) for c in merged] == [("stil", 0.33), ("hoogtemeters", 0.67)]
+    assert crit.with_goal(quiet_only, "toeren") == quiet_only
+    assert crit.with_goal(None, "offroad")[0]["metriek"] == "offroad"
+    # al aanwezig: ongewijzigd
+    both = crit.parse([{"metriek": "stil"}, {"metriek": "hoogtemeters", "richting": "laag"}])
+    assert crit.with_goal(both, "hoogtemeters") == both
+
+    state = _state() | {"computed": None, "route_request": None}
+    calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        calls.append(kwargs["objective"])
+        d["computed"] = _state()["computed"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        intents.plan_route(
+            "Wetteren", target_km=36, doel="hoogtemeters", activiteit="koersfiets",
+            criteria=[{"metriek": "stil", "drempel": 0.6}],
+            create_fn=lambda **_k: {"id": "abc123"}, load_fn=lambda _i: state,
+            optimize_fn=optimize_fn, climbs_fn=dict, export_gpx_fn=_export,
+            export_preview_fn=_export, save_fn=lambda _d: None, exports_root=Path(tmp),
+        )
+    assert [c["metriek"] for c in calls[0]["criteria"]] == ["stil", "hoogtemeters"]

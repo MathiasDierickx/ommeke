@@ -332,7 +332,7 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
 def explain_route(d: dict, request: dict | None = None) -> list[dict]:
     """'Waarom deze route': per criterium (of oud doel) de gemeten waarde en of hij gehaald is."""
     request = request or d.get("route_request") or {}
-    spec = request.get("criteria") or criteria.from_goal(request.get("doel"))
+    spec = criteria.with_goal(request.get("criteria"), request.get("doel")) or []
     computed = d.get("computed") or {}
     if any(criteria.METRICS[c["metriek"]][1] is None and c["metriek"] not in ("oversteken",) for c in spec):
         try:
@@ -514,10 +514,15 @@ def _update_auto_name(d: dict, previous: dict, request: dict) -> None:
             d["name"] = name[:-len(suffix)][:80-len(new_suffix)].rstrip() + new_suffix
 
 
+def _request_criteria(request: dict) -> list[dict] | None:
+    """Criteria van de rit, aangevuld met het routedoel zodat dat nooit verdrongen wordt."""
+    return criteria.with_goal(request.get("criteria"), request.get("doel"))
+
+
 def _tour_objective(request: dict, default: str = "toeren"):
     """Criteria uit het gesprek winnen; anders 'vlak' bij een expliciet vlakke rit, anders het doel."""
     if request.get("criteria"):
-        return {"criteria": request["criteria"]}
+        return {"criteria": _request_criteria(request)}
     explicit = request.get("expliciete_voorkeuren") or {}
     if explicit.get("heuvels") == "vlak" and default in ("toeren", "vlak"):
         return draft.FLAT
@@ -802,7 +807,7 @@ def _route_for_request(
         "fill": True if request.get("rond_plaats") else not request["geen_opvulling"],
     }
     if request.get("criteria"):
-        optimize_kwargs["objective"] = {"criteria": request["criteria"]}
+        optimize_kwargs["objective"] = {"criteria": _request_criteria(request)}
     elif goal == "hoogtemeters" and (request.get("expliciete_voorkeuren") or {}).get("heuvels") == "zoek":
         optimize_kwargs["objective"] = "hm"
     elif request.get("rond_plaats") and not d.get("climbs"):

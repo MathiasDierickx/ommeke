@@ -748,7 +748,9 @@ def objective_for_draft(d: dict, objective):
     if objective is not None:
         return objective
     if (d.get("route_request") or {}).get("criteria"):
-        return {"criteria": d["route_request"]["criteria"]}
+        from . import criteria
+        request = d["route_request"]
+        return {"criteria": criteria.with_goal(request["criteria"], request.get("doel"))}
     if d.get("profile_doc"):
         return profiles.load(d["profile_doc"])["gewichten"]
     if d.get("route_request"):

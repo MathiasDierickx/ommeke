@@ -193,6 +193,27 @@ def merge(existing: list[dict] | None, extra: list[dict], dropped: set[str] = fr
     return parse(list(by_id.values())) if by_id else None
 
 
+GOAL_WEIGHT = 2.0  # een uitgesproken doel (zoveel mogelijk hoogtemeters) weegt dubbel t.o.v. een knopantwoord
+
+
+def with_goal(spec: list[dict] | None, doel: str | None) -> list[dict] | None:
+    """Zorg dat het routedoel (hoogtemeters/offroad/kort) in de criteria zit.
+
+    Een antwoord als 'rustig' mag het doel niet verdringen: zonder deze stap
+    koos de optimizer bij doel=hoogtemeters een vlakke, stille polderlus.
+    """
+    goal = from_goal(doel)
+    if not goal:
+        return spec
+    if not spec:
+        return parse(goal)
+    metric = goal[0]["metriek"]
+    if any(c["metriek"] == metric for c in spec):
+        return spec
+    goal[0]["gewicht"] = GOAL_WEIGHT * max((c["gewicht"] for c in spec if not c["hard"]), default=1.0)
+    return merge(spec, goal)
+
+
 def _value(criterion: dict, components: dict) -> float | None:
     component = METRICS[criterion["metriek"]][1]
     if component is None or components.get(component) is None:
