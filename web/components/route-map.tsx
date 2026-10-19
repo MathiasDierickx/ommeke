@@ -42,7 +42,7 @@ export function RouteMap({ geometry, loading, muted = false, lineal = false, onP
 
       const points = geometry.points.map(([lat, lon]) => L.latLng(lat, lon));
       // Een verkenningsroute (nog niet klaar) staat gestippeld en vaag: de vragen gaan hierover.
-      const line = L.polyline(points, muted ? { color: "#245a43", weight: 4, opacity: 0.45, dashArray: "6 10", lineCap: "round" } : { color: "#245a43", weight: 5, opacity: 0.96, lineCap: "round" }).addTo(map);
+      const line = L.polyline(points, muted ? { color: "#245a43", weight: 5, opacity: 0.75, dashArray: "1 12", lineCap: "round" } : { color: "#245a43", weight: 5, opacity: 0.96, lineCap: "round" }).addTo(map);
       const start = geometry.start;
       if (start) {
         L.marker([start.lat, start.lon], {
@@ -79,7 +79,12 @@ export function RouteMap({ geometry, loading, muted = false, lineal = false, onP
         label.textContent = details.join(" · ");
         L.circleMarker([p.lat,p.lon], {radius:6,color:"#8d5a26",fillOpacity:0.9}).addTo(map).bindTooltip(label);
       });
-      map.fitBounds(line.getBounds(), { padding: [42, 42], maxZoom: 15 });
+      // De sheet ligt over de kaart: rechts op een breed scherm, onderaan op een smal scherm.
+      const canvas = elementRef.current.getBoundingClientRect();
+      const sheet = document.querySelector(".route-sheet")?.getBoundingClientRect();
+      const coverRight = sheet && sheet.left > canvas.width / 2 ? canvas.right - sheet.left : 0;
+      const coverBottom = sheet && sheet.left <= canvas.width / 2 ? canvas.bottom - sheet.top : 0;
+      map.fitBounds(line.getBounds(), { paddingTopLeft: [42, 90], paddingBottomRight: [42 + Math.max(0, coverRight), 42 + Math.max(0, coverBottom)], maxZoom: 15 });
       map.whenReady(() => {
         readyFrame = window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
         sheetTimer = window.setTimeout(() => map.invalidateSize({ animate: false }), 400);

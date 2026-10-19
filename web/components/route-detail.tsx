@@ -202,7 +202,7 @@ export function RouteDetail({
             <p>Er zijn geen open vragen. Je route wordt berekend met de opgeslagen afstand.</p>
             <button className="button button-primary" disabled={adjusting || !route.constraints?.doel_km} onClick={() => void adjust({ target_km: route.constraints?.doel_km ?? undefined })}>{adjusting ? "Route wordt berekend…" : "Route berekenen"}</button>
           </section> : null}
-          <StatGrid route={route} />
+          {route.ready ? <StatGrid route={route} /> : null}
           <ElevationSparkline values={route.geometry?.elevation} />
           <WhyList reasons={route.waarom} />
           {!route.waarom?.length ? <QualityChips route={route} /> : null}

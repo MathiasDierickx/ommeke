@@ -483,6 +483,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .question-actions .button { min-height: 40px; padding: .45rem .85rem; font-weight: 600; }
 .question-skip { margin-left: auto; color: var(--green); border-color: rgba(36, 90, 67, .4); }
 .question-summary button::before { content: "✓"; color: var(--green); }
+.question-card [role="alert"] { margin: 0; padding: .6rem .8rem; border-radius: .7rem; color: #82382e; background: #fff1ed; font-size: .85rem; line-height: 1.45; }
 .route-pending { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: #f5f8f3; }
 .route-pending h3, .route-pending p { margin: 0; }
 .route-pending .planner-question small { display: block; margin: -.25rem 0 .55rem; color: var(--muted); }

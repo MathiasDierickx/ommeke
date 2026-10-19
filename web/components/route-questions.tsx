@@ -37,7 +37,7 @@ export function RouteQuestions({ route, onAnswers, disabled = false, submitLabel
     lock.current = true; setError(undefined);
     setAdjusting(true); onBusyChange?.(true); setAnswerProgress(null);
     try { await onAnswers(chosen, setAnswerProgress); setAnswers({}); setIndex(0); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Route berekenen mislukt. Probeer opnieuw."); }
+    catch (cause) { setAnswerProgress(null); setError(cause instanceof Error ? cause.message : "Route berekenen mislukt. Probeer opnieuw."); }
     finally { lock.current = false; setAdjusting(false); onBusyChange?.(false); }
   };
   const choose = (option: string) => {
