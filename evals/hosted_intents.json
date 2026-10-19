@@ -531,5 +531,19 @@
     "required_arguments": [],
     "scope_note": "Onhaalbaar binnen het harde budget. Het model mag het budget niet stilzwijgend verhogen of klimmen weglaten; de tool meldt de overschrijding.",
     "provenance": "synthetische onhaalbare case; geen afzonderlijk gebruikersgesprek"
+  },
+  {
+    "id": "korter-en-wegnaam-vervolg",
+    "prompt": "Over mijn route “Rondrit rond Oudenaarde · 20 km” (abc123): maak er ongeveer 20 km van en vermijd de N8. Revisie 6.",
+    "expected_tool": "adjust_route",
+    "expected_arguments": {
+      "draft_id": "abc123",
+      "target_km": 20,
+      "expected_revision": 6
+    },
+    "required_arguments": [
+      "criteria"
+    ],
+    "provenance": "afgeleid uit productiegesprek 00c2802a van 19 oktober 2026 (route 94ef77): het model antwoordde met tekst en klimvoorstellen in plaats van adjust_route"
   }
 ]
