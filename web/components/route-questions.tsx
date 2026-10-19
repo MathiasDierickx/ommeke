@@ -7,36 +7,63 @@ import type { ProgressEvent } from "@/lib/event-stream";
 import { RouteProgress } from "./route-progress";
 
 export type AnswerRoute = (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => Promise<void>;
+type QuestionRoute = Pick<Route, "id" | "vragen"> & { revision?: number };
 
-export function RouteQuestions({ route, onAnswers, disabled = false, submitLabel = "Route berekenen", onBusyChange }: { onBusyChange?: (busy: boolean) => void; route: Route; onAnswers: AnswerRoute; disabled?: boolean; submitLabel?: string }) {
+const key = (question: RouteQuestion) => question.id || question.vraag;
+
+/**
+ * Vraagkaart: één vraag tegelijk ("1 van 3"), reden in één zin, antwoorden als
+ * knoppen, "Maakt me niet uit" en "Maak 'm maar". Na de laatste vraag een
+ * overzicht om na te kijken voor het versturen.
+ */
+export function RouteQuestions({ route, onAnswers, disabled = false, submitLabel = "Route berekenen", onBusyChange }: { onBusyChange?: (busy: boolean) => void; route: QuestionRoute; onAnswers: AnswerRoute; disabled?: boolean; submitLabel?: string }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [index, setIndex] = useState(0);
   const [adjusting, setAdjusting] = useState(false);
   const [answerProgress, setAnswerProgress] = useState<ProgressEvent | null>(null);
   const [error, setError] = useState<string>();
   const lock = useRef(false);
   const questions = JSON.stringify(route.vragen);
-  useEffect(() => { setAnswers({}); setAnswerProgress(null); setError(undefined); }, [route.id, route.revision, questions]);
-  if (!route.vragen?.length) return null;
-  return <section className="route-pending" aria-label="Open routevragen">
-    <h3>Deze route wacht nog op je keuzes</h3>
-    {route.vragen.map((question: RouteQuestion) => <div className="planner-question" role="radiogroup" aria-label={question.vraag} key={question.id || question.vraag}>
-      <p>{question.vraag}</p>{question.reden ? <small>{question.reden}</small> : null}
-      <div className="goal-options">{Object.keys(question.opties).map(option => <label key={option} className="choice-chip choice-chip-quiet">
-        <input disabled={disabled || adjusting} type="radio" name={`route-vraag-${route.id}-${question.id || question.vraag}`} value={option} checked={answers[question.id || question.vraag] === option} onChange={() => setAnswers(current => ({ ...current, [question.id || question.vraag]: option }))} />
-        <span>{optionLabel(question, option)}</span>
-      </label>)}</div>
-    </div>)}
-    <button className="button button-primary" disabled={disabled || adjusting || route.vragen.some(q => !answers[q.id || q.vraag])} onClick={async () => {
-      if (disabled || lock.current || !route.vragen) return;
-      lock.current = true; setError(undefined);
-      setAdjusting(true); onBusyChange?.(true); setAnswerProgress(null);
-      try {
-        await onAnswers(Object.fromEntries(route.vragen.map(q => [q.id || q.vraag, answers[q.id || q.vraag]])), setAnswerProgress);
-        setAnswers({});
-      }
-      catch (cause) { setError(cause instanceof Error ? cause.message : "Route berekenen mislukt. Probeer opnieuw."); }
-      finally { lock.current = false; setAdjusting(false); onBusyChange?.(false); }
-    }}>{adjusting ? "Route wordt berekend…" : submitLabel}</button>
+  useEffect(() => { setAnswers({}); setIndex(0); setAnswerProgress(null); setError(undefined); }, [route.id, route.revision, questions]);
+  const list = route.vragen ?? [];
+  if (!list.length) return null;
+  const current = list[Math.min(index, list.length)];
+  const done = index >= list.length;
+  // De startplaats is geen voorkeur: zonder keuze kan de engine niet verder.
+  const mustAnswer = list.some(question => question.id === "startplaats" && !answers[key(question)]);
+
+  const submit = async (chosen: Record<string, string>) => {
+    if (disabled || lock.current) return;
+    lock.current = true; setError(undefined);
+    setAdjusting(true); onBusyChange?.(true); setAnswerProgress(null);
+    try { await onAnswers(chosen, setAnswerProgress); setAnswers({}); setIndex(0); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Route berekenen mislukt. Probeer opnieuw."); }
+    finally { lock.current = false; setAdjusting(false); onBusyChange?.(false); }
+  };
+  const choose = (option: string) => {
+    setAnswers(previous => ({ ...previous, [key(current)]: option }));
+    setIndex(index + 1);
+  };
+  const busy = disabled || adjusting;
+  const options = Object.keys(current?.opties ?? {}).filter(option => option !== "ok");
+
+  return <section className="question-card" aria-label={done ? "Je keuzes" : current.vraag} role="group">
+    {done ? <>
+      <p className="question-step">Klaar</p>
+      <h3>Je keuzes</h3>
+      <ul className="question-summary">{list.map((question, at) => <li key={key(question)}><button type="button" disabled={busy} onClick={() => setIndex(at)} aria-label={`${question.vraag}: ${answers[key(question)] ? optionLabel(question, answers[key(question)]) : "nog geen antwoord"}, wijzigen`}>{answers[key(question)] ? optionLabel(question, answers[key(question)]) : "Nog geen antwoord"}</button></li>)}</ul>
+      <button className="button button-primary" disabled={busy || mustAnswer} onClick={() => void submit(answers)}>{adjusting ? "Route wordt berekend…" : submitLabel}</button>
+    </> : <>
+      <p className="question-step">Vraag {index + 1} van {list.length}</p>
+      <h3>{current.vraag}</h3>
+      {current.reden ? <p className="question-reason">{current.reden}</p> : null}
+      <ol className="question-options">{options.map((option, at) => <li key={option}><button type="button" className="question-option" disabled={busy} aria-pressed={answers[key(current)] === option} onClick={() => choose(option)}><span className="question-number" aria-hidden="true">{at + 1}</span>{optionLabel(current, option)}</button></li>)}</ol>
+      <div className="question-actions">
+        {"ok" in (current.opties ?? {}) ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => choose("ok")}>Maakt me niet uit</button> : null}
+        {index > 0 ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => setIndex(index - 1)}>Vorige</button> : null}
+        {!mustAnswer ? <button type="button" className="button button-quiet question-skip" disabled={busy} onClick={() => void submit(answers)}>Maak &rsquo;m maar</button> : null}
+      </div>
+    </>}
     {adjusting || answerProgress ? <RouteProgress event={answerProgress} /> : null}
     {error ? <p role="alert">{error}</p> : null}
   </section>;

@@ -296,9 +296,11 @@ test("routeconcept met vragen afmaken vanaf routepagina", async ({ page, url }) 
   state.route = { ...state.route, ready: false, total_km: null, elevation_gain_m: null, download_url: null,
     constraints: { doel_km: 60, maximum_is_hard: true, maximum_km: 63, waarschuwingen: [] }, vragen: questions };
   await openRoute(page, url);
-  await page.getByText("Deze route wacht nog op je keuzes").waitFor();
-  await page.getByRole("radio", { name: "Graag heuvels" }).check();
-  await page.getByRole("radio", { name: "Liever verhard" }).check();
+  await page.getByText("Vraag 1 van 2").waitFor();
+  assert.ok(await page.getByText("Je voorkeur is nog onbekend.").isVisible(), "reden-zin zichtbaar");
+  await page.getByRole("button", { name: "Graag heuvels" }).click();
+  await page.getByText("Vraag 2 van 2").waitFor();
+  await page.getByRole("button", { name: "Liever verhard" }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByRole("button", { name: "Neem mee" }).waitFor();
   // Het herladen loopt asynchroon na het streamresultaat; wacht er kort op i.p.v. meteen te tellen.
@@ -735,33 +737,32 @@ test("chat: open vragen als knoppen beantwoorden", async ({ page, url }) => {
   } });
   state.route = { ...state.route, ready: false, total_km: null, vragen: [startplaatsQuestion] };
   await page.goto(`${url}/chats/c1`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("radio", { name: "Kluisbos (Kluisbergen)", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Kluisbos (Kluisbergen)", exact: true }).waitFor();
   await page.getByLabel("Bericht aan Lus").fill("racefiets 50 km vanaf Kluisbos");
   await page.getByRole("button", { name: "Verstuur bericht" }).click();
   await page.locator(".message-assistant").nth(1).waitFor();
-  assert.equal(await page.locator(".route-pending").count(), 1, "alleen het laatste bericht toont open vragen");
-  assert.equal(await page.locator(".message-assistant").first().locator(".route-pending").count(), 0);
+  assert.equal(await page.locator(".question-card").count(), 1, "alleen het laatste bericht toont open vragen");
+  assert.equal(await page.locator(".message-assistant").first().locator(".question-card").count(), 0);
   assert.equal(await page.locator(".option-chips").count(), 0, "geen geraden modelopties bij gestructureerde vragen");
   for (const label of await page.locator(".messages button, .messages .choice-chip").allTextContents()) {
     assert.doesNotMatch(label, /\*\*|\blat\b/);
   }
   const before = actionCalls(state);
-  await page.getByRole("radio", { name: "Kluisbos (Kluisbergen)", exact: true }).check();
+  await page.getByRole("button", { name: "Kluisbos (Kluisbergen)", exact: true }).click();
   assert.equal(actionCalls(state), before, "een keuze maken verstuurt niets");
   await page.getByRole("button", { name: "Route berekenen", exact: true }).click();
-  await page.getByRole("radiogroup", { name: "Welke ondergrond?" }).waitFor();
+  await page.getByRole("group", { name: "Welke ondergrond?" }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Route berekenen", exact: true }).count(), 0, "versturen pas na de laatste vraag");
+  await page.getByRole("button", { name: "Liever verhard" }).click();
+  await page.getByRole("group", { name: "Zoek je heuvels?" }).getByRole("button", { name: "Maakt me niet uit" }).click();
+  await page.getByRole("button", { name: "Liefst op fietspaden" }).click();
   const go = page.getByRole("button", { name: "Route berekenen", exact: true });
-  assert.equal(await go.isDisabled(), true);
-  await page.getByRole("radio", { name: "Liever verhard" }).check();
-  await page.getByRole("radiogroup", { name: "Zoek je heuvels?" }).getByRole("radio", { name: "Maakt niet uit" }).check();
-  assert.equal(await go.isDisabled(), true);
-  await page.getByRole("radio", { name: "Liefst op fietspaden" }).check();
   await go.click();
   await page.getByRole("status").filter({ hasText: "Je keuzes worden verwerkt." }).waitFor();
   assert.equal(await page.getByRole("button", { name: "Route wordt berekend…", exact: true }).isDisabled(), true);
   release();
   await page.locator(".route-made").last().getByText("50 km · bekijk kaart en downloads").waitFor();
-  assert.equal(await page.locator(".route-pending").count(), 0);
+  assert.equal(await page.locator(".question-card").count(), 0);
   const calls = state.calls.filter(c => c.key.endsWith("answers/stream"));
   assert.equal(calls.length, 2, "één POST per reeks vragen");
   assert.notEqual(calls[0].body.request_id, calls[1].body.request_id);
@@ -787,11 +788,12 @@ test("snelle planner: startplaats kiezen vóór vervolgvragen", async ({ page, u
   await page.getByLabel("Startplaats").fill("Kluisbos");
   await page.getByRole("button", { name: "Maak mijn route" }).click();
   await page.getByText("Welke Kluisbos bedoel je?").waitFor();
-  assert.equal(await page.getByRole("radiogroup", { name: "Welke Kluisbos bedoel je?" }).getByRole("radio").count(), 2);
-  await page.getByRole("radio", { name: "Kluisbos (Kluisbergen)", exact: true }).check();
+  assert.equal(await page.locator(".question-option").count(), 2);
+  assert.equal(await page.getByRole("button", { name: "Maak ’m maar" }).count(), 0, "startplaats kan niet overgeslagen worden");
+  await page.getByRole("button", { name: "Kluisbos (Kluisbergen)", exact: true }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByText("Zoek je heuvels?").waitFor();
-  await page.getByRole("radio", { name: "Graag heuvels" }).check();
+  await page.getByRole("button", { name: "Graag heuvels" }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
   const calls = state.calls.filter(c => c.key.endsWith("answers/stream"));
@@ -813,7 +815,7 @@ test("routepagina: startplaats met leesbare kandidaatknoppen", async ({ page, ur
   state.route = { ...state.route, ready: false, total_km: null, vragen: [startplaatsQuestion] };
   await openRoute(page, url);
   await page.getByText("Welke Kluisbos bedoel je?").waitFor();
-  await page.getByRole("radio", { name: "Kluisbos (Halle)", exact: true }).check();
+  await page.getByRole("button", { name: "Kluisbos (Halle)", exact: true }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByRole("button", { name: "Neem mee" }).waitFor();
   assert.equal(state.route.start, "Kluisbos (Halle)");
@@ -835,12 +837,14 @@ test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async
   await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
   await page.getByRole("button", { name: "Maak mijn route" }).click();
   await page.getByRole("heading", { name: "Nog even je wensen aanvullen" }).waitFor();
-  const go = page.getByRole("button", { name: "Maak mijn route met deze keuzes" });
-  assert.equal(await go.isDisabled(), true, "pas actief als alle vragen beantwoord zijn");
-  await page.getByRole("radio", { name: "Liever verhard" }).check();
-  assert.equal(await go.isDisabled(), true);
-  await page.getByRole("radio", { name: "Liever vlak" }).check();
-  await go.click();
+  await page.getByText("Vraag 1 van 2").waitFor();
+  await page.getByRole("button", { name: "Liever verhard" }).click();
+  // Terug en opnieuw kiezen blijft mogelijk vóór het versturen.
+  await page.getByRole("button", { name: "Vorige" }).click();
+  assert.equal(await page.getByRole("button", { name: "Liever verhard" }).getAttribute("aria-pressed"), "true");
+  await page.getByRole("button", { name: "Liever verhard" }).click();
+  await page.getByRole("button", { name: "Liever vlak" }).click();
+  await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
   assert.match(await page.locator(".quick-result").innerText(), /40,4 km/);
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/answers/stream");
@@ -864,8 +868,8 @@ test("snelle planner: fietspad- en oversteekvragen krijgen leesbare knoppen", as
   await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
   await page.getByRole("button", { name: "Maak mijn route" }).click();
   await page.getByRole("heading", { name: "Nog even je wensen aanvullen" }).waitFor();
-  await page.getByRole("radio", { name: "Liefst op fietspaden" }).check();
-  await page.getByRole("radio", { name: "Liever weinig oversteken" }).check();
+  await page.getByRole("button", { name: "Liefst op fietspaden" }).click();
+  await page.getByRole("button", { name: "Liever weinig oversteken" }).click();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
   await page.getByRole("heading", { name: "Je route is klaar" }).waitFor();
   const call = state.calls.find((c) => c.key === "POST /api/routes/d1/answers/stream");

@@ -37,6 +37,13 @@ const route = { id: "r1", revision: 1, name: "Wandellus rond Sint-Pietersplein Â
   ],
   geometry: { points, elevation: points.map((_, i) => ({ km: i * 0.1, ele: 8 + 6 * Math.sin(i / 7) })), climbs: [], pois: [], start: { lat: points[0][0], lon: points[0][1], label: "Sint-Pietersplein" } } };
 const conversations = [{ id: "c1", title: "Wandeling langs de Leie", preview: "6 km vanuit Gent", created_at: "2026-10-04T10:00:00Z" }];
+const concept = { ...route, id: "r3", name: "Wandeling vanuit Wetteren", start: "Markt, Wetteren", ready: false, total_km: null, elevation_gain_m: null, download_url: null, waarom: [], voorstellen: [],
+  constraints: { doel_km: 8, waarschuwingen: [] }, geometry: { verkenning: true, points: points.filter((_, i) => i % 3 === 0), climbs: [], pois: [], elevation: null, start: { lat: points[0][0], lon: points[0][1], label: "Markt" } },
+  vragen: [
+    { id: "oversteken", vraag: "Wil je drukke oversteken vermijden?", reden: "Je verkenning steekt 7 keer een drukke weg over.", opties: { vermijd: {}, ok: {} } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", reden: "41 % van de verkenning is pad of onverhard.", opties: { verhard: {}, ok: {}, onverhard: {} } },
+    { id: "heuvels", vraag: "Zoek je de heuvels op?", opties: { zoek: {}, ok: {}, vlak: {} } },
+  ] };
 const routes = [route, { ...route, id: "r2", name: "Racefietsrit Vlaamse Ardennen Â· 60 km", activity: "koersfiets", total_km: 61.2, elevation_gain_m: 640 }];
 const reply = (body) => ({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify(body) });
 
@@ -49,6 +56,7 @@ for (const vp of [{ name: "mobiel", width: 390, height: 844, mobile: true }, { n
     if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors });
     if (p === "/api/conversations") return r.fulfill(reply({ conversations }));
     if (p === "/api/routes") return r.fulfill(reply({ routes, next_cursor: null }));
+    if (p.startsWith("/api/routes/r3")) return r.fulfill(reply({ route: concept }));
     if (p.startsWith("/api/routes/")) return r.fulfill(reply({ route }));
     return r.fulfill(reply({}));
   });
@@ -62,6 +70,8 @@ for (const vp of [{ name: "mobiel", width: 390, height: 844, mobile: true }, { n
   await page.screenshot({ path: `${out}/${vp.name}-route.png` });
   await page.getByRole("button", { name: "Neem mee" }).click(); await page.waitForTimeout(300);
   await page.screenshot({ path: `${out}/${vp.name}-route-neem-mee.png` });
+  await page.goto(`${url}/routes/r3`); await page.waitForSelector(".question-card", { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/${vp.name}-vraag.png` });
   if (vp.mobile) { await page.goto(`${url}/?new=1`); await page.waitForSelector(".planner-title"); await page.getByRole("button", { name: "Open navigatie" }).click().catch(() => {}); await page.waitForTimeout(500); await page.screenshot({ path: `${out}/${vp.name}-menu.png` }); }
   await page.close();
 }

@@ -6,6 +6,7 @@ const OPTION_LABELS: Record<string, Record<string, string>> = {
   ondergrond: { verhard: "Liever verhard", onverhard: "Graag onverhard" },
   fietspaden: { belangrijk: "Liefst op fietspaden" },
   oversteken: { vermijd: "Liever weinig oversteken" },
+  stil: { belangrijk: "Liefst rustige wegen" },
 };
 
 export function optionLabel(question: RouteQuestion, option: string): string {
@@ -13,7 +14,7 @@ export function optionLabel(question: RouteQuestion, option: string): string {
     const value = question.opties[option] as { label?: unknown } | undefined;
     if (typeof value?.label === "string") return value.label;
   }
-  if (option === "ok") return "Maakt niet uit";
+  if (option === "ok") return "Maakt me niet uit";
   const label = question.id ? OPTION_LABELS[question.id]?.[option] : undefined;
   if (label) return label;
   const text = option.replaceAll("_", " ");

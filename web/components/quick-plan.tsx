@@ -6,7 +6,8 @@ import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
 import { isOutOfCoverage } from "@/lib/interaction";
-import { optionLabel, type RouteQuestion } from "@/lib/question-labels";
+import type { RouteQuestion } from "@/lib/question-labels";
+import { RouteQuestions } from "./route-questions";
 
 type Question = RouteQuestion;
 import type { RouteProposal as Proposal } from "@/lib/types";
@@ -57,7 +58,6 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   const [canRestart,setCanRestart]=useState(false);
   const [outside, setOutside] = useState(false);
   const [result, setResult] = useState<Result>();
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   const resultHeading = useRef<HTMLHeadingElement>(null);
   const progressBox = useRef<HTMLDivElement>(null);
   const startInput = useRef<HTMLInputElement>(null);
@@ -101,7 +101,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     const values = { start, target_km: km, activiteit: activity, doel: "toeren" };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setOutside(false); setResult(undefined); setAnswers({}); onResultChange?.(false);
+    lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setOutside(false); setResult(undefined); onResultChange?.(false);
     try {
       const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
@@ -119,23 +119,20 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
-  async function submitAnswers() {
-    if (!result?.vragen?.length || lock.current) return;
-    const antwoorden = Object.fromEntries(result.vragen.filter(q => q.id).map(q => [q.id!, answers[q.vraag]]));
+  async function submitAnswers(antwoorden: Record<string, string>, onProgress: (event: ProgressEvent) => void) {
+    if (!result) return;
     const signature = JSON.stringify({ draft: result.draft, antwoorden });
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
-    lock.current = true; onBusyChange?.(true); setProgress(null); setBusy(true); setError("");
+    setProgress(null); setError("");
     try {
-      const next = await apiStream<Result>(`/api/routes/${encodeURIComponent(result.draft)}/answers/stream`, token, { antwoorden, request_id: pending.current.id }, setProgress);
+      const next = await apiStream<Result>(`/api/routes/${encodeURIComponent(result.draft)}/answers/stream`, token, { antwoorden, request_id: pending.current.id }, event => { setProgress(event); onProgress(event); });
       pending.current = null;
-      setAnswers({});
       setResult(next);
       onResultChange?.(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Je keuzes konden niet worden verwerkt.");
       setCanRestart(e instanceof StreamFailure);
+      throw e;
     }
-    finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
   const coordinates = /^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(start.trim());
@@ -206,14 +203,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     {error && <p role="alert" className={outside ? "planner-error quick-plan-outside" : "planner-error"}>{error}{outside ? " Pas je startplaats aan en probeer opnieuw." : ""}</p>}
     {canRestart && <button className="quick-plan-again" onClick={()=>{pending.current=null;setCanRestart(false);setError("De vorige poging is gestopt. Controleer Mijn routes: er kan al een concept bestaan. Met Maak mijn route start je bewust een nieuwe poging.");}}>Nieuwe poging voorbereiden</button>}
     {result?.vragen?.length ? <div className="planner-questions">
-      {result.vragen.map(q => <div className="planner-question" role="radiogroup" aria-label={q.vraag} key={q.vraag}>
-        <p>{q.vraag}</p>
-        <div className="goal-options">{Object.keys(q.opties).map(option => <label key={option} className="choice-chip choice-chip-quiet">
-          <input type="radio" name={`vraag-${q.id || q.vraag}`} value={option} checked={answers[q.vraag] === option} onChange={() => setAnswers(current => ({ ...current, [q.vraag]: option }))} />
-          <span>{optionLabel(q, option)}</span>
-        </label>)}</div>
-      </div>)}
-      <button className="planner-submit" disabled={busy || result.vragen.some(q => !answers[q.vraag])} onClick={() => void submitAnswers()}>Maak mijn route met deze keuzes</button>
+      <RouteQuestions route={{ id: result.draft, vragen: result.vragen }} disabled={busy} submitLabel="Maak mijn route met deze keuzes" onAnswers={submitAnswers} onBusyChange={value => { lock.current = value; setBusy(value); onBusyChange?.(value); }} />
       {result.conversation_id ? <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Liever iets anders vragen in het gesprek</button> : null}
     </div> : null}
     {result?.conversation_id && !result.vragen?.length && <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}

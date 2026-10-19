@@ -469,6 +469,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .planner-questions .planner-submit { justify-self: start; }
 .planner-question { margin: 0; }
 .planner-question p { margin: 0 0 .5rem; line-height: 1.5; }
+.question-card { display: grid; gap: .7rem; margin: 1rem 0; padding: 1.1rem; border: 1px solid var(--line); border-radius: 1.2rem; background: var(--white); box-shadow: 0 1px 0 rgba(23, 35, 29, .04), 0 14px 40px rgba(23, 35, 29, .07); animation: lift-in .3s ease both; }
+.question-card h3 { margin: 0; font: 400 1.2rem/1.25 var(--font-serif), Georgia, serif; }
+.question-step { margin: 0; color: var(--green); font-size: .62rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.question-reason { margin: -.2rem 0 0; color: var(--muted); font-size: .82rem; line-height: 1.45; }
+.question-options, .question-summary { margin: 0; padding: 0; list-style: none; display: grid; gap: .4rem; }
+.question-option, .question-summary button { width: 100%; min-height: 48px; padding: .6rem .8rem; border: 1px solid rgba(36, 90, 67, .22); border-radius: .9rem; display: flex; align-items: center; gap: .7rem; color: var(--ink); background: var(--white); font-size: .9rem; font-weight: 600; text-align: left; cursor: pointer; }
+.question-option[aria-pressed="true"] { background: #e6efe2; border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+.question-option:disabled, .question-summary button:disabled { opacity: .6; cursor: progress; }
+.question-option:focus-visible, .question-summary button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.question-number { width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-grid; place-items: center; flex: 0 0 auto; color: var(--green); background: var(--paper); font-size: .72rem; font-weight: 800; }
+.question-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.question-actions .button { min-height: 40px; padding: .45rem .85rem; font-weight: 600; }
+.question-skip { margin-left: auto; color: var(--green); border-color: rgba(36, 90, 67, .4); }
+.question-summary button::before { content: "✓"; color: var(--green); }
 .route-pending { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: #f5f8f3; }
 .route-pending h3, .route-pending p { margin: 0; }
 .route-pending .planner-question small { display: block; margin: -.25rem 0 .55rem; color: var(--muted); }
