@@ -1062,7 +1062,7 @@ test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de 
     "POST /api/conversations": () => json(200, { conversation }),
     "GET /api/conversations/c8/messages": () => json(200, { conversation, messages: [] }),
     "POST /api/conversations/c8/messages/stream": ({ body }) => {
-      assert.equal(body.content, "Over mijn route “Berendries-lus” (r1): liever zonder de steenweg");
+      assert.equal(body.content, "Pas mijn route “Berendries-lus” (r1) aan: liever zonder de steenweg");
       return sse([["result", { message: { id: "a2", conversation_id: "c8", role: "assistant", content: "Ik pas de route aan.", created_at: "2026-10-19T19:00:01Z" }, route_ids: ["r1"] }]]);
     },
   } });

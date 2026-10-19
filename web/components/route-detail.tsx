@@ -144,6 +144,7 @@ export function RouteDetail({
   const [shareUrl, setShareUrl] = useState<string>();
   const [takeAlong, setTakeAlong] = useState(false);
   const [ask, setAsk] = useState("");
+  const [peek, setPeek] = useState(false);
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState("bruikbaar");
   const [feedbackText, setFeedbackText] = useState("");
@@ -186,8 +187,8 @@ export function RouteDetail({
         <button className="route-back" onClick={onBack}><ArrowLeft /> Gesprekken</button>
       </header>
       {route ? (
-        <aside className="route-sheet" aria-label="Routedetails">
-          <div className="sheet-handle" aria-hidden="true"><span /></div>
+        <aside className={`route-sheet${peek ? " route-sheet-peek" : ""}`} aria-label="Routedetails">
+          <button type="button" className="sheet-handle" onClick={() => setPeek(open => !open)} aria-expanded={!peek} aria-label={peek ? "Details tonen" : "Kaart groter maken"}><span /></button>
           <div className="route-title-row">
             {editing ? (
               <form onSubmit={async (event) => { event.preventDefault(); await onRename(name); setEditing(false); }}>
@@ -274,9 +275,10 @@ export function RouteDetail({
             ) : null}
             <form className="avoid-place" onSubmit={(event) => { event.preventDefault(); const value = avoidPlace.trim(); if (value) void adjust({ vermijd_plaatsen: [value] }).then(() => setAvoidPlace("")); }}>
               <MapPin />
-              <input value={avoidPlace} onChange={(event) => setAvoidPlace(event.target.value)} placeholder="Plaats vermijden" aria-label="Plaats vermijden" />
+              <input value={avoidPlace} onChange={(event) => setAvoidPlace(event.target.value)} placeholder="Plaats vermijden" aria-label="Plaats vermijden" aria-describedby="avoid-place-hint" />
               <button disabled={adjusting || !avoidPlace.trim()}>Vermijd</button>
             </form>
+            <small id="avoid-place-hint" className="field-hint">Een plaats of wijk, geen wegnaam: een drukke weg vermijd je door hierboven in het veld te vragen om minder steenwegen.</small>
             {route.ready && onReturn ? <div className="route-journey"><ReturnRoute onReturn={onReturn} /></div> : null}
             <details className="account-controls"><summary>Feedback over deze route</summary>
               <form onSubmit={async event => { event.preventDefault(); setFeedbackStatus("Verzenden…"); try { await onFeedback(feedback, feedbackText); setFeedbackStatus("Bedankt, je feedback is bewaard."); setFeedbackText(""); } catch { setFeedbackStatus("Feedback bewaren mislukt. Probeer opnieuw."); } }}>

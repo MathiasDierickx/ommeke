@@ -25,4 +25,5 @@ test('chatopties slaan code, tools en bestanden over vóór markdownopschoning',
 test('chatopties herkennen "Voorstel N:"-regels van het model', () => {
   const content = 'Past niet.\nWil je iets versoepelen?\n\n**Voorstel 1:** Verhoog het maximum naar 10 km.  \n**Voorstel 2:** Verwijder het criterium “weinig oversteken”.  \n\nKies een voorstel.';
   assert.deepEqual(messageOptions({role:'assistant', content}), ['Verhoog het maximum naar 10 km.', 'Verwijder het criterium “weinig oversteken”.']);
+  assert.deepEqual(messageOptions({role:'assistant', content:'Kies?\nVoorstel 1 – Voeg de Paterberg toe\nVoorstel 2 – Voeg Cabernhol toe'}), ['Voeg de Paterberg toe', 'Voeg Cabernhol toe']);
 });

@@ -446,7 +446,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const askAboutRoute = async (text: string) => {
     if (!session || !selectedRoute) return;
     const conversation = selectedRoute.conversation_id;
-    const content = conversation ? text : `Over mijn route “${selectedRoute.name}” (${selectedRoute.id}): ${text}`;
+    const content = conversation ? text : `Pas mijn route “${selectedRoute.name}” (${selectedRoute.id}) aan: ${text}`;
     const id = conversation ?? (await newConversation());
     if (!id) return;
     try { sessionStorage.setItem(`ommeke-answer:${id}`, content); } catch { /* opslag is optioneel */ }
