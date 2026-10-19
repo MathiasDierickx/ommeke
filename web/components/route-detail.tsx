@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, ArrowLeft, Bike, Check, CircleHelp, Copy, Footprints, LoaderCircle, MapPin, Menu, Mountain, Pencil, Plus, Share2, Smartphone, Trash2, TriangleAlert, Watch, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Bike, Check, CircleHelp, Copy, Footprints, LoaderCircle, MapPin, Menu, Mountain, Pencil, Plus, Send, Share2, Smartphone, Trash2, TriangleAlert, Watch, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, RouteReason, SharedRoute } from "@/lib/types";
@@ -106,10 +106,12 @@ export function RouteDetail({
   onShare,
   onUnshare,
   onFeedback,
+  onAsk,
   mapSlot,
   onBack,
   onMenu,
 }: {
+  onAsk?: (text: string) => Promise<void>;
   mapSlot?: React.ReactNode;
   route: Route | null;
   loading: boolean;
@@ -141,6 +143,7 @@ export function RouteDetail({
   const [nearbyClimbs, setNearbyClimbs] = useState<NearbyClimb[]>([]);
   const [shareUrl, setShareUrl] = useState<string>();
   const [takeAlong, setTakeAlong] = useState(false);
+  const [ask, setAsk] = useState("");
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState("bruikbaar");
   const [feedbackText, setFeedbackText] = useState("");
@@ -197,7 +200,7 @@ export function RouteDetail({
             <span className="activity-tag">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}{activityLabel(route.activity)}</span>
           </div>
           <p className="route-origin">Vertrek vanuit {route.start || route.geometry?.start?.label || "je gekozen startpunt"}</p>
-          {!route.ready && route.vragen?.length ? <RouteQuestions route={route} onAnswers={onAnswers} onBusyChange={setAdjusting} disabled={adjusting} submitLabel="Maak mijn route met deze keuzes" /> : !route.ready ? <section className="route-pending" aria-labelledby="route-pending-title">
+          {!route.ready && route.vragen?.length ? <RouteQuestions route={route} onAnswers={onAnswers} onFreeText={onAsk ? text => void onAsk(text) : undefined} onBusyChange={setAdjusting} disabled={adjusting} submitLabel="Maak mijn route met deze keuzes" /> : !route.ready ? <section className="route-pending" aria-labelledby="route-pending-title">
             <h3 id="route-pending-title">Deze route is nog niet berekend</h3>
             <p>Er zijn geen open vragen. Je route wordt berekend met de opgeslagen afstand.</p>
             <button className="button button-primary" disabled={adjusting || !route.constraints?.doel_km} onClick={() => void adjust({ target_km: route.constraints?.doel_km ?? undefined })}>{adjusting ? "Route wordt berekend…" : "Route berekenen"}</button>
@@ -235,6 +238,10 @@ export function RouteDetail({
               <small className="take-along-note"><Smartphone aria-hidden="true" /> Offline: op dit toestel. GPX: voor elke app. FIT: voor Garmin of Wahoo. Deel: een link voor anderen.</small>
             </div>
           ) : null}
+          {onAsk ? <form className="route-ask" onSubmit={event => { event.preventDefault(); const text = ask.trim(); if (text) { void onAsk(text); setAsk(""); } }}>
+            <input value={ask} onChange={event => setAsk(event.target.value)} maxLength={500} placeholder="Zeg wat je anders wil…" aria-label="Zeg wat je anders wil" />
+            <button type="submit" disabled={!ask.trim()} aria-label="Verstuur"><Send /></button>
+          </form> : null}
           <details className="route-adjust">
             <summary><span>Zelf aanpassen</span><small>afstand, doel, klimmen, plaatsen, terugweg</small></summary>
             <form className="distance-form" onSubmit={event => {

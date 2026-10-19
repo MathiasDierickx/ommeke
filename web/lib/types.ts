@@ -40,6 +40,8 @@ export type RouteReason = { id: string; label: string; hard: boolean; waarde: nu
 export type Route = {
   voorstellen?: RouteProposal[];
   waarom?: RouteReason[];
+  /** Gesprek waarin de route gemaakt of besproken is (nog niet door elke backend meegegeven). */
+  conversation_id?: string;
   /** false = rit in lijn van A naar B; ontbreekt = lus. */
   loop?: boolean;
   vragen?: import("./question-labels").RouteQuestion[];

@@ -444,6 +444,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .anchor-chip-active { color: var(--green-deep); background: #e6efe2; border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
 .recent-start:focus-visible, .anchor-chip:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .planner .planner-submit { width: 100%; }
+.planner-step h3 small { margin-left: auto; color: var(--muted); font: 500 .68rem var(--font-sans), system-ui, sans-serif; }
+.planner-step textarea { width: 100%; min-height: 3.2rem; padding: .65rem .8rem; border: 1px solid rgba(23, 35, 29, .22); border-radius: .75rem; resize: vertical; color: var(--ink); background: white; font-size: .95rem; line-height: 1.4; }
+.planner-step textarea:focus { outline: 0; border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 90, 67, .12); }
+.question-note, .route-ask { display: flex; gap: .4rem; }
+.question-note input, .route-ask input { min-width: 0; flex: 1; min-height: 44px; padding: .55rem .8rem; border: 1px solid rgba(23, 35, 29, .22); border-radius: 999px; color: var(--ink); background: white; font-size: .9rem; }
+.question-note input:focus, .route-ask input:focus { outline: 0; border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 90, 67, .12); }
+.question-note button, .route-ask button { min-height: 44px; padding: 0 1rem; border: 0; border-radius: 999px; color: white; background: var(--green); font-weight: 700; cursor: pointer; }
+.question-note button:disabled, .route-ask button:disabled { opacity: .4; cursor: not-allowed; }
+.route-ask { margin-top: 1rem; }
+.route-ask button { width: 44px; padding: 0; display: grid; place-items: center; }
 .planner-card { padding: 1.15rem; border: 1px solid var(--line); border-radius: 1.1rem; display: grid; gap: 1.15rem; background: var(--white); box-shadow: 0 1px 0 rgba(23, 35, 29, .04), 0 14px 40px rgba(23, 35, 29, .07); }
 .planner-field { display: grid; gap: .45rem; min-width: 0; }
 .planner-field > label, .field-label { color: var(--ink); font-size: .82rem; font-weight: 700; }

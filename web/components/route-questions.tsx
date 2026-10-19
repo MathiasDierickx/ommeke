@@ -16,8 +16,9 @@ const key = (question: RouteQuestion) => question.id || question.vraag;
  * knoppen, "Maakt me niet uit" en "Maak 'm maar". Na de laatste vraag een
  * overzicht om na te kijken voor het versturen.
  */
-export function RouteQuestions({ route, onAnswers, disabled = false, submitLabel = "Route berekenen", onBusyChange }: { onBusyChange?: (busy: boolean) => void; route: QuestionRoute; onAnswers: AnswerRoute; disabled?: boolean; submitLabel?: string }) {
+export function RouteQuestions({ route, onAnswers, onFreeText, disabled = false, submitLabel = "Route berekenen", onBusyChange }: { onBusyChange?: (busy: boolean) => void; route: QuestionRoute; onAnswers: AnswerRoute; onFreeText?: (text: string) => void; disabled?: boolean; submitLabel?: string }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [note, setNote] = useState("");
   const [index, setIndex] = useState(0);
   const [adjusting, setAdjusting] = useState(false);
   const [answerProgress, setAnswerProgress] = useState<ProgressEvent | null>(null);
@@ -58,6 +59,10 @@ export function RouteQuestions({ route, onAnswers, disabled = false, submitLabel
       <h3>{current.vraag}</h3>
       {current.reden ? <p className="question-reason">{current.reden}</p> : null}
       <ol className="question-options">{options.map((option, at) => <li key={option}><button type="button" className="question-option" disabled={busy} aria-pressed={answers[key(current)] === option} onClick={() => choose(option)}><span className="question-number" aria-hidden="true">{at + 1}</span>{optionLabel(current, option)}</button></li>)}</ol>
+      {onFreeText ? <form className="question-note" onSubmit={event => { event.preventDefault(); const text = note.trim(); if (text) { onFreeText(text); setNote(""); } }}>
+        <input value={note} onChange={event => setNote(event.target.value)} maxLength={500} disabled={busy} placeholder="of typ je eigen antwoord…" aria-label="Eigen antwoord" />
+        <button type="submit" disabled={busy || !note.trim()}>Stuur</button>
+      </form> : null}
       <div className="question-actions">
         {"ok" in (current.opties ?? {}) ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => choose("ok")}>Maakt me niet uit</button> : null}
         {index > 0 ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => setIndex(index - 1)}>Vorige</button> : null}

@@ -1050,3 +1050,39 @@ try {
 }
 console.log(`\n${failures ? `${failures} test(s) mislukt` : "alle tests geslaagd"} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
 process.exit(failures ? 1 : 0);
+
+test("startscherm: eigen notities gaan via het gesprek, niet via de snelplanner", async ({ page, url }) => {
+  const conversation = { id: "c7", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
+  const state = await installBackend(page, { handlers: {
+    "POST /api/conversations": () => json(200, { conversation }),
+    "GET /api/conversations/c7/messages": () => json(200, { conversation, messages: [] }),
+    "POST /api/conversations/c7/messages/stream": ({ body }) => {
+      assert.equal(body.content, "Een wandeling van 6 km vanuit Markt, Wetteren. rustig, langs het water, met de kinderen");
+      return sse([["result", { message: { id: "a1", conversation_id: "c7", role: "assistant", content: "Ik stel je drie vragen.", created_at: "2026-10-19T19:00:01Z" }, route_ids: [] }]]);
+    },
+  } });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Markt, Wetteren");
+  await page.getByLabel("Wat telt vandaag?").fill("rustig, langs het water, met de kinderen");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByText("Ik stel je drie vragen.").waitFor();
+  assert.equal(state.calls.filter(c => c.key === "POST /api/routes/stream").length, 0, "met notities geen snelplanner-call");
+  expectNoStrays(state, "notities");
+});
+
+test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de tekst", async ({ page, url }) => {
+  const conversation = { id: "c8", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
+  const state = await installBackend(page, { handlers: {
+    "POST /api/conversations": () => json(200, { conversation }),
+    "GET /api/conversations/c8/messages": () => json(200, { conversation, messages: [] }),
+    "POST /api/conversations/c8/messages/stream": ({ body }) => {
+      assert.equal(body.content, "Over mijn route “Berendries-lus” (r1): liever zonder de steenweg");
+      return sse([["result", { message: { id: "a2", conversation_id: "c8", role: "assistant", content: "Ik pas de route aan.", created_at: "2026-10-19T19:00:01Z" }, route_ids: ["r1"] }]]);
+    },
+  } });
+  await openRoute(page, url);
+  await page.getByLabel("Zeg wat je anders wil").fill("liever zonder de steenweg");
+  await page.getByRole("button", { name: "Verstuur" }).click();
+  await page.getByText("Ik pas de route aan.").waitFor();
+  expectNoStrays(state, "zeg wat je anders wil");
+});

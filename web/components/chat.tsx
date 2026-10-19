@@ -19,7 +19,7 @@ export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }
   return (
     <section className="empty-chat" aria-labelledby="empty-chat-title">
       <h2 id="empty-chat-title">Of vertel het gewoon</h2>
-      <p>Typ hieronder waar je start en wat de tocht goed maakt. Lus stelt alleen de vragen die voor jouw route tellen.</p>
+      <p>Typ hieronder in je eigen woorden wat je zoekt: waar je start, hoe lang, en wat de tocht goed maakt (rustig, langs water, met de kinderen, een café halverwege…). Hoe meer je vertelt, hoe gerichter Lus vraagt.</p>
       <div className="starter-list">
         {STARTERS.map((starter) => <button key={starter} onClick={() => onStarter(starter)}><span>{starter}</span><ArrowUp /></button>)}
       </div>
@@ -42,7 +42,7 @@ export function Message({ message, onRoute, onOption, routes = [], questionRoute
         <div className="message-copy">{message.content.split("\n").map((line, index) => <p key={`${message.id}-${index}`}>{line ? formatLine(line) : "\u00a0"}</p>)}</div>
         {options.length ? <div className="option-chips" aria-label="Antwoordopties">{options.map((option) => <button key={option} onClick={() => onOption(option)}>{option}</button>)}</div> : null}
       </div>
-      {assistant && onAnswers ? routes.filter(route => questionRouteIds.includes(route.id) && route.vragen?.length).map(route => <RouteQuestions key={route.id} route={route} disabled={busy} onAnswers={(answers, onProgress) => onAnswers(route.id, answers, onProgress)} />) : null}
+      {assistant && onAnswers ? routes.filter(route => questionRouteIds.includes(route.id) && route.vragen?.length).map(route => <RouteQuestions key={route.id} route={route} disabled={busy} onFreeText={onOption} onAnswers={(answers, onProgress) => onAnswers(route.id, answers, onProgress)} />) : null}
       {assistant && token && onProposalApplied ? routes.filter(route => questionRouteIds.includes(route.id) && route.ready && route.voorstellen?.length).map(route => <RouteProposals key={route.id} routeId={route.id} proposals={route.voorstellen} token={token} disabled={busy} onApplied={onProposalApplied} />) : null}
       {routeId ? <div className="route-result">
         <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route?.name || "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>

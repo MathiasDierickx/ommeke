@@ -21,3 +21,8 @@ test('chatopties slaan code, tools en bestanden over vóór markdownopschoning',
   assert.deepEqual(messageOptions({role:'assistant', content}), ['Liever vlak', 'Graag heuvels']);
   assert.deepEqual(messageOptions({role:'assistant', content:'Klaar?\n- route.GPX\n- preview.HTML\n- `code`\n- adjust_route (target_km=55)'}), []);
 });
+
+test('chatopties herkennen "Voorstel N:"-regels van het model', () => {
+  const content = 'Past niet.\nWil je iets versoepelen?\n\n**Voorstel 1:** Verhoog het maximum naar 10 km.  \n**Voorstel 2:** Verwijder het criterium “weinig oversteken”.  \n\nKies een voorstel.';
+  assert.deepEqual(messageOptions({role:'assistant', content}), ['Verhoog het maximum naar 10 km.', 'Verwijder het criterium “weinig oversteken”.']);
+});

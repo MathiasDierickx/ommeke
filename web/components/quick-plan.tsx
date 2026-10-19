@@ -41,8 +41,9 @@ const RECENT_KEY = "ommeke-recente-starts";
 const readRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
 const rememberStart = (start: string) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([start, ...readRecent().filter(item => item !== start)].slice(0, 3))); } catch { /* opslag is optioneel */ } };
 
-export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResultChange }: { onResultChange?: (hasResult:boolean)=>void; onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
+export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChange, onResultChange }: { onResultChange?: (hasResult:boolean)=>void; onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void; onPrompt: (text: string) => void }) {
   const [start, setStart] = useState("");
+  const [notes, setNotes] = useState("");
   const [kind, setKind] = useState("voet");
   const [activity, setActivity] = useState("wandelen");
   const current = ACTIVITIES.find(item => item.value === activity) ?? ACTIVITIES[0];
@@ -63,6 +64,7 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   const startInput = useRef<HTMLInputElement>(null);
   const startId = useId();
   const distanceId = useId();
+  const notesId = useId();
   useEffect(() => {
     if (!result) return;
     resultHeading.current?.focus({ preventScroll: true });
@@ -96,8 +98,15 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
       { timeout: 12000, maximumAge: 60000 },
     );
   }
+  // Eigen notities gaan via het gesprek: het taalmodel vertaalt ze naar criteria en vragen.
+  function promptFromForm(): string {
+    const label = current.label.toLowerCase();
+    const what = kind === "voet" ? "wandeling" : kind === "lopen" ? `loopje (${label})` : `fietstocht (${label})`;
+    return `Een ${what} van ${km} km vanuit ${start.trim()}. ${notes.trim()}`;
+  }
   async function submit(e: React.FormEvent) {
     e.preventDefault(); if (lock.current) return;
+    if (notes.trim()) { rememberStart(start.trim()); onPrompt(promptFromForm()); return; }
     const values = { start, target_km: km, activiteit: activity, doel: "toeren" };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
@@ -178,6 +187,11 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
               <input id={distanceId} type="range" min="1" max={current.max} value={km} onChange={e => changeKm(Number(e.target.value))} aria-valuetext={`${km} kilometer, ongeveer ${formatDuration(estimateMinutes(km, 0, activity))}`} />
             </div>
           </li>
+          <li className="planner-step planner-step-notes">
+            <h3><label htmlFor={notesId}>Wat telt vandaag?</label> <small>optioneel, maar helpt</small></h3>
+            <textarea id={notesId} value={notes} onChange={e => setNotes(e.target.value)} rows={2} maxLength={1000} placeholder="bv. rustig, langs het water, met de kinderen, een café halverwege, geen trappen…" />
+            <small className="field-hint">Hoe meer je vertelt, hoe gerichter de vragen en hoe beter de route past.</small>
+          </li>
         </ol>
         <button type="submit" className="planner-submit" disabled={busy}>{busy ? "Route wordt berekend…" : "Maak mijn route"}</button>
       </fieldset>
@@ -203,7 +217,8 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     {error && <p role="alert" className={outside ? "planner-error quick-plan-outside" : "planner-error"}>{error}{outside ? " Pas je startplaats aan en probeer opnieuw." : ""}</p>}
     {canRestart && <button className="quick-plan-again" onClick={()=>{pending.current=null;setCanRestart(false);setError("De vorige poging is gestopt. Controleer Mijn routes: er kan al een concept bestaan. Met Maak mijn route start je bewust een nieuwe poging.");}}>Nieuwe poging voorbereiden</button>}
     {result?.vragen?.length ? <div className="planner-questions">
-      <RouteQuestions route={{ id: result.draft, vragen: result.vragen }} disabled={busy} submitLabel="Maak mijn route met deze keuzes" onAnswers={submitAnswers} onBusyChange={value => { lock.current = value; setBusy(value); onBusyChange?.(value); }} />
+      <RouteQuestions route={{ id: result.draft, vragen: result.vragen }} disabled={busy} submitLabel="Maak mijn route met deze keuzes" onAnswers={submitAnswers}
+        onFreeText={result.conversation_id ? text => { try { sessionStorage.setItem(`ommeke-answer:${result.conversation_id}`, text); } catch { /* opslag is optioneel */ } onConversation(result.conversation_id!); } : undefined} onBusyChange={value => { lock.current = value; setBusy(value); onBusyChange?.(value); }} />
       {result.conversation_id ? <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Liever iets anders vragen in het gesprek</button> : null}
     </div> : null}
     {result?.conversation_id && !result.vragen?.length && <button className="quick-plan-again" onClick={() => onConversation(result.conversation_id!)}>Wensen aanvullen in het gesprek</button>}

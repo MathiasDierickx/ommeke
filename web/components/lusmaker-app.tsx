@@ -441,6 +441,17 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       await loadRoute(selectedRoute.id, session.accessToken);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Delen stoppen mislukt."); throw cause; }
   };
+  // Vrije tekst over een route: naar het gesprek van die route, of een nieuw gesprek met de route erin.
+  // shortcut: zonder conversation_id op de route start dit een nieuw gesprek met de routenaam in de tekst; upgrade zodra de engine conversation_id meegeeft.
+  const askAboutRoute = async (text: string) => {
+    if (!session || !selectedRoute) return;
+    const conversation = selectedRoute.conversation_id;
+    const content = conversation ? text : `Over mijn route “${selectedRoute.name}” (${selectedRoute.id}): ${text}`;
+    const id = conversation ?? (await newConversation());
+    if (!id) return;
+    try { sessionStorage.setItem(`ommeke-answer:${id}`, content); } catch { /* opslag is optioneel */ }
+    router.push(`/chats/${encodeURIComponent(id)}`);
+  };
   const sendFeedback = async (category: string, comment: string) => {
     if (!session || !selectedRoute) return;
     await apiRequest(`/api/routes/${selectedRoute.id}/feedback`, session.accessToken, { method: "POST", body: JSON.stringify({ category, comment }) });
@@ -483,7 +494,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
         {sidebar}
         {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
+        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onAsk={askAboutRoute} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
       </main>
     );
   }
@@ -499,7 +510,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         </header>
         {error ? <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
         <div className="messages">
-          {!messages.length && !busy && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} /> : null}
+          {!messages.length && !busy && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} onPrompt={text => void sendPrompt(text)} /> : null}
           {!messages.length && !busy && !quickBusy && !quickHasResult ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} onAnswers={answerChatRoute} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
           {orphan && !busy ? <div className="orphan-notice" role="status">
