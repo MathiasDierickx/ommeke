@@ -8,7 +8,7 @@ from itertools import islice
 import inspect
 import time
 
-from . import climbs as climbs_mod
+from . import criteria, climbs as climbs_mod
 from . import geo, gh, profiles
 from .errors import DraftError
 
@@ -43,7 +43,7 @@ def _unpaved_m(routes: list[dict]) -> float:
     from . import analysis
 
     total = 0.0
-    unpaved = {"gravel", "dirt", "grass", "sand", "ground", "unpaved", "compacted", "fine_gravel"}
+    unpaved = analysis.UNPAVED_SURFACES
     for routed in routes:
         if "onverhard_m" in routed:
             total += routed["onverhard_m"]
@@ -116,6 +116,11 @@ def _candidate_surface_components(
         "populair": _popular_share(routes, popular_cells, profile=profile),
         "autovrij": _quiet_share(routes, busy_cells),
         "kassei": _route_share(routes, "surface", analysis.COBBLE_SURFACES),
+        "onverhard": _route_share(routes, "surface", analysis.UNPAVED_SURFACES),
+        "beton": _route_share(routes, "surface", analysis.CONCRETE_SURFACES),
+        "steenweg": _route_share(routes, "road_class", analysis.BIG_ROADS),
+        "fietspad": _route_share(routes, "road_class", analysis.CYCLEWAY_CLASSES),
+        "stil": _route_share(routes, "road_class", analysis.QUIET_CLASSES),
     }
     if popular_cells is _LOAD_HEAT or busy_cells is _LOAD_HEAT:
         evidence = route_evidence.route_stats([r.get("coords", []) for r in routes], profile)
@@ -303,17 +308,19 @@ def suggest(d: dict, climb_db: dict, max_detour_km: float = 10.0, limit: int = 5
             router=router,
             weighted=True,
         )
-        weights = profile_document["gewichten"]
+        spec = _objective_weights(_draft().objective_for_draft(d, None))
         prefer_cobbles = _draft()._prefers_cobbles(d, profile_document)
+        scored = []
         for candidate in candidates:
             components = _score_components(candidate, max_detour_km)
-            score = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
-            if prefer_cobbles:
-                score += 0.15 * components["kassei"]
+            score = _weighted_score(spec, components, prefer_cobbles)
+            if score is None:
+                continue  # hard criterium gefaald
             candidate["score"] = round(score, 6)
             candidate["score_componenten"] = components
+            scored.append(candidate)
         return sorted(
-            candidates,
+            scored,
             key=lambda candidate: (
                 -candidate["score"],
                 -candidate["extra_hoogtemeters"],
@@ -354,7 +361,12 @@ def _eligible_candidates(candidates: list[dict], budget_km: float,
     ]
 
 
-def _objective_weights(objective) -> dict | None:
+def _objective_weights(objective) -> list[dict] | None:
+    """Zet een objective om in een criterialijst; None = legacy klimdoel zonder gewichten.
+
+    Accepteert de oude vormen ('hm', 'offroad', gewichten-dict) en de nieuwe
+    ``{"criteria": [...]}`` (zie ``criteria.py``).
+    """
     if objective in ("hm-per-km", "toeren", FLAT, _LEGACY_HM):
         return None
     if objective == "hm":
@@ -363,13 +375,26 @@ def _objective_weights(objective) -> dict | None:
         objective = {"offroad": 1.0}
     if not isinstance(objective, dict):
         raise DraftError(
-            "objective moet 'hm', 'hm-per-km', 'offroad', 'toeren', 'vlak' "
-            "of een gewichten-dict zijn"
+            "objective moet 'hm', 'hm-per-km', 'offroad', 'toeren', 'vlak', "
+            "een gewichten-dict of {'criteria': [...]} zijn"
         )
+    if "criteria" in objective:
+        try:
+            return criteria.parse(objective["criteria"])
+        except criteria.CriteriaError as exc:
+            raise DraftError(str(exc)) from exc
     try:
-        return profiles.normalize_weights(objective)
+        return criteria.from_weights(profiles.normalize_weights(objective))
     except profiles.ProfileError as exc:
         raise DraftError(str(exc)) from exc
+
+
+def _weighted_score(spec: list[dict], components: dict, prefer_cobbles: bool) -> float | None:
+    """Score van één kandidaat; None als een hard criterium faalt."""
+    value = criteria.score(spec, components)
+    if value is not None and prefer_cobbles:
+        value += 0.15 * components.get("kassei", 0.0)
+    return value
 
 
 def _score_components(candidate: dict, budget_km: float) -> dict:
@@ -382,7 +407,8 @@ def _score_components(candidate: dict, budget_km: float) -> dict:
         "populair": min(1.0, max(0.0, surface.get("populair", 0.0))),
         "autovrij": min(1.0, max(0.0, surface.get("autovrij", 0.0))),
         "kort": min(1.0, max(0.0, 1.0 - extra_km / max(budget_km, 0.001))),
-        "kassei": min(1.0, max(0.0, surface.get("kassei", 0.0))),
+        **{key: min(1.0, max(0.0, surface.get(key, 0.0)))
+           for key in ("kassei", "onverhard", "beton", "steenweg", "fietspad", "stil")},
     }
 
 
@@ -410,13 +436,17 @@ def _select_candidate(candidates: list[dict], objective, budget_km: float | None
             primary = gain if objective == _LEGACY_HM else ratio
         else:
             components = _score_components(candidate, budget_km)
-            primary = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
-            if prefer_cobbles:
-                primary += 0.15 * components["kassei"]
-            candidate["score"] = round(primary, 6)
+            primary = _weighted_score(weights, components, prefer_cobbles)
+            candidate["score"] = None if primary is None else round(primary, 6)
             candidate["score_componenten"] = components
         return (-primary, -gain, *surface_tie, extra_km, candidate["climb"]["id"])
 
+    if weights is not None:
+        # Harde criteria sluiten kandidaten uit vóór de sortering.
+        candidates = [c for c in candidates
+                      if _weighted_score(weights, _score_components(c, budget_km), prefer_cobbles) is not None]
+        if not candidates:
+            return None
     return sorted(candidates, key=key)[0]
 
 
@@ -583,9 +613,9 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                 "score_componenten": surface,
             }
             components = _score_components(pseudo_candidate, remaining_m / 1000.0)
-            score = sum(weights[name] * components[name] for name in profiles.WEIGHT_KEYS)
-            if prefer_cobbles:
-                score += 0.15 * components["kassei"]
+            score = _weighted_score(weights, components, prefer_cobbles)
+            if score is None:
+                continue  # hard criterium gefaald
         candidates.append((score, -seed, seed, candidate, coords))
 
     overlap_note = None
@@ -728,8 +758,13 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
     profile_document = profiles.load(d["profile_doc"]) if d.get("profile_doc") else None
     prefer_cobbles = bool(profile_document and _draft()._prefers_cobbles(d, profile_document))
     _select_candidate([], objective, prefer_cobbles=prefer_cobbles)
-    pure_offroad = weights is not None and weights["offroad"] == 1.0
-    tour_only = objective in ("toeren", FLAT)
+    pure_offroad = weights is not None and criteria.is_pure(weights, "offroad")
+    # Criteria zonder (positief) hoogtemetergewicht jagen niet op klimmen.
+    tour_only = objective in ("toeren", FLAT) or (
+        weights is not None and not any(
+            c["metriek"] == "hoogtemeters" and c["richting"] == "hoog" and not c["hard"] for c in weights
+        )
+    )
 
     if not d["climbs"] and d.get("loop"):
         # Offroad en een gewone toer jagen niet op klimmen: meteen opvullen.

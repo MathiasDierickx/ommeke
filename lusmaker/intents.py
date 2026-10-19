@@ -11,6 +11,7 @@ import unicodedata
 from pathlib import Path
 
 from . import (
+    criteria,
     activities,
     artifacts,
     aws_state,
@@ -217,8 +218,10 @@ def summary_sentence(d: dict) -> str:
     computed = d["computed"]
     start = (d.get("start") or {}).get("label") or "het startpunt"
     km = f"{computed['total_km']:.1f}".replace(".", ",")
+    end = (d.get("end") or {}).get("label")
+    head = f"Lus vanuit {start}" if d.get("loop", True) or not end else f"Rit van {start} naar {end}"
     sentence = (
-        f"Lus vanuit {start}: {km} km / +{computed['ascend_m']:g} hm "
+        f"{head}: {km} km / +{computed['ascend_m']:g} hm "
         f"langs {len(d.get('climbs', []))} klimmen"
     )
     if d.get("avoid_cobbles"):
@@ -325,6 +328,14 @@ def constraint_report(d: dict, request: dict | None = None) -> dict:
     }
 
 
+def explain_route(d: dict, request: dict | None = None) -> list[dict]:
+    """'Waarom deze route': per criterium (of oud doel) de gemeten waarde en of hij gehaald is."""
+    request = request or d.get("route_request") or {}
+    spec = request.get("criteria") or criteria.from_goal(request.get("doel"))
+    computed = d.get("computed") or {}
+    return criteria.explain(spec, computed.get("kwaliteit") or {}, computed)
+
+
 def compact_result(
     d: dict,
     climb_db: dict,
@@ -360,6 +371,7 @@ def compact_result(
         ],
         "artifacts": artifacts.describe_all(d["id"]),
         "constraints": constraint_report(d, request),
+        "waarom": explain_route(d, request),
     }
     if d.get('stop_onderweg'):
         stop = d['stop_onderweg']
@@ -411,6 +423,8 @@ def _route_request(
     input_signature: dict,
     heuvels: str | None = None,
     ondergrond: str | None = None,
+    criteria_list: list[dict] | None = None,
+    eind: str | None = None,
 ) -> dict:
     hard_max = max_km
     if target_km is not None and hard_max is None:
@@ -444,6 +458,8 @@ def _route_request(
         "rond_plaats": rond_plaats,
         "langs_water": langs_water,
         "input_signature": input_signature,
+        "criteria": criteria_list,
+        "eind": eind,
     }
 
 
@@ -492,8 +508,10 @@ def _update_auto_name(d: dict, previous: dict, request: dict) -> None:
             d["name"] = name[:-len(suffix)][:80-len(new_suffix)].rstrip() + new_suffix
 
 
-def _tour_objective(request: dict, default: str = "toeren") -> str:
-    """'vlak' als de rit expliciet vlak moet zijn, anders het gegeven doel."""
+def _tour_objective(request: dict, default: str = "toeren"):
+    """Criteria uit het gesprek winnen; anders 'vlak' bij een expliciet vlakke rit, anders het doel."""
+    if request.get("criteria"):
+        return {"criteria": request["criteria"]}
     explicit = request.get("expliciete_voorkeuren") or {}
     if explicit.get("heuvels") == "vlak" and default in ("toeren", "vlak"):
         return draft.FLAT
@@ -689,6 +707,16 @@ def _route_for_request(
     target_km = request.get("target_km")
     hard_max = request.get("max_km")
     max_explicit = request.get("max_km_explicit", True)
+    if not d.get("loop"):
+        # shortcut: een rit in lijn routeert start -> via-klimmen -> eind zonder opvulling of
+        # klimzoektocht; upgrade zodra criteria ook de lijnroute moeten sturen (via-punten kiezen).
+        route_fn(d, climb_db)
+        actual = (d.get("computed") or {}).get("total_km") or 0.0
+        if max_explicit and hard_max is not None and actual > hard_max:
+            raise IntentError(
+                f"route is {actual:.1f} km en overschrijdt het harde maximum van {hard_max:.1f} km"
+            )
+        return
     if climb_adjustment:
         # Expliciete klimkeuzes behouden; alleen de vervangbare rondrit opnieuw
         # opvullen. Geen greedy klimselectie die verwijderde klimmen terugzet.
@@ -702,7 +730,7 @@ def _route_for_request(
             optimize_fn(
                 d, climb_db, max_km=ceiling, max_rounds=0,
                 fill=not request["geen_opvulling"], fill_target_km=target_km,
-                objective="offroad" if goal == "offroad" else _tour_objective(request),
+                objective=_tour_objective(request, "offroad" if goal == "offroad" else "toeren"),
             )
         return
     if d.get("water_via"):
@@ -760,7 +788,9 @@ def _route_for_request(
         "max_km": optimize_ceiling,
         "fill": True if request.get("rond_plaats") else not request["geen_opvulling"],
     }
-    if goal == "hoogtemeters" and (request.get("expliciete_voorkeuren") or {}).get("heuvels") == "zoek":
+    if request.get("criteria"):
+        optimize_kwargs["objective"] = {"criteria": request["criteria"]}
+    elif goal == "hoogtemeters" and (request.get("expliciete_voorkeuren") or {}).get("heuvels") == "zoek":
         optimize_kwargs["objective"] = "hm"
     elif request.get("rond_plaats") and not d.get("climbs"):
         optimize_kwargs["objective"] = (
@@ -868,6 +898,15 @@ def _set_water_via(d: dict, request: dict, water_fn) -> bool:
 
 @funnel.tracked_plan
 @quotas.metered("route")
+def _parse_criteria(raw):
+    if raw is None:
+        return None
+    try:
+        return criteria.parse(raw)
+    except criteria.CriteriaError as exc:
+        raise IntentError(str(exc)) from exc
+
+
 def plan_route(
     start: str,
     region: str | None = None,
@@ -892,6 +931,8 @@ def plan_route(
     heuvels: str | None = None,
     ondergrond: str | None = None,
     stop_onderweg: dict | None = None,
+    criteria: list[dict] | None = None,
+    eind: str | None = None,
     *,
     pois_fn=None,
     overpass_fetch=None,
@@ -922,6 +963,7 @@ def plan_route(
             raise IntentError(str(exc)) from exc
     if doel not in {"hoogtemeters", "offroad", "kort", "toeren"}:
         raise IntentError("doel moet 'hoogtemeters', 'offroad', 'kort' of 'toeren' zijn")
+    criteria = _parse_criteria(criteria)
     if activities.canonical(activiteit) is None:
         raise IntentError(_ACTIVITY_ERROR)
     activiteit = activities.canonical(activiteit)
@@ -941,6 +983,12 @@ def plan_route(
         langs_water = langs_water.strip()
         if not langs_water:
             raise IntentError("langs-water mag niet leeg zijn")
+    if eind is not None:
+        eind = eind.strip()
+        if not eind:
+            raise IntentError("eind mag niet leeg zijn")
+        if rond_plaats or langs_water:
+            raise IntentError("een rit in lijn (eind) combineert niet met rond_plaats of langs_water")
     if rond_plaats and not langs_water and target_km is None and max_km is None:
         target_km = 5.0
     _validate_request(
@@ -948,9 +996,9 @@ def plan_route(
         max_km=max_km,
         tolerance_km=tolerance_km,
     )
-    if doel == "toeren" and not via_klimmen and target_km is None and max_km is None:
+    if eind is None and doel == "toeren" and not via_klimmen and target_km is None and max_km is None:
         raise IntentError("doel 'toeren' vereist target-km of max-km")
-    if doel in {"hoogtemeters", "offroad"} and not via_klimmen and target_km is None and max_km is None:
+    if eind is None and doel in {"hoogtemeters", "offroad"} and not via_klimmen and target_km is None and max_km is None:
         raise IntentError(
             "een lege hoogtemeterlus vereist target-km, max-km of een via-klim"
         )
@@ -976,7 +1024,7 @@ def plan_route(
     }
     # Nieuwe optionele invoer komt alleen in de signatuur als ze gegeven is,
     # zodat bestaande request-id's idempotent hervatbaar blijven.
-    for key, value in (("heuvels", heuvels), ("ondergrond", ondergrond), ("stop_onderweg", stop_onderweg)):
+    for key, value in (("heuvels", heuvels), ("ondergrond", ondergrond), ("stop_onderweg", stop_onderweg), ("criteria", criteria), ("eind", eind)):
         if value is not None:
             input_signature[key] = value
     request = _route_request(
@@ -997,6 +1045,8 @@ def plan_route(
         input_signature=input_signature,
         heuvels=heuvels,
         ondergrond=ondergrond,
+        criteria_list=criteria,
+        eind=eind,
     )
     request["doel"] = effective_goal(doel, request["expliciete_voorkeuren"])
     if stop_onderweg is not None:
@@ -1092,6 +1142,9 @@ def plan_route(
     )
     if profiel_naam is not None:
         create_kwargs["profile_doc"] = profiel_naam
+    if eind is not None:
+        create_kwargs["loop"] = False
+        create_kwargs["end"] = eind
     created = create_fn(**create_kwargs)
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)
@@ -1174,6 +1227,7 @@ ANSWER_VALUES = {
     "ondergrond": {"verhard", "ok", "onverhard"},
     "fietspaden": {"belangrijk", "ok"},
     "oversteken": {"vermijd", "ok"},
+    "stil": {"belangrijk", "ok"},
 }
 
 
@@ -1192,8 +1246,10 @@ def apply_answers(
     profiel: een racefietser die hier 'verhard' kiest, wil dat niet voor elke
     wandeling.
     """
-    if not isinstance(antwoorden, dict) or not antwoorden:
-        raise IntentError("geef minstens één antwoord")
+    if not isinstance(antwoorden, dict):
+        raise IntentError("antwoorden moet een object zijn")
+    # Leeg = "maak 'm maar": routeer met wat bekend is; open vragen blokkeren niet meer.
+    skip_questions = not antwoorden
     for key, value in antwoorden.items():
         if key not in ANSWER_VALUES or not isinstance(value, str) or value not in ANSWER_VALUES[key]:
             raise IntentError(f"onbekend antwoord: {key}={value}")
@@ -1227,6 +1283,11 @@ def apply_answers(
     elif "startplaats" in antwoorden:
         raise IntentError("deze route heeft geen open startplaatsvraag")
     request["expliciete_voorkeuren"] = {**(request.get("expliciete_voorkeuren") or {}), **antwoorden}
+    # Elk antwoord wordt ook een scorecriterium; 'ok' haalt een eerder criterium weg.
+    request["criteria"] = criteria.merge(
+        request.get("criteria"), criteria.from_answers(antwoorden),
+        dropped={key for key, value in antwoorden.items() if value == "ok"},
+    )
     d["route_request"] = request
     if "kasseien" in antwoorden:
         d["avoid_cobbles"] = antwoorden["kasseien"] == "vermijd"
@@ -1237,11 +1298,10 @@ def apply_answers(
     adjust = adjust_fn or adjust_route
     with funnel.adjust_kind("answers"):
         return adjust(draft_id, doel=goal,
-                      check_readiness=not choosing_place or request.get("profiel_naam") is not None)
+                      check_readiness=(not choosing_place or request.get("profiel_naam") is not None)
+                      and not skip_questions)
 
 
-@funnel.tracked_adjust
-@quotas.metered("route")
 def _once_per_request(fn):
     """Laat een `request_id` een retry van `adjust_route` het opgeslagen resultaat geven.
 
@@ -1275,6 +1335,8 @@ def _once_per_request(fn):
     return wrapper
 
 
+@funnel.tracked_adjust
+@quotas.metered("route")
 @_once_per_request
 def adjust_route(
     draft_id: str,
@@ -1295,6 +1357,7 @@ def adjust_route(
     langs_water: str | None = None,
     request_id: str | None = None,
     startplaats: str | None = None,
+    criteria: list[dict] | None = None,
     *,
     load_fn=draft.load,
     add_climb_fn=draft.add_climb,
@@ -1329,6 +1392,7 @@ def adjust_route(
         return apply_answers(draft_id, {"startplaats": startplaats},
                              expected_revision=expected_revision, load_fn=load_fn,
                              save_fn=save_fn, adjust_fn=resume)
+    criteria = _parse_criteria(criteria)
     d = load_fn(draft_id)
     draft.require_revision(d, expected_revision)
     previous_request = d.get("route_request") or {}
@@ -1425,6 +1489,7 @@ def adjust_route(
         "expliciete_voorkeuren": previous_request.get(
             "expliciete_voorkeuren", {}
         ),
+        "criteria": criteria if criteria is not None else previous_request.get("criteria"),
         "toegestane_plaatsen": sorted(
             {
                 *previous_request.get("toegestane_plaatsen", []),

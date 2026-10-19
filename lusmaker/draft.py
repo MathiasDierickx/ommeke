@@ -747,6 +747,8 @@ def objective_for_draft(d: dict, objective):
     """Gebruik profielgewichten tenzij de aanroep een objective overschrijft."""
     if objective is not None:
         return objective
+    if (d.get("route_request") or {}).get("criteria"):
+        return {"criteria": d["route_request"]["criteria"]}
     if d.get("profile_doc"):
         return profiles.load(d["profile_doc"])["gewichten"]
     if d.get("route_request"):
@@ -1053,6 +1055,8 @@ def probe(
         "km": route_km,
         "hm": route_hm,
         "kwaliteit": quality,
+        # Compacte verkenningslijn (~500 m-stappen) zodat de UI nooit een lege kaart toont.
+        "punten": [[round(lat, 5), round(lon, 5)] for lat, lon in geo.resample(route_coords, 500.0)],
         "terrein": {
             "kassei_aanwezig_m": quality.get("kassei_m", 0),
             "beton_m": quality.get("beton_m", 0),

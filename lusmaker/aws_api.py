@@ -235,6 +235,19 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
     }
 
 
+def _probe_geometry(item: dict[str, Any]) -> dict[str, Any] | None:
+    """Verkenningsroute (gestippeld te tekenen) zolang de echte route op antwoorden wacht."""
+    points = (item.get("_probe") or {}).get("punten")
+    if not points:
+        return None
+    start = item.get("start") or {}
+    return {
+        "verkenning": True, "pois": [], "points": points, "climbs": [], "elevation": None,
+        "start": ({"lat": start.get("lat"), "lon": start.get("lon"), "label": start.get("label")}
+                  if start.get("lat") is not None else None),
+    }
+
+
 def _route_detail_payload(item: dict[str, Any], *, proposals_fn=None) -> dict[str, Any]:
     result = _route_item(item)
     result["shared"] = bool(item.get("share_token"))
@@ -242,7 +255,8 @@ def _route_detail_payload(item: dict[str, Any], *, proposals_fn=None) -> dict[st
     result["avoid_places"] = item.get("avoid_places") or []
     result["route_request"] = item.get("route_request") or {}
     result["computed"] = item.get("computed")
-    result["geometry"] = _route_geometry(item) if result["ready"] else None
+    result["geometry"] = _route_geometry(item) if result["ready"] else _probe_geometry(item)
+    result["waarom"] = intents.explain_route(item) if result["ready"] else []
     result["vragen"] = (item.get("open_vragen") or []) if not result["ready"] and item.get("route_request") else []
     result["voorstellen"] = (proposals_fn or _fresh_proposals)(item) if result["ready"] else []
     return result

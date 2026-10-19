@@ -46,6 +46,8 @@ CLI: `lus plan-route`. MCP/chat: `plan_route`. Web: `POST /api/routes` en
 | heuvels | `--heuvels` | `heuvels` | `heuvels` | — | `null` = onbekend (vlag weglaten); zoek, ok of vlak. |
 | ondergrond | `--ondergrond` | `ondergrond` | `ondergrond` | — | `null` = onbekend (vlag weglaten); verhard, ok of onverhard. |
 | stop_onderweg | `--stop-onderweg` | `stop_onderweg` | `stop_onderweg` | — | Optioneel object met soort (cafe, water, bakker, toilet, fietsenmaker) en rond_km ≥ 0. CLI: JSON. Kandidaten binnen 1 km van de route en binnen max(3 km, 40% van rond_km); eerst kleinste afwijking van rond_km, dan route-offset. Voor cafe volgt bij geen lokale kandidaat een begrensde Overpass-zoekactie naar cafe, pub, bar of biergarten. Herroutering bewaakt doel/tolerantie en hard maximum, anders waarschuwing en oorspronkelijke route. |
+| criteria | `--criteria` | `criteria` | `criteria` | — | Optionele scorelijst op maat (1-8 objecten met `metriek`, optioneel `id`, `label`, `richting` hoog/laag, `gewicht` ≥ 0, `hard`, `drempel` 0..1). Gewichten worden op som 1 genormaliseerd; een hard criterium vereist een drempel en sluit kandidaten uit. Aanwezig = vervangt `doel` als optimalisatiedoel; het resultaat krijgt `waarom`-regels. CLI: JSON of `.json`-bestand; `lus criteria metrics` toont de metrieken. |
+| eind | `--eind` | `eind` | `eind` | — | Eindpunt voor een rit in lijn (A→B): `loop=false`, rechtstreeks gerouteerd via eventuele via-klimmen, zonder opvulling. Combineert niet met rond_plaats of langs_water. |
 | check_readiness | `--check-readiness` | — | — | — | CLI: standaard uit. MCP, chat en web sturen altijd `true`. |
 
 Bewuste verschillen:
@@ -82,6 +84,7 @@ CLI: `lus adjust-route <id>`. MCP/chat: `adjust_route`. Web:
 | target_km | `--target-km` | `target_km` | `target_km` | `target_km` | Web: getal. |
 | tolerance_km | `--tolerance-km` | `tolerance_km` | `tolerance_km` | — | Leeg = bestaande waarde. |
 | doel | `--doel` | `doel` | `doel` | `doel` | Leeg = bestaande waarde. Web gebruikt `hm` voor hoogtemeters. |
+| criteria | `--criteria` | `criteria` | `criteria` | — | Leeg = bestaande criteria van de route blijven gelden; een nieuwe lijst vervangt ze volledig. |
 | geen_opvulling | `--geen-opvulling` | `geen_opvulling` | `geen_opvulling` | — | Leeg = bestaande waarde. |
 | profiel_naam | `--profiel-naam` | `profiel_naam` | `profiel_naam` | — | Leeg = profiel van de draft. |
 | expected_revision | `--expected-revision` | `expected_revision` | `expected_revision` | `expected_revision` | Zie revisies. Web: geheel getal. |
@@ -110,7 +113,7 @@ opnieuw routeren. Enkel beschikbaar via de web-API
 | Parameter | CLI | MCP | Chat | Web | Default en opmerking |
 |---|---|---|---|---|---|
 | draft_id | — | — | — | `draft_id` | Padparameter. |
-| antwoorden | — | — | — | `antwoorden` | Verplicht, niet leeg. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. |
+| antwoorden | — | — | — | `antwoorden` | Verplicht object; leeg `{}` = "maak 'm maar": routeer met wat bekend is zonder nieuwe vragen. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `stil` (belangrijk, ok), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. Elk antwoord wordt ook een criterium (`criteria.ANSWER_CRITERIA`); `ok` verwijdert het. CLI: `lus draft answer <id> sleutel=waarde`. |
 | request_id | — | — | — | `request_id` | Verplicht in de web-API (receipt, scope `answers`). |
 
 De motor kent ook `expected_revision`; de web-endpoint geeft die niet door.

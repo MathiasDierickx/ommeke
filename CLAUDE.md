@@ -32,6 +32,12 @@ wanneer de gebruiker het bestand wil; geef previews via de artifact-URI's.
 geeft legs en de volledige kwaliteitsmetrieken alleen wanneer de gebruiker
 erom vraagt.
 
+## Live testen in Chrome
+
+Voor end-to-end acceptatie op https://ommeke.vercel.app volg je
+`docs/E2E-CHROME.md`: persoonlijke Chrome, nooit wachtwoorden typen, downloads
+controleren met `scripts/inspect_download.py`.
+
 ## Aanroepen
 
 ```bash

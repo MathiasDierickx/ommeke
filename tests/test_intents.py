@@ -97,6 +97,7 @@ def test_compact_output_contract_and_summary():
         "vervolg",
         "artifacts",
         "constraints",
+        "waarom",
     }
     assert result["status"] == "ready"
     assert result["revision"] == 0
@@ -1028,7 +1029,7 @@ def test_apply_answers_maps_flat_and_unpaved_and_rejects_unknown_values():
     assert run({"heuvels": "vlak"}) == "toeren"
     assert run({"ondergrond": "onverhard"}, doel="toeren") == "offroad"
     assert run({"heuvels": "ok"}, doel="toeren") == "toeren"
-    for bad in ({}, {"heuvels": "veel"}, {"wind": "ok"}, ["heuvels"]):
+    for bad in ({"heuvels": "veel"}, {"wind": "ok"}, ["heuvels"]):
         try:
             intents.apply_answers("d", bad, load_fn=lambda _id: {"route_request": {"doel": "toeren"}}, save_fn=lambda _d: None, adjust_fn=lambda *_a, **_k: {})
             raise AssertionError(f"verwacht IntentError voor {bad}")

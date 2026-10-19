@@ -44,6 +44,7 @@ class Context:
     unpaved_m: float | None
     cycleway_pct: float | None
     crossings: float | None
+    quiet_pct: float | None          # aandeel wegen zonder doorgaand autoverkeer
     places: int
     goal: str | None
     preferences: dict
@@ -73,6 +74,7 @@ def context(d: dict, profiel: dict, probe: dict) -> Context:
         unpaved_m=_metric(probe, "onverhard_m", "onverhard_m"),
         cycleway_pct=_metric(probe, "fietspad_pct", "fietspad_pct"),
         crossings=_metric(probe, "kruisingen", "steenweg_kruisingen"),
+        quiet_pct=_metric(probe, "stil_pct", "stil_pct"),
         places=len((probe.get("terrein") or {}).get("plaatskernen") or []),
         goal=(d.get("route_request") or {}).get("doel"),
         preferences=profiles.effective_preferences(profiel, activity),
@@ -328,7 +330,38 @@ OVERSTEKEN = Row(
 )
 
 
-ROWS = (KASSEIEN, HEUVELS, ONDERGROND, FIETSPADEN, OVERSTEKEN)
+# -- rustig ---------------------------------------------------------------
+
+_QUIET_RELEVANCE = {
+    "wandelen": 1.0, "wegloop": 1.0, "stadsfiets": 0.8, "toerfiets": 0.6,
+    "gravel": 0.4, "koersfiets": 0.3, "trail": 0.3, "mtb": 0.3,
+}
+_BUSY_MAX_PCT = 40.0   # meer dan dit op doorgaande wegen telt als 'druk'
+
+
+STIL = Row(
+    id="stil",
+    key="stil",
+    label="rustigvraag",
+    relevance=lambda ctx: _QUIET_RELEVANCE.get(ctx.activity, 0.0),
+    measure=lambda ctx: None if ctx.quiet_pct is None else 100.0 - ctx.quiet_pct,
+    threshold=lambda ctx: _BUSY_MAX_PCT,
+    reason=lambda ctx: (
+        f"{fmt(100.0 - ctx.quiet_pct, 0)}% van je verkenningsroute loopt over wegen met "
+        "doorgaand verkeer; rustvoorkeur onbekend"
+    ),
+    question=lambda ctx: (
+        f"Zo'n {fmt(100.0 - ctx.quiet_pct, 0)}% van je verkenningsroute volgt wegen met "
+        "doorgaand verkeer. Wil je het vooral rustig houden, of is dat oké?"
+    ),
+    options=lambda ctx: {
+        "belangrijk": _patch("stil", "belangrijk"),
+        "ok": _patch("stil", "ok"),
+    },
+)
+
+
+ROWS = (KASSEIEN, HEUVELS, ONDERGROND, FIETSPADEN, OVERSTEKEN, STIL)
 LABELS = {row.id: row.label for row in ROWS}
 
 

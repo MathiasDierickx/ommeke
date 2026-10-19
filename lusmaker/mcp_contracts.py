@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 from mcp.types import ToolAnnotations
 from pydantic import ConfigDict, Field
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired, Required, TypedDict
 
 
 # Versiegevoelige OpenAI Apps SDK-wirevelden. Bron (geraadpleegd voor T18):
@@ -238,6 +238,30 @@ class StopOnderweg(TypedDict):
     __pydantic_config__ = ConfigDict(extra="forbid")
     soort: Literal["cafe", "water", "bakker", "toilet", "fietsenmaker"]
     rond_km: Annotated[float, Field(ge=0, allow_inf_nan=False, strict=True)]
+
+
+class Criterium(TypedDict, total=False):
+    """Eén wens uit het gesprek als meetbaar scorecriterium (zie criteria.py)."""
+    __pydantic_config__ = ConfigDict(extra="forbid")
+    id: Annotated[str, Field(pattern=r"^[a-z0-9_-]{1,32}$")]
+    label: Annotated[str, Field(min_length=1, max_length=80)]
+    metriek: Required[Literal[
+        "hoogtemeters", "kort", "offroad", "onverhard", "populair", "autovrij",
+        "stil", "kassei", "beton", "steenweg", "fietspad", "oversteken",
+    ]]
+    richting: Literal["hoog", "laag"]
+    gewicht: Annotated[float, Field(ge=0, allow_inf_nan=False)]
+    hard: bool
+    drempel: Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
+
+Criteria = Annotated[
+    list[Criterium],
+    Field(min_length=1, max_length=8, description=(
+        "Scorelijst op maat: elke wens één criterium met metriek, richting (hoog/laag), "
+        "gewicht en optioneel hard+drempel. Vervangt doel wanneer aanwezig."
+    )),
+]
 
 
 class RouteWorkflowResult(TypedDict, total=False):

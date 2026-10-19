@@ -11,6 +11,9 @@ OFFROAD_CLASSES = {"path", "track", "footway", "pedestrian", "bridleway"}
 CYCLEWAY_CLASSES = {"cycleway"}
 COBBLE_SURFACES = {"cobblestone", "sett", "unhewn_cobblestone", "cobblestone:flattened"}
 CONCRETE_SURFACES = {"concrete", "concrete:lanes", "concrete:plates"}
+UNPAVED_SURFACES = {"gravel", "dirt", "grass", "sand", "ground", "unpaved", "compacted", "fine_gravel"}
+# Wegklassen zonder doorgaand autoverkeer: de deterministische maat voor "rustig".
+QUIET_CLASSES = {"residential", "living_street", "cycleway", "path", "track", "footway", "pedestrian", "bridleway", "service"}
 
 
 def detail_meters(coords, detail_intervals, wanted) -> float:
@@ -142,7 +145,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     cobble_cells = surfaces.get("kassei", set())
     unpaved_cells = surfaces.get("onverhard", set())
     missing_surface, missing_unpaved = [], []
-    kassei = beton = steenweg = offroad = onverhard = fietspad = 0.0
+    kassei = beton = steenweg = offroad = onverhard = fietspad = stil = 0.0
     for leg, det in zip(legs_geometry, legs_details):
         if not det and database is None:
             continue
@@ -163,6 +166,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         beton += detail_meters(leg, surface_details, CONCRETE_SURFACES)
         steenweg += detail_meters(leg, road_details, BIG_ROADS)
         fietspad += detail_meters(leg, road_details, CYCLEWAY_CLASSES)
+        stil += detail_meters(leg, road_details, QUIET_CLASSES)
         leg_offroad = detail_meters(leg, road_details, OFFROAD_CLASSES)
         offroad += leg_offroad
         onverhard += leg_offroad
@@ -195,6 +199,8 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         "offroad_pct": round(offroad / total_m * 100, 1),
         "fietspad_m": round(fietspad),
         "fietspad_pct": round(fietspad / total_m * 100, 1),
+        "stil_m": round(stil),
+        "stil_pct": round(stil / total_m * 100, 1),
     }
     cells = heat.popular_cells(profile)
     if cells is not None:

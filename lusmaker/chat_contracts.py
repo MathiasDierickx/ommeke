@@ -8,6 +8,30 @@ STOP_SCHEMA = {
     },
 }
 
+CRITERIA_SCHEMA = {
+    "type": "array", "minItems": 1, "maxItems": 8,
+    "description": (
+        "Scorelijst op maat uit het gesprek. Elke wens wordt één criterium met een meetbare "
+        "metriek; het gewicht zegt hoe zwaar hij telt, hard=true sluit routes uit die de drempel "
+        "(0..1) niet halen. Vervangt doel wanneer aanwezig."
+    ),
+    "items": {
+        "type": "object", "additionalProperties": False, "required": ["metriek"],
+        "properties": {
+            "id": {"type": "string", "pattern": "^[a-z0-9_-]{1,32}$"},
+            "label": {"type": "string", "minLength": 1, "maxLength": 80, "description": "Korte zin in de woorden van de gebruiker."},
+            "metriek": {"type": "string", "enum": [
+                "hoogtemeters", "kort", "offroad", "onverhard", "populair", "autovrij",
+                "stil", "kassei", "beton", "steenweg", "fietspad", "oversteken",
+            ]},
+            "richting": {"type": "string", "enum": ["hoog", "laag"], "description": "hoog = meer is beter, laag = minder is beter."},
+            "gewicht": {"type": "number", "minimum": 0},
+            "hard": {"type": "boolean"},
+            "drempel": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+    },
+}
+
 PLAN_ROUTE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -53,6 +77,9 @@ PLAN_ROUTE_SCHEMA = {
             "type": ["string", "null"], "enum": ["verhard", "ok", "onverhard", None],
             "description": "Alleen invullen als de gebruiker de ondergrond noemt.",
         },
+        "criteria": CRITERIA_SCHEMA,
+        "eind": {"type": "string", "minLength": 1, "maxLength": 160,
+                 "description": "Eindpunt voor een rit in lijn (A naar B). Weglaten = lus terug naar de start."},
     },
 }
 
@@ -80,6 +107,7 @@ ADJUST_ROUTE_SCHEMA = {
         "langs_water": {"type": "string", "minLength": 1, "maxLength": 120},
         "geen_opvulling": {"type": "boolean"},
         "expected_revision": {"type": "integer", "minimum": 0},
+        "criteria": CRITERIA_SCHEMA,
     },
 }
 

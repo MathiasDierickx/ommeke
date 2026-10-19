@@ -4,6 +4,7 @@ Alle output is JSON zodat een LLM (Claude/OpenAI) de tool kan aansturen.
 """
 import argparse
 import json
+from pathlib import Path
 import sys
 
 from . import activities, config
@@ -25,6 +26,28 @@ def _parse_point(s: str, limit: int = 1):
     from . import geocode
 
     return geocode.resolve(s)
+
+
+def parse_criteria(value):
+    """Parseer ``--criteria`` (JSON-lijst of pad naar een JSON-bestand)."""
+    if value is None:
+        return None
+    text = value
+    path = Path(value)
+    if path.suffix == ".json" and path.exists():
+        text = path.read_text(encoding="utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("criteria moet een JSON-lijst zijn, bv. '[{\"metriek\":\"stil\",\"gewicht\":1}]'") from exc
+
+
+def _objective_arg(args):
+    if getattr(args, "criteria", None):
+        return {"criteria": parse_criteria(args.criteria)}
+    if getattr(args, "gewichten", None):
+        return parse_weights(args.gewichten)
+    return getattr(args, "objective", None)
 
 
 def parse_weights(value: str) -> dict:
@@ -411,6 +434,61 @@ def cmd_draft_suggest(args):
     }
 
 
+def cmd_criteria_metrics(_args):
+    from . import criteria
+
+    return {
+        "metrieken": [
+            {"id": key, "label": label, "scoort_kandidaten": component is not None,
+             "uitleg_op_eindroute": final is not None}
+            for key, (label, component, final, _shown) in criteria.METRICS.items()
+        ],
+        "velden": {"id": "slug", "label": "tekst", "metriek": "id uit metrieken",
+                   "richting": "hoog|laag", "gewicht": ">=0", "hard": "bool", "drempel": "0..1"},
+    }
+
+
+def cmd_criteria_check(args):
+    from . import criteria
+
+    return {"criteria": criteria.parse(parse_criteria(args.criteria))}
+
+
+def cmd_criteria_explain(args):
+    from . import criteria, draft
+
+    d = draft.load(args.id)
+    if not d.get("computed"):
+        raise ValueError("routeer de draft eerst: `lus draft route <id>`")
+    spec = criteria.parse(parse_criteria(args.criteria)) if args.criteria else (
+        (d.get("route_request") or {}).get("criteria")
+        or criteria.from_goal((d.get("route_request") or {}).get("doel"))
+    )
+    quality = d["computed"].get("kwaliteit") or {}
+    components = {m: v for m, v in {
+        "hoogtemeters": criteria.METRICS["hoogtemeters"][2](quality, d["computed"]),
+        **{key: criteria.METRICS[key][2](quality, d["computed"]) for key in criteria.METRICS
+           if key not in ("hoogtemeters", "kort") and criteria.METRICS[key][1]},
+    }.items() if v is not None}
+    return {
+        "draft": d["id"], "km": d["computed"]["total_km"], "hoogtemeters": d["computed"]["ascend_m"],
+        "criteria": spec, "score": None if not spec else criteria.score(spec, components),
+        "waarom": criteria.explain(spec, quality, d["computed"]),
+    }
+
+
+def cmd_draft_answer(args):
+    from . import intents
+
+    answers = {}
+    for item in args.antwoord:
+        if "=" not in item:
+            raise ValueError("antwoorden zijn sleutel=waarde, bv. kasseien=vermijd")
+        key, value = item.split("=", 1)
+        answers[key.strip()] = value.strip()
+    return intents.apply_answers(args.id, answers, expected_revision=args.expected_revision)
+
+
 def cmd_draft_optimize(args):
     from . import climbs, draft
 
@@ -418,7 +496,7 @@ def cmd_draft_optimize(args):
     with draft.region_scope(d):
         return draft.optimize(
             d, climbs.all_climbs(), max_km=args.max_km,
-            objective=(parse_weights(args.gewichten) if args.gewichten else args.objective),
+            objective=_objective_arg(args),
             min_ratio=args.min_ratio,
             max_rounds=args.max_rounds, fill=not args.geen_opvulling,
         )
@@ -475,6 +553,8 @@ def cmd_plan_route(args):
         heuvels=args.heuvels,
         ondergrond=args.ondergrond,
         stop_onderweg=stop,
+        criteria=parse_criteria(args.criteria),
+        eind=args.eind,
     )
 
 
@@ -497,6 +577,7 @@ def cmd_adjust_route(args):
         geen_opvulling=args.geen_opvulling,
         profiel_naam=args.profiel_naam,
         expected_revision=args.expected_revision,
+        criteria=parse_criteria(args.criteria),
     )
 
 
@@ -578,6 +659,19 @@ def main(argv=None):
     s = sub.add_parser("status", help="check data + GraphHopper")
     _region_arg(s)
     s.set_defaults(func=cmd_status)
+
+    r = sub.add_parser("criteria", help="scorelijst op maat: metrieken, validatie en uitleg (offline)")
+    rsub = r.add_subparsers(dest="criteria_cmd", required=True)
+    s = rsub.add_parser("metrics", help="toon alle meetbare metrieken")
+    s.set_defaults(func=cmd_criteria_metrics)
+    s = rsub.add_parser("check", help="valideer en normaliseer een criterialijst")
+    s.add_argument("criteria", help="JSON-lijst of .json-bestand")
+    s.set_defaults(func=cmd_criteria_check)
+    s = rsub.add_parser("explain", help="'waarom deze route' voor een gerouteerde draft")
+    _region_arg(s)
+    s.add_argument("id")
+    s.add_argument("--criteria", help="JSON-lijst of .json-bestand; standaard de criteria van de draft")
+    s.set_defaults(func=cmd_criteria_explain)
 
     r = sub.add_parser("profile", help="persistente gebruikersvoorkeuren beheren")
     rsub = r.add_subparsers(dest="subcmd", required=True)
@@ -694,6 +788,7 @@ def main(argv=None):
     s.add_argument("--stop-onderweg", help='Stop als JSON: {"soort":"cafe","rond_km":20}')
     s.add_argument("--rond-plaats")
     s.add_argument("--langs-water")
+    s.add_argument("--eind", help="eindpunt voor een rit in lijn (A naar B); weglaten = lus")
     s.add_argument(
         "--heuvels",
         choices=("zoek", "ok", "vlak"),
@@ -704,6 +799,7 @@ def main(argv=None):
         choices=("verhard", "ok", "onverhard"),
         help="ondergrondvoorkeur; weglaten = onbekend",
     )
+    s.add_argument("--criteria", help='scorelijst op maat als JSON-lijst of .json-bestand; zie `lus criteria metrics`')
     s.add_argument(
         "--check-readiness",
         action="store_true",
@@ -733,6 +829,7 @@ def main(argv=None):
     s.add_argument("--geen-opvulling", action="store_true", default=None)
     s.add_argument("--rond-plaats")
     s.add_argument("--langs-water")
+    s.add_argument("--criteria", help='scorelijst op maat als JSON-lijst of .json-bestand; zie `lus criteria metrics`')
     s.set_defaults(func=cmd_adjust_route)
 
     c = sub.add_parser("climbs", help="klim-database")
@@ -883,6 +980,12 @@ def main(argv=None):
     s.add_argument("--max-detour-km", type=float, default=10.0)
     s.add_argument("--limit", type=int, default=5)
     s.set_defaults(func=cmd_draft_suggest)
+    s = dsub.add_parser("answer", help="beantwoord open routevragen (sleutel=waarde) en routeer opnieuw")
+    _region_arg(s)
+    s.add_argument("id")
+    s.add_argument("antwoord", nargs="+", help="bv. kasseien=vermijd stil=belangrijk")
+    s.add_argument("--expected-revision", type=int)
+    s.set_defaults(func=cmd_draft_answer)
     s = dsub.add_parser("optimize", help="vul de route greedy met klimmen binnen een budget")
     _region_arg(s)
     s.add_argument("id")
@@ -893,6 +996,7 @@ def main(argv=None):
         "--gewichten",
         help="eenmalige mix, bv. hoogtemeters=0.5,offroad=0.5",
     )
+    objective_group.add_argument("--criteria", help="scorelijst op maat als JSON-lijst of .json-bestand")
     s.add_argument("--min-ratio", type=float, default=8.0, help="minimaal aantal hoogtemeters per extra km")
     s.add_argument("--max-rounds", type=int, default=12, help="maximum aantal greedy-rondes")
     s.add_argument(

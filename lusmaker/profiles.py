@@ -18,14 +18,15 @@ HEUVELS_VALUES = {None, "zoek", "ok", "vlak"}
 ONDERGROND_VALUES = {None, "verhard", "ok", "onverhard"}
 FIETSPADEN_VALUES = {None, "belangrijk", "ok"}
 OVERSTEKEN_VALUES = {None, "vermijd", "ok"}
+STIL_VALUES = {None, "belangrijk", "ok"}
 # Nullable situationele voorkeuren: null = onbekend (mag gevraagd worden),
 # "ok" = expliciet onverschillig (nooit meer vragen, niets wijzigen).
-OPTIONAL_PREFERENCES = ("heuvels", "ondergrond", "fietspaden", "oversteken")
+OPTIONAL_PREFERENCES = ("heuvels", "ondergrond", "fietspaden", "oversteken", "stil")
 # Sleutels van ``voorkeuren`` die per activiteit kunnen verschillen
 # (``vermijd_plaatsen`` is activiteitsneutraal en blijft bovenaan staan).
 ACTIVITY_PREFERENCE_KEYS = (
     "kasseien", "beton", "steenwegen", "autovrij", "heuvels", "ondergrond",
-    "fietspaden", "oversteken",
+    "fietspaden", "oversteken", "stil",
 )
 _NAME_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
@@ -61,6 +62,7 @@ def default_document(name: str = "standaard") -> dict:
             "ondergrond": None,
             "fietspaden": None,
             "oversteken": None,
+            "stil": None,
             "vermijd_plaatsen": [],
         },
         "voorkeuren_per_activiteit": {},
@@ -115,6 +117,9 @@ def _check_preference_value(key: str, value) -> None:
     elif key == "oversteken":
         if value not in OVERSTEKEN_VALUES:
             raise ProfileError(f"oversteken: ongeldige waarde {value!r}")
+    elif key == "stil":
+        if value not in STIL_VALUES:
+            raise ProfileError(f"stil: ongeldige waarde {value!r}")
 
 
 def _validate_per_activity(raw) -> dict:
@@ -189,7 +194,7 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
     preferences = profile["voorkeuren"]
     if not isinstance(preferences, dict) or set(preferences) != {
         "kasseien", "beton", "steenwegen", "autovrij", "heuvels",
-        "ondergrond", "fietspaden", "oversteken", "vermijd_plaatsen",
+        "ondergrond", "fietspaden", "oversteken", "stil", "vermijd_plaatsen",
     }:
         raise ProfileError("voorkeuren bevatten ontbrekende of onbekende velden")
     for key in ("kasseien", "beton", "steenwegen"):
@@ -207,6 +212,8 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
         raise ProfileError("fietspaden moet null, 'belangrijk' of 'ok' zijn")
     if preferences["oversteken"] not in OVERSTEKEN_VALUES:
         raise ProfileError("oversteken moet null, 'vermijd' of 'ok' zijn")
+    if preferences["stil"] not in STIL_VALUES:
+        raise ProfileError("stil moet null, 'belangrijk' of 'ok' zijn")
     per_activity = _validate_per_activity(profile["voorkeuren_per_activiteit"])
     places = preferences["vermijd_plaatsen"]
     if not isinstance(places, list) or not all(

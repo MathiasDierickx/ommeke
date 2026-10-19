@@ -357,3 +357,27 @@ def test_answers_drive_routing_preferences_without_touching_the_profile():
     assert draft.prefers_cycleways(ok) is False
     assert draft.routing_preferences(ok)["strict"] is False
     assert draft._activity_kwargs(ok) == {"activity": "stadsfiets"}
+
+
+# -- rustig (criteria-motor) ------------------------------------------------
+
+def _busy(quiet_pct):
+    d = _draft(km=12, hm=20)
+    d["_probe"]["kwaliteit"]["stil_pct"] = quiet_pct
+    return d
+
+
+def test_quiet_question_when_most_of_the_probe_follows_through_roads():
+    asked = {q["id"]: q for q in questions.ask(_busy(45.0), _profile("wandelen"), _busy(45.0)["_probe"])}
+    assert set(asked["stil"]["opties"]) == {"belangrijk", "ok"}
+    assert "55%" in asked["stil"]["reden"]
+    assert "stil" in _ids(_busy(45.0), _profile("stadsfiets"))
+
+
+def test_quiet_question_is_not_asked_without_reason():
+    assert "stil" not in _ids(_busy(75.0), _profile("wandelen"))          # al rustig genoeg
+    assert "stil" not in _ids(_draft(km=12, hm=20), _profile("wandelen"))  # niet gemeten
+    assert "stil" not in _ids(_busy(45.0), _profile("stadsfiets", stil="ok"))
+    per_activity = _profile("wandelen")
+    per_activity["voorkeuren_per_activiteit"] = {"wandelen": {"stil": "belangrijk"}}
+    assert "stil" not in _ids(_busy(45.0), per_activity)

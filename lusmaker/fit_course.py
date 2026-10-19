@@ -18,6 +18,33 @@ def crc(data):
     return value
 
 
+def decode(data):
+    """Lees een FIT-course terug als [(berichtnummer, {veld: waarde})]; controleert header- en bestands-CRC."""
+    if data[8:12]!=b'.FIT': raise ValueError('geen FIT-bestand')
+    length=struct.unpack_from('<I',data,4)[0]
+    if len(data)!=14+length+2: raise ValueError('FIT-lengte klopt niet')
+    if crc(data[:12])!=struct.unpack_from('<H',data,12)[0]: raise ValueError('header-CRC fout')
+    if crc(data[:-2])!=struct.unpack_from('<H',data,len(data)-2)[0]: raise ValueError('bestands-CRC fout')
+    definitions, records={},[]
+    offset=14
+    while offset<14+length:
+        header=data[offset]; offset+=1
+        local=header&15
+        if header&64:
+            _,endian,number,count=struct.unpack_from('<BBHB',data,offset);offset+=5
+            if endian!=0: raise ValueError('big-endian FIT niet ondersteund')
+            fields=[tuple(data[i:i+3]) for i in range(offset,offset+count*3,3)]
+            offset+=count*3; definitions[local]=(number,fields)
+        else:
+            number,fields=definitions[local]; decoded={}
+            for field,size,kind in fields:
+                value=data[offset:offset+size]; offset+=size
+                decoded[field]=value.rstrip(b'\0').decode('utf-8') if kind==7 else int.from_bytes(value,'little',signed=kind==0x85)
+            records.append((number,decoded))
+    if offset!=14+length: raise ValueError('FIT-payload loopt niet uit')
+    return records
+
+
 def _text(value,size=64):
     raw=str(value).encode('utf-8')[:size-1].decode('utf-8','ignore').encode('utf-8')
     return raw+b'\0'*(size-len(raw))

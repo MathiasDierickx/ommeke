@@ -1,31 +1,5 @@
 import struct
-from lusmaker.fit_course import encode, crc
-
-
-def _decode(data):
-    assert data[8:12]==b'.FIT'
-    length=struct.unpack_from('<I',data,4)[0]
-    assert len(data)==14+length+2
-    assert crc(data[:12])==struct.unpack_from('<H',data,12)[0]
-    assert crc(data[:-2])==struct.unpack_from('<H',data,len(data)-2)[0]
-    definitions, records={},[]
-    offset=14
-    while offset<14+length:
-        header=data[offset]; offset+=1
-        local=header&15
-        if header&64:
-            _,endian,number,count=struct.unpack_from('<BBHB',data,offset);offset+=5
-            assert endian==0
-            fields=[tuple(data[i:i+3]) for i in range(offset,offset+count*3,3)]
-            offset+=count*3; definitions[local]=(number,fields)
-        else:
-            number,fields=definitions[local]; decoded={}
-            for field,size,kind in fields:
-                value=data[offset:offset+size]; offset+=size
-                decoded[field]=value.rstrip(b'\0').decode('utf-8') if kind==7 else int.from_bytes(value,'little',signed=kind==0x85)
-            records.append((number,decoded))
-    assert offset==14+length
-    return records
+from lusmaker.fit_course import encode, crc, decode as _decode
 
 
 def test_fit_course_roundtrip_fields_distance_altitude_cues_and_crc():
