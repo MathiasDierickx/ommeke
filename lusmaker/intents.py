@@ -774,7 +774,7 @@ def _route_for_request(
     # fill_target_km blijft het doel, dus de route wordt niet onnodig opgerekt.
     optimize_ceiling = hard_max
     if not max_explicit and target_km is not None:
-        optimize_ceiling = max(hard_max, target_km * 1.2)
+        optimize_ceiling = round(max(hard_max, target_km * 1.1), 2)  # kleine marge voor GH-rondritten
 
     optimize_kwargs = {
         "max_km": optimize_ceiling,
@@ -811,7 +811,7 @@ def _route_for_request(
         optimize_fn(
             d,
             climb_db,
-            max_km=max(optimize_ceiling, (fill_target or 0.0) * 1.6),
+            max_km=optimize_ceiling,  # de terugval mag een zacht doel niet verder oprekken
             fill=True,
             fill_target_km=fill_target,
             objective=_tour_objective(request),
