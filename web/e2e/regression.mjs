@@ -203,6 +203,10 @@ async function openRoute(page, url) {
   await page.getByRole("heading", { level: 2, name: "Berendries-lus" }).waitFor();
 }
 
+// Downloads en delen zitten achter "Neem mee"; het atelier achter "Zelf aanpassen".
+const openTakeAlong = (page) => page.getByRole("button", { name: "Neem mee" }).click();
+const openAdjust = (page) => page.getByText("Zelf aanpassen", { exact: true }).click();
+
 async function openHome(page, url) {
   await page.goto(`${url}/?new=1`, { waitUntil: "domcontentloaded" });
   await page.getByRole("heading", { name: /^Waar wil je/ }).waitFor();
@@ -266,7 +270,9 @@ test("route openen via de zijbalk en met toetsenbord", async ({ page, url, vp })
 test("routepagina: toetsenbord, focus en namen", async ({ page, url, vp }) => {
   const state = await installBackend(page);
   await openRoute(page, url);
-  const stops = await keyboardReach(page, ["Download GPX", "Download FIT", "Deel", "Gewenste afstand", "Bereken opnieuw", "Plaats vermijden"], vp);
+  await openTakeAlong(page);
+  await openAdjust(page);
+  const stops = await keyboardReach(page, ["Neem mee", "Download GPX", "Download FIT", "Deel", "Korter", "Gewenste afstand", "Bereken opnieuw", "Plaats vermijden"], vp);
   assert.ok(stops.length > 5);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   assert.ok(overflow <= 0, `[${vp.name}] horizontaal scrollen (${overflow}px te breed)`);
@@ -294,7 +300,7 @@ test("routeconcept met vragen afmaken vanaf routepagina", async ({ page, url }) 
   await page.getByRole("radio", { name: "Graag heuvels" }).check();
   await page.getByRole("radio", { name: "Liever verhard" }).check();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
-  await page.getByRole("button", { name: "Download GPX" }).waitFor();
+  await page.getByRole("button", { name: "Neem mee" }).waitFor();
   // Het herladen loopt asynchroon na het streamresultaat; wacht er kort op i.p.v. meteen te tellen.
   const reloads = () => state.calls.filter(call => call.key === "GET /api/routes/r1").length;
   for (let waited = 0; reloads() < 2 && waited < TIMEOUT; waited += 100) await wait(100);
@@ -327,6 +333,7 @@ test("afstand aanpassen via Gewenste afstand", async ({ page, url }) => {
     },
   });
   await openRoute(page, url);
+  await openAdjust(page);
   const field = page.getByLabel("Gewenste afstand (km)");
   assert.equal(await field.inputValue(), "30");
   await field.fill("42");
@@ -342,8 +349,8 @@ test("afstand aanpassen via Gewenste afstand", async ({ page, url }) => {
   assert.deepEqual(adjustBody, { target_km: 42, expected_revision: 1 });
   assert.match(adjustId, /^[A-Za-z0-9_-]{8,128}$/, "stabiel verzoeknummer per aanpassing");
   assert.equal(await field.inputValue(), "42");
-  // Stap-knoppen sturen ook de nieuwe revisie mee.
-  await page.getByRole("button", { name: /^\+?\s*5 km$/ }).first().click();
+  // Bijstuurchips sturen ook de nieuwe revisie mee.
+  await page.getByRole("button", { name: /^Langer/ }).click();
   await page.getByLabel("Routedetails").getByText("47 km").first().waitFor();
   assert.equal(state.calls.filter((c) => c.key === "POST /api/routes/r1/adjust").at(-1).body.expected_revision, 2);
   expectNoStrays(state, "afstand");
@@ -356,6 +363,7 @@ test("revision-conflict (409) toont melding en laadt nieuwste versie", async ({ 
     },
   });
   await openRoute(page, url);
+  await openAdjust(page);
   await page.getByLabel("Gewenste afstand (km)").fill("50");
   await page.getByRole("button", { name: "Bereken opnieuw" }).click();
   const alert = alerts(page);
@@ -369,6 +377,7 @@ test("revision-conflict (409) toont melding en laadt nieuwste versie", async ({ 
 test("delen en intrekken", async ({ page, url, vp }) => {
   const state = await installBackend(page);
   await openRoute(page, url);
+  await openTakeAlong(page);
   const confirms = [];
   page.on("dialog", (dialog) => { confirms.push(dialog.message()); void dialog.accept(); });
   await page.getByRole("button", { name: "Deel", exact: true }).click();
@@ -394,6 +403,7 @@ test("delen en intrekken", async ({ page, url, vp }) => {
 test("delen mislukt: fout wordt aangekondigd", async ({ page, url }) => {
   const state = await installBackend(page, { handlers: { "POST /api/routes/r1/share": () => json(500, { error: "Deellink maken is mislukt." }) } });
   await openRoute(page, url);
+  await openTakeAlong(page);
   page.on("dialog", (dialog) => void dialog.accept());
   await page.getByRole("button", { name: "Deel", exact: true }).click();
   assert.match(await alerts(page).innerText(), /Deellink maken is mislukt\./);
@@ -403,6 +413,7 @@ test("delen mislukt: fout wordt aangekondigd", async ({ page, url }) => {
 test("GPX- en FIT-download geven een downloadevent", async ({ page, url }) => {
   const state = await installBackend(page);
   await openRoute(page, url);
+  await openTakeAlong(page);
   const [gpx] = await Promise.all([page.waitForEvent("download", { timeout: TIMEOUT }), page.getByRole("button", { name: "Download GPX" }).click()]);
   assert.equal(gpx.suggestedFilename(), "Berendries-lus.gpx");
   const [fit] = await Promise.all([page.waitForEvent("download", { timeout: TIMEOUT }), page.getByRole("button", { name: "Download FIT" }).click()]);
@@ -424,6 +435,7 @@ test("download neemt de actuele POI-filter mee", async ({ page, url }) => {
   await openRoute(page, url);
   const filter = page.getByLabel("Onderweg");
   await filter.waitFor({timeout: TIMEOUT});
+  await openTakeAlong(page);
   for (const kind of ["cafe", "geen", "alle"]) {
     await filter.selectOption(kind);
     for (const format of ["GPX", "FIT"]) {
@@ -438,6 +450,7 @@ test("download neemt de actuele POI-filter mee", async ({ page, url }) => {
 test("download mislukt: fout wordt aangekondigd", async ({ page, url }) => {
   const state = await installBackend(page, { handlers: { "GET /api/routes/r1/gpx": () => json(500, { error: "kapot" }) } });
   await openRoute(page, url);
+  await openTakeAlong(page);
   await page.getByRole("button", { name: "Download GPX" }).click();
   assert.match(await alerts(page).innerText(), /Routebestand kon niet worden geladen\./);
   expectNoStrays(state, "download fout");
@@ -801,7 +814,7 @@ test("routepagina: startplaats met leesbare kandidaatknoppen", async ({ page, ur
   await page.getByText("Welke Kluisbos bedoel je?").waitFor();
   await page.getByRole("radio", { name: "Kluisbos (Halle)", exact: true }).check();
   await page.getByRole("button", { name: "Maak mijn route met deze keuzes" }).click();
-  await page.getByRole("button", { name: "Download GPX" }).waitFor();
+  await page.getByRole("button", { name: "Neem mee" }).waitFor();
   assert.equal(state.route.start, "Kluisbos (Halle)");
   expectNoStrays(state, "startplaats routepagina");
 });
@@ -934,6 +947,7 @@ test("Breng me terug stuurt de afsluitingszone mee", async ({ page, url }) => {
   await page.context().grantPermissions(["geolocation"]);
   await page.context().setGeolocation({ latitude: 50.9, longitude: 3.6 });
   await openRoute(page, url);
+  await openAdjust(page);
   await page.getByText("Breng me terug", { exact: true }).click();
   const box = page.getByRole("checkbox", { name: "Afgesloten weg vermijden" });
   await box.check();
@@ -954,6 +968,7 @@ test("Breng me terug zonder vinkje stuurt geen closure", async ({ page, url }) =
   await page.context().grantPermissions(["geolocation"]);
   await page.context().setGeolocation({ latitude: 50.9, longitude: 3.6 });
   await openRoute(page, url);
+  await openAdjust(page);
   await page.getByText("Breng me terug", { exact: true }).click();
   await page.getByRole("button", { name: /Gebruik mijn locatie/ }).click();
   for (let i = 0; i < 50 && !state.calls.some((c) => c.key === "POST /api/routes/r1/reroute"); i++) await wait(100);

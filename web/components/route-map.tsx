@@ -16,7 +16,7 @@ const poiLabel = (kind: string) => POI_LABELS[kind] || (kind.charAt(0).toUpperCa
 // de routelijn. Toon ze dan pas op vraag.
 const POI_AUTO_LIMIT = 15;
 
-export function RouteMap({ geometry, loading, onPoiChange }: { onPoiChange?: (kind: string) => void; geometry?: RouteGeometry | null; loading: boolean }) {
+export function RouteMap({ geometry, loading, muted = false, lineal = false, onPoiChange }: { onPoiChange?: (kind: string) => void; geometry?: RouteGeometry | null; loading: boolean; muted?: boolean; lineal?: boolean }) {
   const [poiKind, setPoiKind] = useState("alle");
   const poiCount = geometry?.pois?.length ?? 0;
   useEffect(() => { setPoiKind(poiCount > POI_AUTO_LIMIT ? "geen" : "alle"); }, [geometry, poiCount]);
@@ -41,7 +41,8 @@ export function RouteMap({ geometry, loading, onPoiChange }: { onPoiChange?: (ki
       }).addTo(map);
 
       const points = geometry.points.map(([lat, lon]) => L.latLng(lat, lon));
-      const line = L.polyline(points, { color: "#245a43", weight: 5, opacity: 0.96, lineCap: "round" }).addTo(map);
+      // Een verkenningsroute (nog niet klaar) staat gestippeld en vaag: de vragen gaan hierover.
+      const line = L.polyline(points, muted ? { color: "#245a43", weight: 4, opacity: 0.45, dashArray: "6 10", lineCap: "round" } : { color: "#245a43", weight: 5, opacity: 0.96, lineCap: "round" }).addTo(map);
       const start = geometry.start;
       if (start) {
         L.marker([start.lat, start.lon], {
@@ -49,6 +50,14 @@ export function RouteMap({ geometry, loading, onPoiChange }: { onPoiChange?: (ki
           keyboard: true,
           title: start.label || "Start",
         }).addTo(map).bindTooltip(start.label || "Start");
+      }
+      const end = lineal ? points.at(-1) : undefined;
+      if (end) {
+        L.marker(end, {
+          icon: L.divIcon({ className: "map-marker-wrap", html: '<span class="map-marker map-marker-end"></span>', iconSize: [28, 28], iconAnchor: [14, 14] }),
+          keyboard: true,
+          title: "Eindpunt",
+        }).addTo(map).bindTooltip("Eindpunt");
       }
       geometry.climbs.forEach((climb, index) => {
         L.marker([climb.lat, climb.lon], {
@@ -86,9 +95,9 @@ export function RouteMap({ geometry, loading, onPoiChange }: { onPoiChange?: (ki
       disposed = true;
       cleanup();
     };
-  }, [geometry, poiKind]);
+  }, [geometry, poiKind, muted, lineal]);
 
   if (loading) return <div className="map-state"><LoaderCircle className="spin" /> Routekaart laden…</div>;
-  if (!geometry?.points.length) return <div className="map-state"><MapIcon />Nog geen kaart voor deze route</div>;
+  if (!geometry?.points.length) return <div className="map-state"><MapIcon />{muted ? "De kaart volgt zodra je keuzes gemaakt zijn" : "Nog geen kaart voor deze route"}</div>;
   return <><div ref={elementRef} className="leaflet-map" aria-label="Kaart van de route" />{geometry.pois?.length ? <label className="poi-filter">Onderweg <select value={poiKind} onChange={e=>setPoiKind(e.target.value)}><option value="geen">Verbergen</option><option value="alle">Alle voorzieningen ({geometry.pois.length})</option>{[...new Set(geometry.pois.map(p=>p.kind))].map(k=><option key={k} value={k}>{poiLabel(k)}</option>)}</select></label> : null}</>;
 }

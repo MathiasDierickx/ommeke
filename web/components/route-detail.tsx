@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowDownToLine, ArrowLeft, Bike, Check, Copy, Footprints, LoaderCircle, MapPin, Menu, Mountain, Pencil, Plus, Share2, Trash2 } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Bike, Check, CircleHelp, Copy, Footprints, LoaderCircle, MapPin, Menu, Mountain, Pencil, Plus, Share2, Smartphone, Trash2, TriangleAlert, Watch, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, SharedRoute } from "@/lib/types";
+import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, RouteReason, SharedRoute } from "@/lib/types";
+import { estimateMinutes, formatDuration, reasonTone } from "@/lib/route-summary";
 import { RouteQuestions } from "./route-questions";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { activityKind, activityLabel } from "@/lib/route-library";
@@ -13,12 +14,32 @@ import { ReturnRoute } from "./return-route";
 import { RouteMap } from "./route-map";
 
 export function StatGrid({ route }: { route: Route | SharedRoute }) {
+  const minutes = estimateMinutes(route.total_km, route.elevation_gain_m, route.activity);
   return (
     <dl className="route-stats">
+      <div><dt>Duur</dt><dd>{formatDuration(minutes)}</dd></div>
       <div><dt>Afstand</dt><dd>{route.total_km != null ? route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) : "—"}<small> km</small></dd></div>
-      <div><dt>Hoogtemeters</dt><dd>{route.elevation_gain_m != null ? Math.round(route.elevation_gain_m) : "—"}<small> m</small></dd></div>
-      <div><dt>Klimmen</dt><dd>{route.climbs.length}</dd></div>
+      <div><dt>Hoogte</dt><dd>{route.elevation_gain_m != null ? Math.round(route.elevation_gain_m) : "—"}<small> m</small></dd></div>
     </dl>
+  );
+}
+
+const REASON_ICONS = { ok: Check, soft: TriangleAlert, hard: X, unknown: CircleHelp } as const;
+
+/** "Waarom deze route": de criteria met gemeten waarde en vinkje, waarschuwing of kruisje. */
+export function WhyList({ reasons }: { reasons?: RouteReason[] }) {
+  if (!reasons?.length) return null;
+  return (
+    <section className="route-why" aria-labelledby="route-why-title">
+      <h3 id="route-why-title">Waarom deze route</h3>
+      <ul>
+        {reasons.map(reason => {
+          const tone = reasonTone(reason);
+          const Icon = REASON_ICONS[tone];
+          return <li key={reason.id} className={`why-${tone}`}><Icon aria-hidden="true" /><span className="sr-only">{{ ok: "Gehaald", soft: "Niet helemaal", hard: "Niet gehaald", unknown: "Niet gemeten" }[tone]}: </span><strong>{reason.label}</strong><span>{reason.tekst}</span></li>;
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -119,6 +140,7 @@ export function RouteDetail({
   const [showClimbs, setShowClimbs] = useState(false);
   const [nearbyClimbs, setNearbyClimbs] = useState<NearbyClimb[]>([]);
   const [shareUrl, setShareUrl] = useState<string>();
+  const [takeAlong, setTakeAlong] = useState(false);
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState("bruikbaar");
   const [feedbackText, setFeedbackText] = useState("");
@@ -129,6 +151,7 @@ export function RouteDetail({
     setShowClimbs(false);
     setNearbyClimbs([]);
     setShareUrl(undefined);
+    setTakeAlong(false);
   }, [route?.id, route?.name]);
 
   const adjust = async (value: RouteAdjustment) => {
@@ -153,7 +176,7 @@ export function RouteDetail({
 
   return (
     <section className="route-fullscreen">
-      <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} onPoiChange={setPoiKind} />}</div>
+      <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} muted={route ? !route.ready || Boolean(route.geometry?.verkenning) : false} lineal={route?.loop === false} onPoiChange={setPoiKind} />}</div>
       <header className="route-topbar">
         <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
         <div className="route-topbar-title"><Logo /><span><strong>{route?.name || "Route laden…"}</strong></span></div>
@@ -169,7 +192,7 @@ export function RouteDetail({
                 <button aria-label="Naam bewaren"><Check /></button>
               </form>
             ) : (
-              <><h2>{route.name}</h2><button className="icon-button" onClick={() => setEditing(true)} aria-label="Naam wijzigen"><Pencil /></button></>
+              <><h2>{route.name}</h2>{route.loop === false ? <span className="route-lineal">A → B</span> : null}<button className="icon-button" onClick={() => setEditing(true)} aria-label="Naam wijzigen"><Pencil /></button></>
             )}
             <span className="activity-tag">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}{activityLabel(route.activity)}</span>
           </div>
@@ -181,48 +204,39 @@ export function RouteDetail({
           </section> : null}
           <StatGrid route={route} />
           <ElevationSparkline values={route.geometry?.elevation} />
-          <QualityChips route={route} />
-          {route.constraints && (route.constraints.doel_km != null || route.constraints.maximum_is_hard || route.constraints.waarschuwingen.length > 0) ? (
-            <section className="route-constraints" aria-label="Afstand en routewensen">
-              {route.constraints.doel_km != null ? <p>Streefafstand: {route.constraints.doel_km.toLocaleString("nl-BE")} km</p> : null}
-              {route.constraints.maximum_is_hard && route.constraints.maximum_km != null ? <p>Hard maximum: {route.constraints.maximum_km.toLocaleString("nl-BE")} km</p> : null}
-              {route.constraints.waarschuwingen.length ? <div role="status"><strong>Niet alle wensen zijn gehaald</strong><ul>{route.constraints.waarschuwingen.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
+          <WhyList reasons={route.waarom} />
+          {!route.waarom?.length ? <QualityChips route={route} /> : null}
+          {route.constraints?.waarschuwingen.length ? <div className="route-constraints" role="status"><strong>Niet alle wensen zijn gehaald</strong><ul>{route.constraints.waarschuwingen.map((warning, index) => <li key={index}>{warning}</li>)}</ul></div> : null}
+          {route.ready ? (
+            <section className="route-steer" aria-label="Bijsturen">
+              <div className="steer-chips">
+                <button disabled={adjusting || route.total_km == null || route.total_km <= 1} onClick={() => void adjust({ target_km: Math.max(1, (route.total_km || 0) - distanceStep) })}>Korter <small>−{distanceStep} km</small></button>
+                <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: (route.total_km || 0) + distanceStep })}>Langer <small>+{distanceStep} km</small></button>
+                {route.voorstellen?.map(proposal => <button key={proposal.titel} title={proposal.uitleg} disabled={adjusting} onClick={() => void adjust(proposal.adjust_route)}>{proposal.titel}</button>)}
+              </div>
+              <span role="status">{adjusting ? <><LoaderCircle className="spin" aria-hidden="true" /><span className="sr-only">Route aanpassen…</span></> : null}</span>
             </section>
           ) : null}
-          <div className="route-downloads">
-            <button className="button button-primary" onClick={() => onDownload(poiKind)} disabled={!route.ready}><ArrowDownToLine /> Download GPX</button>
-            {onDownloadFit && <button className="button button-secondary" onClick={() => onDownloadFit?.(poiKind)} disabled={!route.ready}><ArrowDownToLine /> Download FIT</button>}
-          </div>
-          {!route.ready ? <p className="route-download-note">Downloads zijn beschikbaar zodra de route is berekend.</p> : null}
-          <div className="route-actions">
-            <button className="button button-quiet" onClick={() => void share()}><Share2 /> Deel</button>
-            {route.shared || shareUrl ? <button className="button button-quiet" onClick={async () => { try { await onUnshare(); setShareUrl(undefined); } catch { /* caller toont de fout; link blijft zichtbaar */ } }}>Stop delen</button> : null}
-            <button className="button button-danger" onClick={() => void onDelete()} aria-label="Route verwijderen"><Trash2 /><span>Verwijder</span></button>
-          </div>
-          {route.ready ? <div className="route-journey"><OfflineRoute route={route} />{onReturn && <ReturnRoute onReturn={onReturn} />}</div> : null}
-          {shareUrl ? (
-            <div className="share-result">
-              <a href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
-              <button className="icon-button" onClick={async () => { await navigator.clipboard.writeText(shareUrl); setCopied(true); }} aria-label="Deellink kopiëren">{copied ? <Check /> : <Copy />}</button>
-              {typeof navigator.share === "function" ? <button className="icon-button" onClick={() => void navigator.share({ title: route.name, url: shareUrl })} aria-label="Deellink delen"><Share2 /></button> : null}
+          {route.ready ? <button className="button button-primary take-along-button" aria-expanded={takeAlong} onClick={() => setTakeAlong(open => !open)}><ArrowDownToLine /> Neem mee</button> : null}
+          {route.ready && takeAlong ? (
+            <div className="take-along" role="group" aria-label="Neem mee">
+              <OfflineRoute route={route} />
+              <button className="button button-secondary" onClick={() => onDownload(poiKind)}><ArrowDownToLine /> Download GPX</button>
+              {onDownloadFit && <button className="button button-secondary" onClick={() => onDownloadFit?.(poiKind)}><Watch /> Download FIT</button>}
+              <button className="button button-secondary" onClick={() => void share()}><Share2 /> Deel</button>
+              {route.shared || shareUrl ? <button className="button button-quiet" onClick={async () => { try { await onUnshare(); setShareUrl(undefined); } catch { /* caller toont de fout; link blijft zichtbaar */ } }}>Stop delen</button> : null}
+              {shareUrl ? (
+                <div className="share-result">
+                  <a href={shareUrl} target="_blank" rel="noreferrer">{shareUrl}</a>
+                  <button className="icon-button" onClick={async () => { await navigator.clipboard.writeText(shareUrl); setCopied(true); }} aria-label="Deellink kopiëren">{copied ? <Check /> : <Copy />}</button>
+                  {typeof navigator.share === "function" ? <button className="icon-button" onClick={() => void navigator.share({ title: route.name, url: shareUrl })} aria-label="Deellink delen"><Share2 /></button> : null}
+                </div>
+              ) : null}
+              <small className="take-along-note"><Smartphone aria-hidden="true" /> Offline: op dit toestel. GPX: voor elke app. FIT: voor Garmin of Wahoo. Deel: een link voor anderen.</small>
             </div>
           ) : null}
-          <details className="account-controls"><summary>Feedback over deze route</summary>
-            <form onSubmit={async event => { event.preventDefault(); setFeedbackStatus("Verzenden…"); try { await onFeedback(feedback, feedbackText); setFeedbackStatus("Bedankt, je feedback is bewaard."); setFeedbackText(""); } catch { setFeedbackStatus("Feedback bewaren mislukt. Probeer opnieuw."); } }}>
-              <label>Hoe is de route?<select value={feedback} onChange={event => setFeedback(event.target.value)}><option value="bruikbaar">Bruikbaar</option><option value="verkeerde_weg">Verkeerde weg</option><option value="afstand">Afstand klopt niet</option><option value="wens_gemist">Wens gemist</option><option value="anders">Anders</option></select></label>
-              <label>Toelichting (optioneel)<textarea value={feedbackText} onChange={event => setFeedbackText(event.target.value)} maxLength={1000} /></label>
-              <button disabled={feedbackStatus === "Verzenden…"}>Feedback bewaren</button><p role="status">{feedbackStatus}</p>
-            </form>
-          </details>
-          <section className="route-adjust" aria-labelledby="adjust-title">
-            <div className="adjust-heading"><div><small>Routeatelier</small><h3 id="adjust-title">Aanpassen</h3></div><span role="status">{adjusting ? <><LoaderCircle className="spin" aria-hidden="true" /><span className="sr-only">Route aanpassen…</span></> : null}</span></div>
-            <div className="adjust-row">
-              <span>Afstand</span>
-              <div className="adjust-buttons">
-                <button disabled={adjusting || route.total_km == null || route.total_km <= 1} onClick={() => void adjust({ target_km: Math.max(1, (route.total_km || 0) - distanceStep) })}>−{distanceStep} km</button>
-                <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: (route.total_km || 0) + distanceStep })}><Plus />{distanceStep} km</button>
-              </div>
-            </div>
+          <details className="route-adjust">
+            <summary><span>Zelf aanpassen</span><small>afstand, doel, klimmen, plaatsen, terugweg</small></summary>
             <form className="distance-form" onSubmit={event => {
               event.preventDefault();
               const km = Number(targetDistance);
@@ -256,7 +270,16 @@ export function RouteDetail({
               <input value={avoidPlace} onChange={(event) => setAvoidPlace(event.target.value)} placeholder="Plaats vermijden" aria-label="Plaats vermijden" />
               <button disabled={adjusting || !avoidPlace.trim()}>Vermijd</button>
             </form>
-          </section>
+            {route.ready && onReturn ? <div className="route-journey"><ReturnRoute onReturn={onReturn} /></div> : null}
+            <details className="account-controls"><summary>Feedback over deze route</summary>
+              <form onSubmit={async event => { event.preventDefault(); setFeedbackStatus("Verzenden…"); try { await onFeedback(feedback, feedbackText); setFeedbackStatus("Bedankt, je feedback is bewaard."); setFeedbackText(""); } catch { setFeedbackStatus("Feedback bewaren mislukt. Probeer opnieuw."); } }}>
+                <label>Hoe is de route?<select value={feedback} onChange={event => setFeedback(event.target.value)}><option value="bruikbaar">Bruikbaar</option><option value="verkeerde_weg">Verkeerde weg</option><option value="afstand">Afstand klopt niet</option><option value="wens_gemist">Wens gemist</option><option value="anders">Anders</option></select></label>
+                <label>Toelichting (optioneel)<textarea value={feedbackText} onChange={event => setFeedbackText(event.target.value)} maxLength={1000} /></label>
+                <button disabled={feedbackStatus === "Verzenden…"}>Feedback bewaren</button><p role="status">{feedbackStatus}</p>
+              </form>
+            </details>
+            <div className="route-actions"><button className="button button-danger" onClick={() => void onDelete()} aria-label="Route verwijderen"><Trash2 /><span>Verwijder</span></button></div>
+          </details>
         </aside>
       ) : null}
     </section>

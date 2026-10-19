@@ -34,8 +34,14 @@ export type RouteConstraints = {
 export type RouteProposal = { titel: string; uitleg: string; adjust_route: { voeg_klimmen_toe?: string[]; rond_plaats?: string; langs_water?: string; target_km?: number } };
 export type ProposalResult = { route: Route; voorstellen?: RouteProposal[] };
 
+/** Eén "Waarom deze route"-regel uit de criteria van de engine; `ok: null` = niet gemeten. */
+export type RouteReason = { id: string; label: string; hard: boolean; waarde: number | null; tekst: string; ok: boolean | null };
+
 export type Route = {
   voorstellen?: RouteProposal[];
+  waarom?: RouteReason[];
+  /** false = rit in lijn van A naar B; ontbreekt = lus. */
+  loop?: boolean;
   vragen?: import("./question-labels").RouteQuestion[];
   constraints?: RouteConstraints;
   shared?: boolean;
@@ -44,7 +50,7 @@ export type Route = {
   name: string;
   created?: string;
   start?: string;
-  activity: "fietsen" | "trail";
+  activity: string;
   region?: string;
   climbs: string[];
   total_km?: number;
@@ -62,6 +68,8 @@ export type RouteQuality = {
   kassei_m?: number;
   offroad_pct?: number;
   populair_pct?: number;
+  stil_pct?: number;
+  autovrij_pct?: number;
 };
 
 export type NearbyClimb = {
@@ -84,7 +92,7 @@ export type RouteAdjustment = {
 
 export type SharedRoute = {
   name: string;
-  activity: "fietsen" | "trail";
+  activity: string;
   region?: string;
   climbs: string[];
   total_km?: number;
@@ -98,5 +106,7 @@ export type RouteGeometry = {
   points: [number, number][];
   climbs: { lat: number; lon: number; id: string }[];
   start: { lat: number; lon: number; label?: string } | null;
-  elevation?: { km: number; ele: number }[];
+  elevation?: { km: number; ele: number }[] | null;
+  /** Verkenningsroute van een concept: gestippeld tekenen, nog geen echte route. */
+  verkenning?: boolean;
 };

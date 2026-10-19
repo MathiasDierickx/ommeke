@@ -25,6 +25,16 @@ const cors = { "access-control-allow-origin": "*", "access-control-allow-headers
 const points = Array.from({ length: 60 }, (_, i) => { const a = (i / 59) * Math.PI * 2; return [51.0415 + 0.008 * Math.sin(a), 3.7255 + 0.012 * Math.cos(a) - 0.012]; });
 const route = { id: "r1", revision: 1, name: "Wandellus rond Sint-Pietersplein · 6 km", start: "Sint-Pietersplein, Gent", activity: "wandelen", region: "vlaanderen", climbs: [], total_km: 6.1, elevation_gain_m: 31, ready: true, download_url: "/api/routes/r1/gpx", shared: false,
   computed: { kwaliteit: { kassei_m: 252, offroad_pct: 41, populair_pct: 12 } }, constraints: { target_km: 6, waarschuwingen: [] },
+  waarom: [
+    { id: "rustig", label: "Rustig", hard: false, waarde: 0.91, tekst: "91 % autoluw", ok: true },
+    { id: "groen", label: "Groen", hard: false, waarde: 0.58, tekst: "58 % bos en park", ok: true },
+    { id: "oversteken", label: "Weinig oversteken", hard: false, waarde: 0.2, tekst: "2 drukke oversteken", ok: false },
+    { id: "cafe", label: "Café rond km 4", hard: true, waarde: null, tekst: "niet gevonden", ok: false },
+  ],
+  voorstellen: [
+    { titel: "Rustiger", uitleg: "Vermijd de Brusselsesteenweg.", adjust_route: { rond_plaats: "Brusselsesteenweg" } },
+    { titel: "Langs de Leie", uitleg: "Ongeveer 1 km extra langs het water.", adjust_route: { langs_water: "Leie" } },
+  ],
   geometry: { points, elevation: points.map((_, i) => ({ km: i * 0.1, ele: 8 + 6 * Math.sin(i / 7) })), climbs: [], pois: [], start: { lat: points[0][0], lon: points[0][1], label: "Sint-Pietersplein" } } };
 const conversations = [{ id: "c1", title: "Wandeling langs de Leie", preview: "6 km vanuit Gent", created_at: "2026-10-04T10:00:00Z" }];
 const routes = [route, { ...route, id: "r2", name: "Racefietsrit Vlaamse Ardennen · 60 km", activity: "koersfiets", total_km: 61.2, elevation_gain_m: 640 }];
@@ -50,6 +60,8 @@ for (const vp of [{ name: "mobiel", width: 390, height: 844, mobile: true }, { n
   await page.screenshot({ path: `${out}/${vp.name}-nieuw-racefiets.png`, fullPage: true });
   await page.goto(`${url}/routes/r1`); await page.waitForSelector(".route-sheet, .route-detail", { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/${vp.name}-route.png` });
+  await page.getByRole("button", { name: "Neem mee" }).click(); await page.waitForTimeout(300);
+  await page.screenshot({ path: `${out}/${vp.name}-route-neem-mee.png` });
   if (vp.mobile) { await page.goto(`${url}/?new=1`); await page.waitForSelector(".planner-title"); await page.getByRole("button", { name: "Open navigatie" }).click().catch(() => {}); await page.waitForTimeout(500); await page.screenshot({ path: `${out}/${vp.name}-menu.png` }); }
   await page.close();
 }
