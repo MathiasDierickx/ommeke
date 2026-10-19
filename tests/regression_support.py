@@ -228,7 +228,8 @@ def invariant_failures(name: str, routed: dict) -> list[str]:
         require(values["kassei_m"] < 300, "kassei is minstens 300 m")
     elif name == "trail_offroad":
         require(6 <= values["km"] <= 9, "afstand niet binnen 6–9 km")
-        require(values["hm"] >= 80, "hoogtemeters zijn minder dan 80 m")
+        # Sinds de hysterese van 2 m (issue #30) telt de SRTM-zaagtand niet meer mee: 90 -> ~70 m.
+        require(values["hm"] >= 60, "hoogtemeters zijn minder dan 60 m")
         require(values["heen_en_weer_m"] < 300, "heen-en-weer is minstens 300 m")
         require(values["offroad_pct"] >= 25, "offroad is minder dan 25%")
     elif name == "zottegem_avoid":

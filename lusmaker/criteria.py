@@ -48,6 +48,22 @@ def _ascend_per_km(q, c):
     return min(1.0, c["ascend_m"] / km / 20.0)
 
 
+def _poi_count(c, *kinds):
+    pois = c.get("pois") or {}
+    return sum(int(pois.get(kind) or 0) for kind in kinds)
+
+
+def _poi_value(*kinds):
+    return lambda q, c: None if c.get("pois") is None else min(1.0, _poi_count(c, *kinds) / 2.0)
+
+
+def _poi_text(kind, singular, plural, *extra):
+    def text(q, c):
+        n = _poi_count(c, kind, *extra)
+        return f"{n} {singular if n == 1 else plural} langs de route"
+    return text
+
+
 def _crossings(q, c):
     n = q.get("steenweg_kruisingen")
     return None if n is None else min(1.0, n / 10.0)
@@ -67,10 +83,15 @@ METRICS = {
     "steenweg": ("Steenwegen", "steenweg", _meters("steenweg_m"), lambda q, c: f"{(q.get('steenweg_m') or 0) / 1000:.1f} km steenweg".replace(".", ",")),
     "fietspad": ("Fietspaden", "fietspad", _pct("fietspad_pct"), lambda q, c: _pct_text(q, "fietspad_pct", "fietspad")),
     "oversteken": ("Drukke oversteken", None, _crossings, lambda q, c: f"{q.get('steenweg_kruisingen') or 0} drukke oversteken"),
+    # Voorzieningen langs de route (Toerisme Vlaanderen-lagen), alleen uitleg/hard op de eindroute.
+    "toilet": ("Toilet onderweg", None, _poi_value("toilet"), _poi_text("toilet", "toilet", "toiletten")),
+    "speeltuin": ("Speeltuin onderweg", None, _poi_value("speeltuin"), _poi_text("speeltuin", "speeltuin", "speeltuinen")),
+    "zitbank": ("Bankje onderweg", None, _poi_value("zitbank", "picknickbank"), _poi_text("zitbank", "bankje", "bankjes", "picknickbank")),
 }
 # Natuurlijke richting per metriek. Vast = de andere richting is nooit zinvol
 # ('weinig rustige wegen' wil niemand); standaard = overschrijfbaar (kasseien graag, vlak).
-FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog"}
+FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog",
+                   "toilet": "hoog", "speeltuin": "hoog", "zitbank": "hoog"}
 DEFAULT_DIRECTION = {"kassei": "laag", "beton": "laag", "steenweg": "laag", "oversteken": "laag",
                      "hoogtemeters": "hoog", "offroad": "hoog", "onverhard": "hoog", "populair": "hoog"}
 # Standaarddrempel voor de uitleg wanneer het criterium er geen meegeeft.

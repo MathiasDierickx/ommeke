@@ -324,6 +324,32 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
     return custom
 
 
+ELEVATION_HYSTERESIS_M = 2.0
+
+
+def ascend_with_hysteresis(coords, band: float = ELEVATION_HYSTERESIS_M) -> float | None:
+    """Som van stijgingen die een band van `band` m overschrijden; None zonder hoogtes.
+
+    SRTM is een oppervlaktemodel: gebouwen, bruggen en bomenrijen geven pieken
+    van enkele meters die GraphHopper allemaal optelt (issue #30). De band
+    negeert die zaagtand en laat echte heuvels staan.
+    """
+    base = None
+    total = 0.0
+    for point in coords:
+        ele = point[2] if len(point) > 2 else None
+        if ele is None:
+            return None
+        if base is None:
+            base = ele
+        elif ele >= base + band:
+            total += ele - base
+            base = ele
+        elif ele < base:
+            base = ele
+    return total
+
+
 def _path_result(data: dict, details: bool = False) -> dict:
     if not data.get("paths"):
         raise GhError("geen route gevonden")
@@ -333,10 +359,12 @@ def _path_result(data: dict, details: bool = False) -> dict:
         for c in p["points"]["coordinates"]
         for lon, lat in [(c[0], c[1])]
     ]
+    hysteresis = ascend_with_hysteresis(coords)
     out = {
         "distance_m": p["distance"],
         "time_s": p["time"] / 1000.0,
-        "ascend_m": round(p.get("ascend", 0.0), 1),
+        "ascend_m": round(p.get("ascend", 0.0) if hysteresis is None else hysteresis, 1),
+        "ascend_ruw_m": round(p.get("ascend", 0.0), 1),
         "descend_m": round(p.get("descend", 0.0), 1),
         "coords": coords,
     }

@@ -68,6 +68,7 @@ jobs:
       TF_VAR_web_callback_urls: ${{ vars.WEB_CALLBACK_URLS_JSON }}
       TF_VAR_enable_application_monitoring: ${{ vars.ENABLE_APPLICATION_MONITORING || 'false' }}
       TF_VAR_metrics_salt: ${{ secrets.METRICS_SALT }}
+      TF_VAR_alarm_email: ${{ vars.ALARM_EMAIL }}
       TF_VAR_google_maps_api_key: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       LUSMAKER_GH_IMAGE: israelhikingmap/graphhopper:11.0
       ROLLBACK_DIGEST: ${{ inputs.image_digest }}
@@ -226,6 +227,10 @@ jobs:
           REGISTRY=${REGISTRY%%/*}
           aws ecr get-login-password --region "$AWS_REGION" \
             | docker login --username AWS --password-stdin "$REGISTRY"
+          # public.ecr.aws (Lambda Web Adapter) ingelogd trekken: anoniem is de
+          # daglimiet na enkele deploys bereikt (429 Data limit exceeded).
+          aws ecr-public get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin public.ecr.aws
 
       - name: Activeer Docker Buildx
         if: steps.image.outputs.exists != 'true'

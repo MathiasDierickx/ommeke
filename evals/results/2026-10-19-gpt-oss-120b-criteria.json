@@ -1,0 +1,1246 @@
+{
+  "model": "openai.gpt-oss-120b-1:0",
+  "suite_sha256": "06e33c7bec60847d7108fd9b70999eced7b86c36c420688ce45eea51b168e941",
+  "created_at": "2026-10-19T20:32:40Z",
+  "scope": "eerste toolkeuze en geldige argumenten; geen route-uitvoering of gesprekskwaliteit",
+  "score": {
+    "geslaagd": 28,
+    "totaal": 42,
+    "score_pct": 66.7,
+    "cases": [
+      {
+        "id": "heuvelrit-wetteren-50",
+        "prompt": "Maak een heuvelachtige fietsroute van ongeveer 50 km, startend in Wetteren.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "hard-budget-via-klim",
+        "prompt": "Vertrek in Oudenaarde, rij via de Berendries, absoluut maximaal 45 km en liever geen kasseien.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "gewone-toer-30",
+        "prompt": "Ik wil gewoon een mooie lus van 30 km vanuit Wetteren, geen specifieke klimmen.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "trail-15",
+        "prompt": "Maak een traillus van circa 15 km vanuit Ronse.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "route-inkorten",
+        "prompt": "Maak draft abc123 korter: mik op 40 km met 2 km speling.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "kassei-antwoord",
+        "prompt": "Op de readiness-vraag antwoordt de gebruiker: kasseien zijn graag gezien. Profiel: standaard.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "plaats-ok",
+        "prompt": "De gebruiker vindt de passage door Doordorp oké voor draft abc123.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "plaats-vermijden",
+        "prompt": "Vermijd Zottegem in draft abc123 en behoud de eerdere routewens.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "langs-schelde",
+        "prompt": "Fiets 40 km vanuit Wetteren, zo lang mogelijk langs de Schelde.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "rond-landmark",
+        "prompt": "Loop 5 km rond de Blaarmeersen in Gent.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "offroad-vervolg",
+        "prompt": "Maak draft abc123 zoveel mogelijk onverhard. Revisie 4.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "bredene-hotel-eerst",
+        "prompt": "Ik logeer morgen, 3 oktober 2026, in het ibis Styles hotel in Bredene. Zoek eerst zelf het juiste hotel en de parking ernaast op. Ik wil een wandeling van ongeveer 3 km, kindvriendelijk, liefst zo lang mogelijk langs het strand, vertrekkend vanop de parking naast het hotel en terug naar dezelfde parking. Geen fietsroute. Geef duidelijk aan als je het hotel, de parking, strandtoegang of kindvriendelijkheid niet kunt verifiëren.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "kust-wandeling",
+        "prompt": "Maak een wandeling vanaf 51.2514,2.9741 van ongeveer 3 km, geen fietsroute.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "kust-hard",
+        "prompt": "Wandel vanaf 51.2514,2.9741 maximaal 3 km.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "kust-toeren",
+        "prompt": "Fiets een gewone toer van ongeveer 20 km vanaf Bredene.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "kust-wijzig",
+        "prompt": "Maak draft abc123 ongeveer 3 km lang met 0.3 km speling.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "kust-verkeer",
+        "prompt": "Vermijd Oostende in draft abc123.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "strand-zoeken",
+        "prompt": "Zoek eerst het ibis Styles hotel in Bredene op.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "parking-zoeken",
+        "prompt": "Zoek parkings binnen 500 meter van 51.251,2.973.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "strand-nabij",
+        "prompt": "Zoek stranden binnen 1000 meter van 51.251,2.973.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "trail-geen-fiets",
+        "prompt": "Maak vanaf Ronse een wandeling van ongeveer 8 km over onverharde paden.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "gesprek-rustig-wetteren",
+        "prompt": "Maak een rustige fietsroute van 50 km vanuit Wetteren",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "gesprek-vijver-blaarmeersen",
+        "prompt": "Startende vanuit Gent. Graag een looptourtje die helemaal rond de de vijver van Blaarmeersen (rond het water) gaat en dan terug",
+        "geslaagd": false,
+        "fouten": [
+          "tool is None, verwacht 'plan_route'",
+          "verwachte argumentsubset ontbreekt of wijkt af",
+          "verplicht argument 'rond_plaats' ontbreekt",
+          "geen beschikbare tool gekozen"
+        ]
+      },
+      {
+        "id": "gesprek-blaarmeersen-spelling",
+        "prompt": "Gent. Graag een looptourtje die helemaal rond de Blaaremeersen (rond het water) gaat en dan terug",
+        "geslaagd": false,
+        "fouten": [
+          "tool is None, verwacht 'plan_route'",
+          "verwachte argumentsubset ontbreekt of wijkt af",
+          "verplicht argument 'rond_plaats' ontbreekt",
+          "geen beschikbare tool gekozen"
+        ]
+      },
+      {
+        "id": "gesprek-wetteren-voorkeuren",
+        "prompt": "Maak een rustige fietsroute van ongeveer 20 km vanuit Wetteren. Kasseien en beton zijn oké, vermijd drukke wegen waar mogelijk. Noem deze route E2E voortgang Wetteren.",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "gesprek-trail-brugse-poort",
+        "prompt": "trail rondje vanuit brugse poort gent van 10 km",
+        "geslaagd": false,
+        "fouten": [
+          "verwachte argumentsubset ontbreekt of wijkt af"
+        ]
+      },
+      {
+        "id": "gesprek-melle-water",
+        "prompt": "Ik woon in Melle, ik wil 30 km fietsen. Zoveel mogelijk langs het water",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "gesprek-melle-schelde",
+        "prompt": "Ik woon in Melle, ik wil 30km fietsen. Langs de Schelde liefst zoveel mogelijk, vlak. Een lus",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "gesprek-berendries-kort",
+        "prompt": "Graag vanaf Wetteren een korte maar mooie lus naar de Berendries.",
+        "geslaagd": false,
+        "fouten": [
+          "tool is None, verwacht 'plan_route'",
+          "verwachte argumentsubset ontbreekt of wijkt af",
+          "geen beschikbare tool gekozen"
+        ]
+      },
+      {
+        "id": "gesprek-bredene-hotel",
+        "prompt": "Ik logeer morgen, 3 oktober 2026, in het ibis Styles hotel in Bredene. Zoek eerst zelf het juiste hotel en de parking ernaast op. Ik wil een wandeling van ongeveer 3 km, kindvriendelijk, liefst zo lang mogelijk langs het strand, vertrekkend vanop de parking naast het hotel en terug naar dezelfde parking. Geen fietsroute. Geef duidelijk aan als je het hotel, de parking, strandtoegang of kindvriendelijkheid niet kunt verifiëren.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "gesprek-trail-voorkeurantwoord",
+        "prompt": "geen probleem ! maar het is lopen. Liefst veel offroad",
+        "geslaagd": false,
+        "fouten": [
+          "tool is 'plan_route', verwacht 'update_profile'",
+          "verwachte argumentsubset ontbreekt of wijkt af",
+          "verplicht argument 'patch' ontbreekt"
+        ]
+      },
+      {
+        "id": "activiteit-wandelen-stad",
+        "prompt": "Plan een wandeling van ongeveer 6 km door Gent, vertrek aan Gent-Sint-Pieters.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-trail-bos",
+        "prompt": "Ik wil een traillus van 15 km door de bossen rond Ronse.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-wegloop",
+        "prompt": "Ik ga loopmeters maken op asfalt: een wegloop van 10 km vanuit Aalst.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-stadsfiets",
+        "prompt": "Een rustige rit van 20 km met mijn stadsfiets vanuit Mechelen.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-toerfiets",
+        "prompt": "Een gezellige toerfietsrit van 50 km vanuit Dendermonde.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-koersfiets",
+        "prompt": "Ik ga met mijn racefiets: 80 km vanuit Oudenaarde.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-gravel",
+        "prompt": "Zin in een gravelrit van 60 km vanuit Geraardsbergen.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "activiteit-mtb",
+        "prompt": "Ik wil 25 km mountainbiken vanuit Zonnebeke.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "onhaalbaar-hoogtemeters-kort",
+        "prompt": "Maak een fietsroute van maximaal 8 km vanaf Gent met 1500 hoogtemeters.",
+        "geslaagd": true,
+        "fouten": []
+      },
+      {
+        "id": "onhaalbaar-klimmen-hard-budget",
+        "prompt": "Start in Oudenaarde, rij via de Koppenberg, de Oude Kwaremont en de Berendries en blijf absoluut onder 10 km.",
+        "geslaagd": false,
+        "fouten": [
+          "tool is None, verwacht 'plan_route'",
+          "verwachte argumentsubset ontbreekt of wijkt af",
+          "geen beschikbare tool gekozen"
+        ]
+      },
+      {
+        "id": "korter-en-wegnaam-vervolg",
+        "prompt": "Over mijn route “Rondrit rond Oudenaarde · 20 km” (abc123): maak er ongeveer 20 km van en vermijd de N8. Revisie 6.",
+        "geslaagd": true,
+        "fouten": []
+      }
+    ]
+  },
+  "calls": [
+    {
+      "id": "heuvelrit-wetteren-50",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Wetteren",
+        "target_km": 50,
+        "doel": "hoogtemeters",
+        "activiteit": "toerfiets",
+        "naam": "Heuvelige fietsroute rond Wetteren · 50 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "hard-budget-via-klim",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "start": "Oudenaarde",
+        "max_km": 45,
+        "criteria": [
+          {
+            "metriek": "kassei",
+            "hard": true,
+            "drempel": 0.05,
+            "label": "geen kasseien",
+            "gewicht": 1
+          }
+        ],
+        "naam": "Berendries rondrit vanaf Oudenaarde · max 45 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gewone-toer-30",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Wetteren",
+        "target_km": 30,
+        "naam": "Mooie lus rond Wetteren · 30 km",
+        "activiteit": "toerfiets",
+        "doel": "toeren"
+      },
+      "answer": ""
+    },
+    {
+      "id": "trail-15",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "trail",
+        "doel": "toeren",
+        "start": "Ronse",
+        "target_km": 15,
+        "naam": "Traillus rond Ronse · 15 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "route-inkorten",
+      "tool": "route_details",
+      "arguments": {
+        "draft_id": "abc123"
+      },
+      "answer": ""
+    },
+    {
+      "id": "kassei-antwoord",
+      "tool": "update_profile",
+      "arguments": {
+        "naam": "gebruiker",
+        "patch": {
+          "kasseien": true
+        }
+      },
+      "answer": ""
+    },
+    {
+      "id": "plaats-ok",
+      "tool": "route_details",
+      "arguments": {
+        "draft_id": "abc123"
+      },
+      "answer": ""
+    },
+    {
+      "id": "plaats-vermijden",
+      "tool": "route_details",
+      "arguments": {
+        "draft_id": "abc123"
+      },
+      "answer": ""
+    },
+    {
+      "id": "langs-schelde",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "start": "Wetteren",
+        "target_km": 40,
+        "langs_water": "Schelde",
+        "naam": "Fietsroute langs de Schelde vanuit Wetteren · 40 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "rond-landmark",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "wandelen",
+        "doel": "toeren",
+        "start": "Blaarmeersen, Gent",
+        "rond_plaats": "Blaarmeersen",
+        "target_km": 5,
+        "tolerance_km": 0.5,
+        "naam": "Rond de Blaarmeersen · 5 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "offroad-vervolg",
+      "tool": "adjust_route",
+      "arguments": {
+        "draft_id": "abc123",
+        "expected_revision": 4,
+        "criteria": [
+          {
+            "metriek": "onverhard",
+            "richting": "hoog",
+            "gewicht": 1.0,
+            "label": "zoveel mogelijk onverhard"
+          }
+        ]
+      },
+      "answer": ""
+    },
+    {
+      "id": "bredene-hotel-eerst",
+      "tool": "lookup_place",
+      "arguments": {
+        "query": "ibis Styles Bredene"
+      },
+      "answer": ""
+    },
+    {
+      "id": "kust-wandeling",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "51.2514,2.9741",
+        "activiteit": "wandelen",
+        "doel": "toeren",
+        "target_km": 3,
+        "tolerance_km": 0.3,
+        "naam": "Wandeling van 3 km bij 51.2514,2.9741"
+      },
+      "answer": ""
+    },
+    {
+      "id": "kust-hard",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "wandelen",
+        "doel": "toeren",
+        "start": "51.2514,2.9741",
+        "max_km": 3,
+        "naam": "Wandeling rond start · max 3 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "kust-toeren",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Bredene",
+        "target_km": 20,
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "naam": "Toer rond Bredene · 20 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "kust-wijzig",
+      "tool": "route_details",
+      "arguments": {
+        "draft_id": "abc123"
+      },
+      "answer": ""
+    },
+    {
+      "id": "kust-verkeer",
+      "tool": "route_details",
+      "arguments": {
+        "draft_id": "abc123"
+      },
+      "answer": ""
+    },
+    {
+      "id": "strand-zoeken",
+      "tool": "lookup_place",
+      "arguments": {
+        "query": "ibis Styles Bredene"
+      },
+      "answer": ""
+    },
+    {
+      "id": "parking-zoeken",
+      "tool": "nearby_places",
+      "arguments": {
+        "lat": 51.251,
+        "lon": 2.973,
+        "radius_m": 500,
+        "kind": "parking"
+      },
+      "answer": ""
+    },
+    {
+      "id": "strand-nabij",
+      "tool": "nearby_places",
+      "arguments": {
+        "lat": 51.251,
+        "lon": 2.973,
+        "radius_m": 1000,
+        "kind": "beach"
+      },
+      "answer": ""
+    },
+    {
+      "id": "trail-geen-fiets",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "wandelen",
+        "doel": "offroad",
+        "start": "Ronse",
+        "target_km": 8,
+        "tolerance_km": 0.8,
+        "naam": "Wandeling rond Ronse · 8 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-rustig-wetteren",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Wetteren",
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "target_km": 50,
+        "criteria": [
+          {
+            "metriek": "stil",
+            "gewicht": 1,
+            "label": "rustig"
+          }
+        ],
+        "naam": "Rustige fietsroute rond Wetteren · 50 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-vijver-blaarmeersen",
+      "tool": null,
+      "arguments": {},
+      "answer": "Hoe lang mag je rondje rond de vijver van de Blaarmeersen ongeveer zijn? (bijvoorbeeld 3 km, 5 km of een andere afstand)"
+    },
+    {
+      "id": "gesprek-blaarmeersen-spelling",
+      "tool": null,
+      "arguments": {},
+      "answer": "Hoe lang mag de wandeling rond de Blaaremeersen ongeveer zijn? (bijvoorbeeld 10 km, 15 km, …)"
+    },
+    {
+      "id": "gesprek-wetteren-voorkeuren",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "start": "Wetteren",
+        "target_km": 20,
+        "naam": "E2E voortgang Wetteren · 20 km",
+        "criteria": [
+          {
+            "metriek": "autovrij",
+            "gewicht": 0.7,
+            "richting": "hoog",
+            "label": "vermijd drukke wegen"
+          },
+          {
+            "metriek": "stil",
+            "gewicht": 0.5,
+            "richting": "hoog",
+            "label": "rustige route"
+          }
+        ]
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-trail-brugse-poort",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Brugse Poort, Gent",
+        "target_km": 10,
+        "activiteit": "wandelen",
+        "naam": "Trailrondje Brugse Poort · 10 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-melle-water",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Melle",
+        "target_km": 30,
+        "activiteit": "toerfiets",
+        "naam": "Fietsroute Melle – 30 km langs water"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-melle-schelde",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "start": "Melle",
+        "target_km": 30,
+        "langs_water": "Schelde",
+        "criteria": [
+          {
+            "metriek": "hoogtemeters",
+            "richting": "laag",
+            "gewicht": 1,
+            "label": "vlak"
+          }
+        ],
+        "naam": "Lus langs de Schelde vanuit Melle · 30 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-berendries-kort",
+      "tool": null,
+      "arguments": {},
+      "answer": "Hoe lang mag de lus ongeveer zijn? (bijvoorbeeld 20 km, 30 km, 40 km…)"
+    },
+    {
+      "id": "gesprek-bredene-hotel",
+      "tool": "lookup_place",
+      "arguments": {
+        "query": "ibis Styles hotel Bredene"
+      },
+      "answer": ""
+    },
+    {
+      "id": "gesprek-trail-voorkeurantwoord",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "wandelen",
+        "doel": "offroad",
+        "target_km": 10,
+        "start": "Brugse Poort, Gent",
+        "naam": "Trail rondje Gent – Brugse Poort · 10 km",
+        "criteria": [
+          {
+            "metriek": "offroad",
+            "gewicht": 1,
+            "label": "veel offroad"
+          }
+        ]
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-wandelen-stad",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "wandelen",
+        "doel": "toeren",
+        "start": "Gent-Sint-Pieters",
+        "target_km": 6,
+        "naam": "Wandeling Gent-Sint-Pieters ~6 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-trail-bos",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "trail",
+        "doel": "toeren",
+        "target_km": 15,
+        "start": "Ronse",
+        "naam": "Traillus rond Ronse · 15 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-wegloop",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "wegloop",
+        "doel": "toeren",
+        "start": "Aalst",
+        "target_km": 10,
+        "naam": "Wegloop Aalst · 10 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-stadsfiets",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "stadsfiets",
+        "doel": "toeren",
+        "start": "Mechelen",
+        "target_km": 20,
+        "criteria": [
+          {
+            "metriek": "stil",
+            "label": "rustige rit",
+            "gewicht": 1
+          }
+        ],
+        "naam": "Rustige stadsrit Mechelen · 20 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-toerfiets",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "toerfiets",
+        "doel": "toeren",
+        "start": "Dendermonde",
+        "target_km": 50,
+        "naam": "Gezellige toerfietsrit rond Dendermonde · 50 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-koersfiets",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Oudenaarde",
+        "activiteit": "koersfiets",
+        "doel": "toeren",
+        "target_km": 80,
+        "naam": "Ronde rond Oudenaarde · 80 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-gravel",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Geraardsbergen",
+        "activiteit": "gravel",
+        "target_km": 60,
+        "naam": "Gravelrit rond Geraardsbergen · 60 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "activiteit-mtb",
+      "tool": "plan_route",
+      "arguments": {
+        "activiteit": "mtb",
+        "doel": "toeren",
+        "start": "Zonnebeke",
+        "target_km": 25,
+        "naam": "Mountainbike rond Zonnebeke · 25 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "onhaalbaar-hoogtemeters-kort",
+      "tool": "plan_route",
+      "arguments": {
+        "start": "Gent",
+        "max_km": 8,
+        "target_km": 8,
+        "doel": "hoogtemeters",
+        "activiteit": "toerfiets",
+        "naam": "Heuvelige fietsroute Gent · 8 km"
+      },
+      "answer": ""
+    },
+    {
+      "id": "onhaalbaar-klimmen-hard-budget",
+      "tool": null,
+      "arguments": {},
+      "answer": "De drie beklimmingen (Koppenberg, Oude Kwaremont en de Berendries) liggen te ver uit elkaar om in één ronde van maximaal 10 km te passen.  \n\nWil je een kortere route met één of twee van de beklimmingen, of de maximale afstand verhogen? Kies een van de opties hieronder."
+    },
+    {
+      "id": "korter-en-wegnaam-vervolg",
+      "tool": "adjust_route",
+      "arguments": {
+        "draft_id": "abc123",
+        "expected_revision": 6,
+        "target_km": 20,
+        "criteria": [
+          {
+            "metriek": "steenweg",
+            "hard": true,
+            "drempel": 0.05,
+            "label": "vermijd N8"
+          }
+        ]
+      },
+      "answer": ""
+    }
+  ],
+  "measurements": [
+    {
+      "id": "heuvelrit-wetteren-50",
+      "seconds": 3.202,
+      "usage": {
+        "inputTokens": 3029,
+        "outputTokens": 267,
+        "totalTokens": 3296
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "hard-budget-via-klim",
+      "seconds": 3.815,
+      "usage": {
+        "inputTokens": 3036,
+        "outputTokens": 604,
+        "totalTokens": 3640
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gewone-toer-30",
+      "seconds": 1.346,
+      "usage": {
+        "inputTokens": 3029,
+        "outputTokens": 226,
+        "totalTokens": 3255
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "trail-15",
+      "seconds": 2.225,
+      "usage": {
+        "inputTokens": 3023,
+        "outputTokens": 175,
+        "totalTokens": 3198
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "route-inkorten",
+      "seconds": 1.25,
+      "usage": {
+        "inputTokens": 3029,
+        "outputTokens": 174,
+        "totalTokens": 3203
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "kassei-antwoord",
+      "seconds": 2.424,
+      "usage": {
+        "inputTokens": 3032,
+        "outputTokens": 384,
+        "totalTokens": 3416
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "plaats-ok",
+      "seconds": 1.381,
+      "usage": {
+        "inputTokens": 3026,
+        "outputTokens": 179,
+        "totalTokens": 3205
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "plaats-vermijden",
+      "seconds": 2.453,
+      "usage": {
+        "inputTokens": 3028,
+        "outputTokens": 125,
+        "totalTokens": 3153
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "langs-schelde",
+      "seconds": 1.752,
+      "usage": {
+        "inputTokens": 3027,
+        "outputTokens": 295,
+        "totalTokens": 3322
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "rond-landmark",
+      "seconds": 2.094,
+      "usage": {
+        "inputTokens": 3022,
+        "outputTokens": 261,
+        "totalTokens": 3283
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "offroad-vervolg",
+      "seconds": 1.734,
+      "usage": {
+        "inputTokens": 3024,
+        "outputTokens": 273,
+        "totalTokens": 3297
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "bredene-hotel-eerst",
+      "seconds": 0.976,
+      "usage": {
+        "inputTokens": 3111,
+        "outputTokens": 123,
+        "totalTokens": 3234
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "kust-wandeling",
+      "seconds": 1.642,
+      "usage": {
+        "inputTokens": 3034,
+        "outputTokens": 266,
+        "totalTokens": 3300
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "kust-hard",
+      "seconds": 1.938,
+      "usage": {
+        "inputTokens": 3028,
+        "outputTokens": 292,
+        "totalTokens": 3320
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "kust-toeren",
+      "seconds": 1.173,
+      "usage": {
+        "inputTokens": 3025,
+        "outputTokens": 160,
+        "totalTokens": 3185
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "kust-wijzig",
+      "seconds": 0.755,
+      "usage": {
+        "inputTokens": 3028,
+        "outputTokens": 83,
+        "totalTokens": 3111
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "kust-verkeer",
+      "seconds": 0.726,
+      "usage": {
+        "inputTokens": 3020,
+        "outputTokens": 102,
+        "totalTokens": 3122
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "strand-zoeken",
+      "seconds": 0.523,
+      "usage": {
+        "inputTokens": 3023,
+        "outputTokens": 81,
+        "totalTokens": 3104
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "parking-zoeken",
+      "seconds": 0.677,
+      "usage": {
+        "inputTokens": 3028,
+        "outputTokens": 83,
+        "totalTokens": 3111
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "strand-nabij",
+      "seconds": 0.686,
+      "usage": {
+        "inputTokens": 3028,
+        "outputTokens": 89,
+        "totalTokens": 3117
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "trail-geen-fiets",
+      "seconds": 1.534,
+      "usage": {
+        "inputTokens": 3028,
+        "outputTokens": 225,
+        "totalTokens": 3253
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-rustig-wetteren",
+      "seconds": 1.879,
+      "usage": {
+        "inputTokens": 3022,
+        "outputTokens": 325,
+        "totalTokens": 3347
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-vijver-blaarmeersen",
+      "seconds": 1.628,
+      "usage": {
+        "inputTokens": 3042,
+        "outputTokens": 261,
+        "totalTokens": 3303
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-blaarmeersen-spelling",
+      "seconds": 1.584,
+      "usage": {
+        "inputTokens": 3036,
+        "outputTokens": 245,
+        "totalTokens": 3281
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-wetteren-voorkeuren",
+      "seconds": 3.343,
+      "usage": {
+        "inputTokens": 3053,
+        "outputTokens": 444,
+        "totalTokens": 3497
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-trail-brugse-poort",
+      "seconds": 1.288,
+      "usage": {
+        "inputTokens": 3023,
+        "outputTokens": 203,
+        "totalTokens": 3226
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-melle-water",
+      "seconds": 2.39,
+      "usage": {
+        "inputTokens": 3029,
+        "outputTokens": 385,
+        "totalTokens": 3414
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-melle-schelde",
+      "seconds": 1.982,
+      "usage": {
+        "inputTokens": 3036,
+        "outputTokens": 430,
+        "totalTokens": 3466
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-berendries-kort",
+      "seconds": 2.836,
+      "usage": {
+        "inputTokens": 3026,
+        "outputTokens": 202,
+        "totalTokens": 3228
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-bredene-hotel",
+      "seconds": 1.545,
+      "usage": {
+        "inputTokens": 3111,
+        "outputTokens": 319,
+        "totalTokens": 3430
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "gesprek-trail-voorkeurantwoord",
+      "seconds": 1.445,
+      "usage": {
+        "inputTokens": 3080,
+        "outputTokens": 289,
+        "totalTokens": 3369
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-wandelen-stad",
+      "seconds": 1.777,
+      "usage": {
+        "inputTokens": 3030,
+        "outputTokens": 200,
+        "totalTokens": 3230
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-trail-bos",
+      "seconds": 1.361,
+      "usage": {
+        "inputTokens": 3027,
+        "outputTokens": 280,
+        "totalTokens": 3307
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-wegloop",
+      "seconds": 2.05,
+      "usage": {
+        "inputTokens": 3029,
+        "outputTokens": 288,
+        "totalTokens": 3317
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-stadsfiets",
+      "seconds": 1.498,
+      "usage": {
+        "inputTokens": 3026,
+        "outputTokens": 324,
+        "totalTokens": 3350
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-toerfiets",
+      "seconds": 1.216,
+      "usage": {
+        "inputTokens": 3025,
+        "outputTokens": 234,
+        "totalTokens": 3259
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-koersfiets",
+      "seconds": 1.107,
+      "usage": {
+        "inputTokens": 3025,
+        "outputTokens": 179,
+        "totalTokens": 3204
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-gravel",
+      "seconds": 1.074,
+      "usage": {
+        "inputTokens": 3026,
+        "outputTokens": 174,
+        "totalTokens": 3200
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "activiteit-mtb",
+      "seconds": 1.614,
+      "usage": {
+        "inputTokens": 3024,
+        "outputTokens": 199,
+        "totalTokens": 3223
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "onhaalbaar-hoogtemeters-kort",
+      "seconds": 2.773,
+      "usage": {
+        "inputTokens": 3029,
+        "outputTokens": 293,
+        "totalTokens": 3322
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "onhaalbaar-klimmen-hard-budget",
+      "seconds": 2.991,
+      "usage": {
+        "inputTokens": 3041,
+        "outputTokens": 250,
+        "totalTokens": 3291
+      },
+      "estimated_usd": null
+    },
+    {
+      "id": "korter-en-wegnaam-vervolg",
+      "seconds": 1.946,
+      "usage": {
+        "inputTokens": 3049,
+        "outputTokens": 310,
+        "totalTokens": 3359
+      },
+      "estimated_usd": null
+    }
+  ],
+  "latency": {
+    "p50_s": 1.628,
+    "p95_s": 3.202
+  },
+  "estimated_total_usd": null
+}

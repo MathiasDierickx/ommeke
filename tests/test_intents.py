@@ -957,7 +957,7 @@ def test_plan_route_names_a_coordinate_start_after_the_nearest_place():
             export_gpx_fn=lambda *_a: {}, export_preview_fn=lambda *_a: {},
             save_fn=lambda d: saved.append(d["name"]), exports_root=Path(temp_dir),
         )
-    assert state["name"] == "Wandellus rond Bredene-Bad · 3 km"
+    assert state["name"] == "Wandellus rond Bredene-Bad · 44 km"  # naam volgt de werkelijke afstand na routering
     assert intents._nearby_place({"label": "Wetteren"}) is None
 
 

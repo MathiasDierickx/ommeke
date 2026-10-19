@@ -334,6 +334,11 @@ def explain_route(d: dict, request: dict | None = None) -> list[dict]:
     request = request or d.get("route_request") or {}
     spec = request.get("criteria") or criteria.from_goal(request.get("doel"))
     computed = d.get("computed") or {}
+    if any(criteria.METRICS[c["metriek"]][1] is None and c["metriek"] not in ("oversteken",) for c in spec):
+        try:
+            computed = {**computed, "pois": _route_poi_counts(d, heat.features_near_route)}
+        except Exception:  # noqa: BLE001 - voorzieningen zijn uitleg, geen blokkade
+            computed = {**computed, "pois": {}}
     return criteria.explain(spec, computed.get("kwaliteit") or {}, computed)
 
 
@@ -693,6 +698,22 @@ def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=
         if persist_fn:
             persist_fn(d)
         raise IntentError(problem)
+    _refresh_auto_name(d, actual)
+
+
+_AUTO_KM_SUFFIX = re.compile(r" · [\d.,]+ km$")
+
+
+def _refresh_auto_name(d: dict, actual_km: float) -> None:
+    """Een automatische naam toont de werkelijke afstand, niet de gevraagde."""
+    if not d.get("name_auto"):
+        return
+    name = d.get("name") or ""
+    if not _AUTO_KM_SUFFIX.search(name):
+        return
+    shown = f"{round(actual_km, 1):g}" if actual_km < 10 else f"{round(actual_km):d}"
+    suffix = f" · {shown.replace('.', ',')} km"
+    d["name"] = (_AUTO_KM_SUFFIX.sub("", name)[:80 - len(suffix)].rstrip() + suffix)
 
 
 def _route_for_request(

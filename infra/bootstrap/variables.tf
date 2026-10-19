@@ -41,3 +41,9 @@ variable "github_oidc_provider_arn" {
   default     = null
   nullable    = true
 }
+
+variable "gh_service_enabled" {
+  description = "Geef de deployrol ook de EC2/CloudFront-rechten voor de altijd-warme GraphHopper. Standaard uit: Ommeke blijft serverless."
+  type        = bool
+  default     = false
+}

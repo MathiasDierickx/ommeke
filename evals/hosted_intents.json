@@ -24,14 +24,13 @@
     "expected_tool": "plan_route",
     "expected_arguments": {
       "start": "Oudenaarde",
-      "max_km": 45,
-      "via_klimmen": [
-        "Berendries"
-      ],
-      "kasseien": false
+      "max_km": 45
     },
-    "required_arguments": [],
-    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+    "required_arguments": [
+      "via_klimmen",
+      "criteria"
+    ],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek; sinds 19 okt 2026: via_klimmen Berendries en een kassei-criterium (laag) in plaats van kasseien=false"
   },
   {
     "id": "gewone-toer-30",
@@ -141,11 +140,12 @@
     "expected_tool": "adjust_route",
     "expected_arguments": {
       "draft_id": "abc123",
-      "doel": "offroad",
       "expected_revision": 4
     },
-    "required_arguments": [],
-    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek"
+    "required_arguments": [
+      "criteria"
+    ],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek; sinds 19 okt 2026 is een criterium onverhard/offroad het verwachte antwoord"
   },
   {
     "id": "bredene-hotel-eerst",
@@ -309,12 +309,11 @@
     "expected_tool": "plan_route",
     "expected_arguments": {
       "start": "Wetteren",
-      "target_km": 20,
-      "kasseien": true,
-      "beton_vermijden": false,
-      "autovrij": true
+      "target_km": 20
     },
-    "required_arguments": [],
+    "required_arguments": [
+      "criteria"
+    ],
     "provenance": "Afgeleid uit eigen opgeslagen appgesprek, opgehaald op 2026-10-02. Eventueel straatadres vervangen door de plaatsnaam; geen account- of gesprek-id gepubliceerd."
   },
   {

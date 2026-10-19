@@ -248,6 +248,7 @@ class Criterium(TypedDict, total=False):
     metriek: Required[Literal[
         "hoogtemeters", "kort", "offroad", "onverhard", "populair", "autovrij",
         "stil", "kassei", "beton", "steenweg", "fietspad", "oversteken",
+        "toilet", "speeltuin", "zitbank",
     ]]
     richting: Literal["hoog", "laag"]
     gewicht: Annotated[float, Field(ge=0, allow_inf_nan=False)]
