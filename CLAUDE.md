@@ -38,6 +38,25 @@ Voor end-to-end acceptatie op https://ommeke.vercel.app volg je
 `docs/E2E-CHROME.md`: persoonlijke Chrome, nooit wachtwoorden typen, downloads
 controleren met `scripts/inspect_download.py`.
 
+## Motor lokaal testen (feedbackloop)
+
+Elk puzzelstuk van de motor heeft een eigen CLI-ingang, zodat je zonder
+webapp of taalmodel kunt itereren (GraphHopper lokaal:
+`docker compose -f docker-compose.regions.yml up -d graphhopper-vlaanderen`):
+
+| Stap | Commando |
+|---|---|
+| Metrieken en criteria valideren (offline) | `lus criteria metrics`, `lus criteria check '<json>'` |
+| Verkenning + vragen | `lus plan-route --start ... --target-km N --profiel-naam standaard --check-readiness [--criteria '<json>']` |
+| Een vraag beantwoorden (wordt ook criterium) | `lus draft answer <id> oversteken=vermijd stil=belangrijk`; "maak 'm maar" zonder antwoorden = `lus adjust-route <id>` |
+| Rit in lijn | `lus plan-route --start A --eind B --activiteit koersfiets` |
+| Waarom deze route (offline op een gerouteerde draft) | `lus criteria explain <id> [--criteria '<json>']` |
+| Kandidaatkeuze met criteria | `lus draft optimize <id> --max-km 45 --criteria '<json>'` |
+| Taalmodel dat vragen stelt en criteria opstelt | `lus chat "<wens>" --provider codex` (traceert elke toolcall) |
+
+Offline tests: `.venv/bin/python -m tests.run` (criteria: `test_criteria`,
+`test_engine_contract`, `test_questions`).
+
 ## Aanroepen
 
 ```bash

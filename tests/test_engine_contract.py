@@ -117,3 +117,14 @@ def test_summary_sentence_names_a_point_to_point_ride():
     d = _state() | {"loop": False, "end": {"label": "Gent", "lat": 51.05, "lon": 3.72}}
     assert intents.summary_sentence(d).startswith("Rit van Wetteren naar Gent: 9,0 km")
     assert intents.summary_sentence(_state()).startswith("Lus vanuit Wetteren")
+
+
+def test_readiness_skips_questions_already_covered_by_criteria():
+    from lusmaker import profiles, readiness
+    d = {"id": "q1", "start": {"label": "Start", "lat": 51.0, "lon": 3.7}, "end": None, "avoid_places": [],
+         "route_request": {"doel": "toeren", "criteria": intents.criteria.parse([{"metriek": "oversteken", "richting": "laag"}])},
+         "_probe": {"km": 6, "hm": 10, "kwaliteit": {"kassei_m": 0, "onverhard_m": 0, "steenweg_kruisingen": 7, "stil_pct": 30.0},
+                    "terrein": {"kassei_aanwezig_m": 0, "plaatskernen": [], "kruisingen": 7}}}
+    profile = profiles.default_document(); profile["activiteit"] = "wandelen"
+    ids = [q["id"] for q in readiness.assess(d, profile, {})["vragen"]]
+    assert "oversteken" not in ids and "stil" in ids

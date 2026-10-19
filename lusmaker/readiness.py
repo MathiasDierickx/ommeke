@@ -135,6 +135,14 @@ def _passed_places(d: dict, probe: dict) -> list[dict]:
     return places
 
 
+# Vraag-id -> metrieken die ze dekt; een criterium op zo'n metriek beantwoordt de vraag al.
+_QUESTION_METRICS = {
+    "kasseien": {"kassei"}, "heuvels": {"hoogtemeters"}, "ondergrond": {"onverhard", "offroad"},
+    "fietspaden": {"fietspad"}, "oversteken": {"oversteken"}, "stil": {"stil"},
+    "autovrij": {"autovrij", "stil"}, "beton": {"beton"},
+}
+
+
 def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
     """Beoordeel welke routevoorkeuren nu materieel bevraagd moeten worden."""
     del climb_db  # de probe bevat de vooraf gefilterde klimpool al
@@ -272,6 +280,9 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
                 }
             )
 
+    # Wat de gebruiker al als criterium zei, vragen we niet opnieuw.
+    known = {c["metriek"] for c in (d.get("route_request") or {}).get("criteria") or []}
+    questions = [q for q in questions if not (_QUESTION_METRICS.get(q["id"], set()) & known)]
     questions.sort(key=lambda question: (question["prioriteit"], question["id"]))
     unknown = [question["id"] for question in questions]
     # ``klaar`` is een workflowbeslissing: zolang we nog een BLOKKERENDE vraag

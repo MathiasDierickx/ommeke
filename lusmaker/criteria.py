@@ -106,9 +106,9 @@ def parse(raw) -> list[dict]:
             raise CriteriaError("label is 1-80 tekens")
         out.append({"id": cid, "label": label, "metriek": metric, "richting": direction,
                     "gewicht": float(weight), "hard": hard, "drempel": threshold})
+    # Alleen zachte, op kandidaten meetbare criteria normaliseren; een lijst met enkel
+    # harde of uitleg-criteria (bv. alleen 'oversteken') is geldig en scoort 0 voor iedereen.
     total = sum(c["gewicht"] for c in out if not c["hard"] and METRICS[c["metriek"]][1])
-    if total <= 0 and not any(c["hard"] for c in out):
-        raise CriteriaError("som van gewichten moet groter dan 0 zijn")
     for c in out:
         c["gewicht"] = round(c["gewicht"] / total, 6) if total > 0 and not c["hard"] else c["gewicht"]
     return out
