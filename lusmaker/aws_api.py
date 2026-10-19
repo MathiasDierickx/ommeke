@@ -27,6 +27,14 @@ def _error(message: str, status: int = 400, code: str = "bad_request") -> JSONRe
     return JSONResponse({"error": message, "code": code}, status_code=status)
 
 
+def _draft_error(exc: "draft.DraftError") -> JSONResponse:
+    """Alleen een onbekende draft is 404; een routeringsprobleem (te lang, geen lus) is 400."""
+    message = str(exc)
+    if "bestaat niet" in message:
+        return _error(message, 404, "route_not_found")
+    return _error(message, 400, "route_failed")
+
+
 def _coverage_error(exc: "coverage.OutOfCoverage") -> JSONResponse:
     return JSONResponse(exc.payload(), status_code=422)
 
@@ -286,7 +294,7 @@ async def route_detail(request: Request) -> JSONResponse:
         item = await asyncio.to_thread(draft.load, _draft_id(request))
         return JSONResponse({"route": _route_detail_payload(item)})
     except draft.DraftError as exc:
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
 
 
 def _string_list(body: dict[str, Any], name: str) -> list[str]:
@@ -401,7 +409,7 @@ async def route_adjust(request: Request) -> JSONResponse:
     except draft.DraftError as exc:
         if route_found:
             return _error(str(exc), 409, "route_conflict")
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
 
 
 async def route_answers(request: Request) -> JSONResponse:
@@ -432,7 +440,7 @@ async def route_answers(request: Request) -> JSONResponse:
     except (ValueError, ChatError, intents.IntentError) as exc:
         return _error(str(exc))
     except draft.DraftError as exc:
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
 
 
 async def route_answers_stream(request: Request) -> Response:
@@ -482,7 +490,7 @@ async def route_climbs_near(request: Request) -> JSONResponse:
     except ValueError:
         return _error("radius_km moet tussen 0 en 100 liggen")
     except draft.DraftError as exc:
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
 
 
 def _share_url(request: Request, token: str) -> str:
@@ -520,7 +528,7 @@ async def route_share(request: Request) -> JSONResponse:
         funnel.exported("share", item)
         return JSONResponse({"token": token, "url": _share_url(request, token)})
     except draft.DraftError as exc:
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
     except (aws_state.StateError, ValueError) as exc:
         return _error(str(exc), 500, "share_failed")
 
@@ -534,7 +542,7 @@ async def route_unshare(request: Request) -> Response:
             await asyncio.to_thread(aws_sharing.delete_reference, token)
         return Response(status_code=204)
     except draft.DraftError as exc:
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
     except (aws_state.StateError, ValueError) as exc:
         return _error(str(exc), 500, "share_failed")
 
@@ -588,7 +596,7 @@ async def route_delete(request: Request) -> Response:
         await asyncio.to_thread(aws_state.delete_prefix, f"artifacts/{draft_id}")
         return Response(status_code=204)
     except draft.DraftError as exc:
-        return _error(str(exc), 404, "route_not_found")
+        return _draft_error(exc)
     except Exception as exc:
         return _error(str(exc), 500, "route_delete_failed")
 

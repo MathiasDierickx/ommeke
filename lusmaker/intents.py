@@ -774,7 +774,7 @@ def _route_for_request(
     # fill_target_km blijft het doel, dus de route wordt niet onnodig opgerekt.
     optimize_ceiling = hard_max
     if not max_explicit and target_km is not None:
-        optimize_ceiling = round(max(hard_max, target_km * 1.1), 2)  # kleine marge voor GH-rondritten
+        optimize_ceiling = round(max(hard_max, target_km * 1.2), 2)  # GH-rondritten schieten vaak 10-20 % over
 
     optimize_kwargs = {
         "max_km": optimize_ceiling,
@@ -808,14 +808,20 @@ def _route_for_request(
         d["climbs"] = []
         d["computed"] = None
         d.pop("_geometry", None)
-        optimize_fn(
-            d,
-            climb_db,
-            max_km=optimize_ceiling,  # de terugval mag een zacht doel niet verder oprekken
-            fill=True,
-            fill_target_km=fill_target,
-            objective=_tour_objective(request),
-        )
+        try:
+            optimize_fn(
+                d,
+                climb_db,
+                max_km=optimize_ceiling,  # de terugval mag een zacht doel niet verder oprekken
+                fill=True,
+                fill_target_km=fill_target,
+                objective=_tour_objective(request),
+            )
+        except draft.DraftError:
+            # Zacht doel: liever een iets te lange route met een eerlijke waarschuwing
+            # (constraint_report) dan een fout terwijl de optimizer al een route bewaarde.
+            if not (d.get("computed") or {}).get("total_km"):
+                raise
 
 
 def _export_files(

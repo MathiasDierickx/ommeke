@@ -213,6 +213,7 @@ er misging.
 | `request_conflict` | 409 | Dezelfde `request_id` is al gebruikt voor een andere opdracht, of het eerdere verzoek is nog bezig of onderbroken. | Web: plan, adjust, answers, reroute, chat. |
 | `route_conflict` | 409 | `expected_revision` komt niet overeen met de huidige draft (of de draft is gewijzigd). | Web: adjust, reroute en `PATCH /api/routes/{draft_id}`. |
 | `route_not_found` | 404 | Onbekende `draft_id`. | Web. |
+| `route_failed` | 400 | De router of optimizer kon geen passende route maken (bv. te lang voor het harde maximum, geen lus). De draft blijft bestaan. | Web: plan, adjust, answers, reroute. |
 | `chat_failed` | 422 | De chatagent kon het bericht niet afronden. | Web. |
 | `model_unavailable` | 502 | Bedrock niet beschikbaar of niet geactiveerd. | Web. |
 | `invalid_poi` | 400 | Onbekend of leeg POI-type bij GPX/FIT-download. | Web. |

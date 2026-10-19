@@ -179,3 +179,35 @@ def test_route_over_hard_maximum_never_stays_ready_in_the_draft():
     else:
         raise AssertionError("IntentError verwacht")
     assert state.get("computed") is None, "een te lange route mag niet als klaar achterblijven"
+
+
+def test_soft_target_keeps_a_slightly_long_route_with_a_warning_instead_of_failing():
+    state = _state() | {"computed": None}
+    calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        calls.append(kwargs["max_km"])
+        d["computed"] = _state()["computed"] | {"total_km": 25.4}
+        from lusmaker import draft as draft_mod
+        raise draft_mod.DraftError("De route wordt 25,4 km, langer dan je maximum van 24 km.")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        result = intents.plan_route(
+            "Oudenaarde", target_km=20, tolerance_km=2, activiteit="gravel",
+            create_fn=lambda **_k: {"id": "abc123"}, load_fn=lambda _i: state,
+            optimize_fn=optimize_fn, climbs_fn=dict, export_gpx_fn=_export,
+            export_preview_fn=_export, save_fn=lambda _d: None, exports_root=Path(tmp),
+        )
+    assert calls == [24.0, 24.0]  # eerste poging en terugval op hetzelfde plafond, nooit 1,6x
+    assert result["status"] == "ready" and result["km"] == 25.4
+    assert result["constraints"]["binnen_doelbereik"] is False
+    assert any("langer" in w for w in result["constraints"]["waarschuwingen"])
+
+
+def test_routing_draft_errors_are_400_not_404():
+    from lusmaker import draft as draft_mod
+    import json as _json
+    too_long = aws_api._draft_error(draft_mod.DraftError("De route wordt 25,4 km, langer dan je maximum van 22 km."))
+    missing = aws_api._draft_error(draft_mod.DraftError("draft 'x' bestaat niet — zie `lus draft list`"))
+    assert too_long.status_code == 400 and _json.loads(too_long.body)["code"] == "route_failed"
+    assert missing.status_code == 404 and _json.loads(missing.body)["code"] == "route_not_found"
