@@ -147,3 +147,14 @@ def test_resolve_caches_repeated_queries():
 
     assert first == second
     assert len(calls) == 1
+
+
+def test_places_label_keeps_the_municipality_from_the_query():
+    def fetch(request, timeout=None):
+        return json.dumps({"places": [{"displayName": {"text": "Markt"}, "location": {"latitude": 50.8435, "longitude": 3.6037}}]}).encode()
+
+    with _google_key("test-key"):
+        result = google_geocode.resolve("Markt, Oudenaarde", fetch=fetch)
+        same = google_geocode.resolve("Markt, Oudenaarde ", fetch=lambda r, timeout=None: json.dumps({"places": [{"displayName": {"text": "Markt, Oudenaarde"}, "location": {"latitude": 50.8, "longitude": 3.6}}]}).encode())
+    assert result["label"] == "Markt, Oudenaarde"
+    assert same["label"] == "Markt, Oudenaarde"

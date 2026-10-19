@@ -71,8 +71,13 @@ def _places_result(query: str, key: str, fetch) -> dict | None:
     label = display_name or place.get("formattedAddress")
     if not isinstance(label, str) or not label.strip():
         return None
+    label = label.strip()
+    # "Markt, Oudenaarde" mag niet terugkomen als "Markt": hou de gemeente uit de vraag.
+    place_part = query.split(",")[-1].strip() if "," in query else ""
+    if place_part and place_part.casefold() not in label.casefold():
+        label = f"{label}, {place_part}"
     return {
-        "label": label.strip(),
+        "label": label,
         "lat": float(location["latitude"]),
         "lon": float(location["longitude"]),
         "type": "google",
