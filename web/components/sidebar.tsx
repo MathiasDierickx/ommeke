@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { activityKind, activityLabel, conversationPreview, filterRoutes, type ActivityFilter } from "@/lib/route-library";
+import { activityKind, activityLabel, conversationPreview, filterRoutes, routeTitle, type ActivityFilter } from "@/lib/route-library";
 import { estimateMinutes, formatDuration } from "@/lib/route-summary";
 import { OFFLINE_EVENT, readOffline } from "@/lib/offline-routes";
 
@@ -68,7 +68,7 @@ export function Sidebar({ conversations, routes, selectedConversation, selectedR
           <div className="nav-items route-nav-items">
             {routes.length > 0 && !visibleRoutes.length ? <p className="nav-empty">Geen overeenkomst in de geladen routes. Pas je zoekterm aan of laad meer routes.</p> : null}
             {!routes.length && !loading ? <p className="nav-empty">Je eerste route verschijnt hier</p> : null}
-            {visibleRoutes.map((route) => <button key={route.id} className={`route-card${selectedRoute === route.id ? " active" : ""}`} onClick={() => onRoute(route)}><span className="route-card-icon" aria-hidden="true">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}</span><span className="route-card-body"><span className="nav-title">{route.name}</span><span className="nav-meta">{route.ready && route.total_km != null ? `${route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km · ${formatDuration(estimateMinutes(route.total_km, route.elevation_gain_m, route.activity))}` : "Concept · nog vragen open"}{route.ready && route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}<span className="sr-only"> · {activityLabel(route.activity)}</span>{offlineIds.has(route.id) ? <span className="offline-badge"><WifiOff aria-hidden="true" /> Offline beschikbaar</span> : null}</span></span></button>)}
+            {visibleRoutes.map((route) => <button key={route.id} className={`route-card${selectedRoute === route.id ? " active" : ""}`} onClick={() => onRoute(route)}><span className="route-card-icon" aria-hidden="true">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}</span><span className="route-card-body"><span className="nav-title">{route.ready && route.total_km != null ? `${route.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km · ${formatDuration(estimateMinutes(route.total_km, route.elevation_gain_m, route.activity))}${route.elevation_gain_m != null ? ` · ${Math.round(route.elevation_gain_m)} hm` : ""}` : "Concept · nog vragen open"}</span><span className="nav-meta">{routeTitle(route)}<span className="sr-only"> · {activityLabel(route.activity)}</span>{offlineIds.has(route.id) ? <span className="offline-badge"><WifiOff aria-hidden="true" /> Offline beschikbaar</span> : null}</span></span></button>)}
           </div>
           {hasMoreRoutes ? <button className="new-chat" disabled={loadingMoreRoutes} onClick={onMoreRoutes}>{loadingMoreRoutes ? "Routes laden…" : "Meer routes laden"}</button> : null}
         </section>

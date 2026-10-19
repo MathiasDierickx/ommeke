@@ -48,10 +48,17 @@ const MESSAGES: Record<string, string> = {
 
 export class AuthError extends Error {
   code: string;
-  constructor(code: string, message: string) {
+  status: number;
+  constructor(code: string, message: string, status = 0) {
     super(message);
     this.code = code;
+    this.status = status;
   }
+}
+
+/** Alleen een door Cognito geweigerd refresh-token (4xx) beëindigt de sessie; netwerk, throttling en 5xx niet. */
+export function refreshRejected(error: unknown): boolean {
+  return error instanceof AuthError && error.status >= 400 && error.status < 500 && !["TooManyRequestsException", "LimitExceededException"].includes(error.code);
 }
 
 type Challenge = { challenge: string };
@@ -75,7 +82,7 @@ async function call(target: string, body: Record<string, unknown>): Promise<Reco
     const raw = String(payload.__type || payload.code || "UnknownException");
     const code = raw.includes("#") ? raw.split("#").pop()! : raw;
     const message = MESSAGES[code] || (typeof payload.message === "string" ? payload.message : "Er ging iets mis. Probeer opnieuw.");
-    throw new AuthError(code, message);
+    throw new AuthError(code, message, response.status);
   }
   return payload;
 }
@@ -210,7 +217,7 @@ async function refreshOnce(session: AuthSession): Promise<AuthSession | null> {
     if (storedSession()?.accessToken !== session.accessToken) return null;
     return result ? store(toSession(result, session)) : null;
   } catch (error) {
-    if (error instanceof AuthError && error.code === "NotAuthorizedException") return null;
+    if (refreshRejected(error)) return null;
     throw error;
   }
 }
@@ -236,11 +243,17 @@ export async function requestAccessToken(previousToken: string, force: boolean):
   return fresh.accessToken;
 }
 
-/** Laad de bewaarde sessie en vernieuw ze indien nodig. */
+/**
+ * Laad de bewaarde sessie en vernieuw ze indien nodig. Mislukt de vernieuwing
+ * door netwerk, throttling of een 5xx, dan blijft de bewaarde sessie staan:
+ * het refresh-token is 30 dagen geldig en een volgende aanroep probeert opnieuw.
+ */
 export async function currentSession(): Promise<AuthSession | null> {
   const stored = storedSession();
   if (!stored) return null;
-  const fresh = await refresh(stored);
+  let fresh: AuthSession | null;
+  try { fresh = await refresh(stored); }
+  catch (error) { if (refreshRejected(error)) fresh = null; else return stored; }
   if (!fresh && storedSession()?.accessToken === stored.accessToken) clearStored();
   return fresh;
 }

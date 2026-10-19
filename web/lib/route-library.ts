@@ -34,3 +34,12 @@ export function filterRoutes(routes: Route[], query: string, activity: ActivityF
 export function conversationPreview(preview?: string | null): string {
   return (preview || "").replace(/^Routeconcept\s+[0-9a-f]+\s+heeft nog aanvullende wensen nodig\.?\s*/i, "").replace(/[*_`]/g, "").trim();
 }
+
+/**
+ * Naam zonder de gevraagde afstand die de engine erin zet ("· 20 km"): die
+ * klopt na herroutering niet meer, de echte afstand staat ernaast.
+ */
+export function routeTitle(route: Pick<Route, "name" | "ready" | "total_km">): string {
+  if (!route.ready || route.total_km == null) return route.name;
+  return route.name.replace(/\s*[·–—-]\s*\d+([.,]\d+)?\s*km\s*$/i, "").trim() || route.name;
+}

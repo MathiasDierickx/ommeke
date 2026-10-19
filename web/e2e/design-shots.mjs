@@ -24,7 +24,7 @@ const session = { accessToken: jwt({ sub: "u" }), idToken: jwt({ sub: "u", email
 const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" };
 const points = Array.from({ length: 60 }, (_, i) => { const a = (i / 59) * Math.PI * 2; return [51.0415 + 0.008 * Math.sin(a), 3.7255 + 0.012 * Math.cos(a) - 0.012]; });
 const route = { id: "r1", revision: 1, name: "Wandellus rond Sint-Pietersplein · 6 km", start: "Sint-Pietersplein, Gent", activity: "wandelen", region: "vlaanderen", climbs: [], total_km: 6.1, elevation_gain_m: 31, ready: true, download_url: "/api/routes/r1/gpx", shared: false,
-  computed: { kwaliteit: { kassei_m: 252, offroad_pct: 41, populair_pct: 12 } }, constraints: { target_km: 6, waarschuwingen: [] },
+  computed: { kwaliteit: { kassei_m: 252, offroad_pct: 41, populair_pct: 12 } }, constraints: { target_km: 6, waarschuwingen: ["Dender ligt 12 km van je start, te ver voor 5 km.", "De route is 6,1 km, 1,1 km langer dan je gevraagde 5,0 km."] },
   waarom: [
     { id: "rustig", label: "Rustig", hard: false, waarde: 0.91, tekst: "91 % autoluw", ok: true },
     { id: "groen", label: "Groen", hard: false, waarde: 0.58, tekst: "58 % bos en park", ok: true },

@@ -7,7 +7,7 @@ import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, RouteReason, S
 import { estimateMinutes, formatDuration, reasonTone } from "@/lib/route-summary";
 import { RouteQuestions } from "./route-questions";
 import type { ProgressEvent } from "@/lib/event-stream";
-import { activityKind, activityLabel } from "@/lib/route-library";
+import { activityKind, activityLabel, routeTitle } from "@/lib/route-library";
 import { Logo } from "./brand";
 import { OfflineRoute } from "./offline-route";
 import { ReturnRoute } from "./return-route";
@@ -183,7 +183,7 @@ export function RouteDetail({
       <div className="route-map-canvas">{mapSlot ?? <RouteMap geometry={route?.geometry} loading={loading} muted={route ? !route.ready || Boolean(route.geometry?.verkenning) : false} lineal={route?.loop === false} onPoiChange={setPoiKind} />}</div>
       <header className="route-topbar">
         <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
-        <div className="route-topbar-title"><Logo /><span><strong>{route?.name || "Route laden…"}</strong></span></div>
+        <div className="route-topbar-title"><Logo /><span><strong>{route ? routeTitle(route) : "Route laden…"}</strong></span></div>
         <button className="route-back" onClick={onBack}><ArrowLeft /> Gesprekken</button>
       </header>
       {route ? (
@@ -196,7 +196,7 @@ export function RouteDetail({
                 <button aria-label="Naam bewaren"><Check /></button>
               </form>
             ) : (
-              <><h2>{route.name}</h2>{route.loop === false ? <span className="route-lineal">A → B</span> : null}<button className="icon-button" onClick={() => setEditing(true)} aria-label="Naam wijzigen"><Pencil /></button></>
+              <><h2>{routeTitle(route)}</h2>{route.loop === false ? <span className="route-lineal">A → B</span> : null}<button className="icon-button" onClick={() => setEditing(true)} aria-label="Naam wijzigen"><Pencil /></button></>
             )}
             <span className="activity-tag">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}{activityLabel(route.activity)}</span>
           </div>

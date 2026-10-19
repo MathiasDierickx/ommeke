@@ -5,6 +5,7 @@ import { FormEvent } from "react";
 
 import type { ChatMessage, Route, ProposalResult } from "@/lib/types";
 import { messageOptions } from "@/lib/message-options";
+import { routeTitle } from "@/lib/route-library";
 import { RouteProposals } from "./route-proposals";
 import { RouteQuestions, type AnswerRoute } from "./route-questions";
 import { Logo } from "./brand";
@@ -45,7 +46,7 @@ export function Message({ message, onRoute, onOption, routes = [], questionRoute
       {assistant && onAnswers ? routes.filter(route => questionRouteIds.includes(route.id) && route.vragen?.length).map(route => <RouteQuestions key={route.id} route={route} disabled={busy} onFreeText={onOption} onAnswers={(answers, onProgress) => onAnswers(route.id, answers, onProgress)} />) : null}
       {assistant && token && onProposalApplied ? routes.filter(route => questionRouteIds.includes(route.id) && route.ready && route.voorstellen?.length).map(route => <RouteProposals key={route.id} routeId={route.id} proposals={route.voorstellen} token={token} disabled={busy} onApplied={onProposalApplied} />) : null}
       {routeId ? <div className="route-result">
-        <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route?.name || "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>
+        <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route ? routeTitle(route) : "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>
         {route?.constraints?.waarschuwingen.length ? <p className="route-result-warning">Let op: {route.constraints.waarschuwingen.join(" · ")}</p> : null}
       </div> : null}
     </article>

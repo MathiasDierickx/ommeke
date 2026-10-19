@@ -12,10 +12,11 @@ import { RouteDetail } from "@/components/route-detail";
 import { RouteProgress } from "./route-progress";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
+import { routeTitle } from "@/lib/route-library";
 import { chatReply, mergeById, orphanState, pendingPrompt, unansweredPrompt, type PendingPrompt } from "@/lib/interaction";
 import { Sidebar } from "@/components/sidebar";
 import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
-import { clearStored, currentSession, signOut } from "@/lib/cognito";
+import { currentSession, signOut, storedSession } from "@/lib/cognito";
 import { clearOffline, registerOfflineWorker, storeRoute } from "@/lib/offline-routes";
 import { safeFilename, saveBlob } from "@/lib/save-file";
 import type { AuthSession, ChatMessage, Conversation, NearbyClimb, ProposalResult, Route, RouteAdjustment } from "@/lib/types";
@@ -75,7 +76,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         const next = await currentSession();
         if (active) setSession(next);
       } catch {
-        clearStored();
+        // Een tijdelijke fout mag de 30-daagse sessie niet wissen; ga verder met wat bewaard is.
+        if (active) setSession(storedSession());
       } finally { if (active) setAuthReady(true); }
     };
     void resolve();
@@ -242,8 +244,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   useEffect(() => { if (messages.length || busy) messageEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
   const activeConversation = useMemo(() => conversations.find((item) => item.id === conversationId), [conversations, conversationId]);
   useEffect(() => {
-    document.title = view.kind === "route" ? `${selectedRoute?.name || "Route"} — Lusmaker` : `${activeConversation?.title || "Nieuwe route"} — Lusmaker`;
-  }, [activeConversation?.title, selectedRoute?.name, view.kind]);
+    document.title = view.kind === "route" ? `${selectedRoute ? routeTitle(selectedRoute) : "Route"} — Lusmaker` : `${activeConversation?.title || "Nieuwe route"} — Lusmaker`;
+  }, [activeConversation?.title, selectedRoute, view.kind]);
 
   const openConversation = (id: string) => { setLeftOpen(false); router.push(`/chats/${encodeURIComponent(id)}`); };
   const openRoute = (id: string) => { setLeftOpen(false); router.push(`/routes/${encodeURIComponent(id)}`); };
