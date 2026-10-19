@@ -433,6 +433,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .choice-chip input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
 .choice-chip-quiet span { font-weight: 500; }
 .choice-chip-quiet input:checked + span { color: var(--green-deep); background: #e6efe2; border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+.planner-steps { margin: 0 0 1rem; padding: 0; list-style: none; counter-reset: stap; display: grid; gap: 1rem; }
+.planner-step { counter-increment: stap; padding: 1rem 1.1rem 1.1rem; border: 1px solid var(--line); border-radius: 1.1rem; display: grid; gap: .65rem; background: var(--white); box-shadow: 0 1px 0 rgba(23, 35, 29, .04), 0 14px 40px rgba(23, 35, 29, .07); }
+.planner-step h3 { margin: 0; display: flex; align-items: center; gap: .55rem; font: 400 1.25rem/1.2 var(--font-serif), Georgia, serif; }
+.planner-step h3::before { content: counter(stap); width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-grid; place-items: center; flex: 0 0 auto; color: white; background: var(--green); font: 700 .72rem var(--font-sans), system-ui, sans-serif; }
+.kind-options .choice-chip span { min-height: 48px; padding: .6rem 1.05rem; gap: .45rem; font-size: .95rem; }
+.kind-options .choice-chip svg { width: 1.05rem; height: 1.05rem; }
+.recent-start, .anchor-chip { min-height: 40px; padding: .45rem .85rem; border: 1px solid rgba(36, 90, 67, .24); border-radius: 999px; display: inline-flex; align-items: baseline; gap: .35rem; color: var(--green-deep); background: var(--white); font-size: .82rem; font-weight: 600; cursor: pointer; }
+.anchor-chip small { color: var(--muted); font-weight: 500; }
+.anchor-chip-active { color: var(--green-deep); background: #e6efe2; border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }
+.recent-start:focus-visible, .anchor-chip:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.planner .planner-submit { width: 100%; }
 .planner-card { padding: 1.15rem; border: 1px solid var(--line); border-radius: 1.1rem; display: grid; gap: 1.15rem; background: var(--white); box-shadow: 0 1px 0 rgba(23, 35, 29, .04), 0 14px 40px rgba(23, 35, 29, .07); }
 .planner-field { display: grid; gap: .45rem; min-width: 0; }
 .planner-field > label, .field-label { color: var(--ink); font-size: .82rem; font-weight: 700; }
@@ -440,7 +451,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .start-input { display: flex; align-items: stretch; min-width: 0; border: 1px solid rgba(23, 35, 29, .22); border-radius: .75rem; background: white; }
 .start-input:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(36, 90, 67, .12); }
 .start-input input { flex: 1; min-width: 0; min-height: 48px; padding: .7rem .85rem; border: 0; border-radius: .75rem; background: transparent; color: var(--ink); font-size: 1rem; outline: 0; }
-.locate-button { margin: .3rem; padding: 0 .75rem; border: 0; border-radius: .55rem; display: inline-flex; align-items: center; gap: .35rem; color: var(--green); background: #edf4eb; font-size: .82rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.locate-button { margin: .3rem; padding: 0 .9rem; min-height: 42px; border: 0; border-radius: .55rem; display: inline-flex; align-items: center; gap: .35rem; color: var(--green); background: #edf4eb; font-size: .82rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .locate-button svg { width: 1rem; height: 1rem; }
 .locate-button:disabled { opacity: .6; cursor: progress; }
 .distance-control { display: grid; grid-template-columns: 44px auto 44px minmax(0, 1fr); align-items: center; gap: .5rem; }

@@ -505,7 +505,7 @@ test("locatie geweigerd: melding, focus op startplaats en geen API-call", async 
   await page.context().grantPermissions([]);
   await openHome(page, url);
   const before = actionCalls(state);
-  const locate = page.getByRole("button", { name: "Mijn locatie" });
+  const locate = page.getByRole("button", { name: "Hier, mijn locatie" });
   await locate.click();
   const alert = alerts(page);
   await alert.waitFor();
@@ -521,7 +521,7 @@ test("locatie ontbreekt: melding, focus op startplaats en geen API-call", async 
   await page.addInitScript(() => { Object.defineProperty(navigator, "geolocation", { configurable: true, value: undefined }); });
   await openHome(page, url);
   const before = actionCalls(state);
-  const locate = page.getByRole("button", { name: "Mijn locatie" });
+  const locate = page.getByRole("button", { name: "Hier, mijn locatie" });
   await locate.click();
   const alert = alerts(page);
   await alert.waitFor();
@@ -541,6 +541,7 @@ test("planner houdt invoer vast terwijl de bibliotheek nog laadt", async ({ page
   });
   await page.goto(`${url}/?new=1`);
   await page.getByRole("heading", { name: /^Waar wil je/ }).waitFor();
+  await page.getByRole("radio", { name: "Fietsen" }).check();
   await page.getByRole("radio", { name: "Racefiets" }).check();
   await page.getByLabel("Startplaats").fill("Markt, Oudenaarde");
   await page.getByText(/1 van 1 routes/).first().waitFor({ state: "attached", timeout: TIMEOUT });

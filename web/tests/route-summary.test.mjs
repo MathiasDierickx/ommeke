@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateMinutes, formatDuration, reasonTone } from '../lib/route-summary.ts';
+import { estimateMinutes, formatDuration, kmForMinutes, reasonTone } from '../lib/route-summary.ts';
 
 test('duur volgt activiteit en hoogtemeters', () => {
   assert.equal(estimateMinutes(6, 0, 'wandelen'), 80);
@@ -23,4 +23,12 @@ test('waarom-regel: vinkje, waarschuwing, kruisje of onbekend', () => {
   assert.equal(reasonTone({ ok: false, hard: false }), 'soft');
   assert.equal(reasonTone({ ok: false, hard: true }), 'hard');
   assert.equal(reasonTone({ ok: null, hard: true }), 'unknown');
+});
+
+test('tijdanker naar kilometers per activiteit, binnen het maximum', () => {
+  assert.equal(kmForMinutes(60, 'wandelen'), 5);
+  assert.equal(kmForMinutes(30, 'wandelen'), 2);
+  assert.equal(kmForMinutes(180, 'koersfiets'), 81);
+  assert.equal(kmForMinutes(180, 'wandelen', 10), 10);
+  assert.equal(kmForMinutes(5, 'wandelen'), 1, 'nooit onder 1 km');
 });

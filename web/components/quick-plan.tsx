@@ -1,5 +1,6 @@
 "use client";
 import { Bike, Footprints, LocateFixed, Minus, Plus } from "lucide-react";
+import { estimateMinutes, formatDuration, kmForMinutes } from "@/lib/route-summary";
 import { useEffect, useId, useRef, useState } from "react";
 import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
@@ -15,13 +16,16 @@ type Result = { voorstellen?: Proposal[]; aangepast?: string; km?: number; const
 type Activity = { value: string; label: string; verb: string; km: number; max: number };
 
 // Waarden volgen lusmaker/activities.py; afstanden zijn een redelijke start per activiteit.
-const ACTIVITY_GROUPS: { name: string; icon: typeof Bike; items: Activity[] }[] = [
-  { name: "Te voet", icon: Footprints, items: [
+// Eerste laag: te voet, lopen, fietsen. Tweede laag pas na een keuze, nooit acht knoppen op één rij.
+const KINDS: { value: string; label: string; icon: typeof Bike; items: Activity[] }[] = [
+  { value: "voet", label: "Te voet", icon: Footprints, items: [
     { value: "wandelen", label: "Wandelen", verb: "wandelen", km: 6, max: 40 },
-    { value: "wegloop", label: "Hardlopen", verb: "lopen", km: 10, max: 50 },
+  ] },
+  { value: "lopen", label: "Lopen", icon: Footprints, items: [
+    { value: "wegloop", label: "Op de weg", verb: "lopen", km: 10, max: 50 },
     { value: "trail", label: "Trail", verb: "lopen", km: 12, max: 60 },
   ] },
-  { name: "Fiets", icon: Bike, items: [
+  { value: "fiets", label: "Fietsen", icon: Bike, items: [
     { value: "stadsfiets", label: "Stadsfiets", verb: "fietsen", km: 15, max: 80 },
     { value: "toerfiets", label: "Toerfiets", verb: "fietsen", km: 40, max: 150 },
     { value: "koersfiets", label: "Racefiets", verb: "koersen", km: 60, max: 200 },
@@ -29,20 +33,23 @@ const ACTIVITY_GROUPS: { name: string; icon: typeof Bike; items: Activity[] }[] 
     { value: "mtb", label: "Mountainbike", verb: "biken", km: 30, max: 100 },
   ] },
 ];
-const ACTIVITIES = ACTIVITY_GROUPS.flatMap(group => group.items);
-const GOALS = [
-  { value: "toeren", label: "Ontspannen" },
-  { value: "hoogtemeters", label: "Heuvels" },
-  { value: "offroad", label: "Onverhard" },
-];
+const ACTIVITIES = KINDS.flatMap(kind => kind.items);
+const TIME_ANCHORS = [{ label: "Half uurtje", minutes: 30 }, { label: "Uurtje", minutes: 60 }, { label: "Namiddag", minutes: 180 }];
+const RECENT_KEY = "ommeke-recente-starts";
+// shortcut: recente startpunten alleen in deze browser; upgrade naar het profiel zodra "zoals vorige keer" bestaat.
+const readRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
+const rememberStart = (start: string) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([start, ...readRecent().filter(item => item !== start)].slice(0, 3))); } catch { /* opslag is optioneel */ } };
 
 export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResultChange }: { onResultChange?: (hasResult:boolean)=>void; onBusyChange?: (busy:boolean)=>void; token: string; onRoute: (id: string) => void; onConversation: (id: string) => void }) {
   const [start, setStart] = useState("");
+  const [kind, setKind] = useState("voet");
   const [activity, setActivity] = useState("wandelen");
   const current = ACTIVITIES.find(item => item.value === activity) ?? ACTIVITIES[0];
+  const currentKind = KINDS.find(item => item.value === kind) ?? KINDS[0];
   const [km, setKm] = useState(current.km);
   const kmTouched = useRef(false);
-  const [goal, setGoal] = useState("toeren");
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => { setRecent(readRecent()); }, []);
   const [locating, setLocating] = useState(false);
   const [progress,setProgress]=useState<ProgressEvent|null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,6 +73,10 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const lock = useRef(false);
 
+  function chooseKind(next: typeof KINDS[number]) {
+    setKind(next.value);
+    if (!next.items.some(item => item.value === activity)) chooseActivity(next.items[0]);
+  }
   function chooseActivity(next: Activity) {
     setActivity(next.value);
     // Een wandeling van 40 km is zelden bedoeld: volg de activiteit tot de gebruiker zelf kiest.
@@ -87,13 +98,14 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault(); if (lock.current) return;
-    const values = { start, target_km: km, activiteit: activity, doel: goal };
+    const values = { start, target_km: km, activiteit: activity, doel: "toeren" };
     const signature = JSON.stringify(values);
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
     lock.current = true; onBusyChange?.(true); setCanRestart(false); setProgress(null); setBusy(true); setError(""); setOutside(false); setResult(undefined); setAnswers({}); onResultChange?.(false);
     try {
       const next = await apiStream<Result>("/api/routes/stream", token, { ...values, request_id: pending.current.id }, setProgress);
       pending.current = null;
+      if (!coordinates) { rememberStart(start.trim()); setRecent(readRecent()); }
       setResult(next);
       onResultChange?.(true);
     } catch (e) {
@@ -132,50 +144,45 @@ export function QuickPlan({ token, onRoute, onConversation, onBusyChange, onResu
     <form hidden={result?.status === "ready"} onSubmit={e => void submit(e)}>
       <fieldset disabled={busy}>
         <legend className="sr-only">Je lus</legend>
-        <div className="activity-picker">
-          {ACTIVITY_GROUPS.map(group => <div className="activity-group" role="radiogroup" aria-label={`Activiteit ${group.name.toLowerCase()}`} key={group.name}>
-            <span className="activity-group-name" aria-hidden="true"><group.icon />{group.name}</span>
-            <div className="activity-options">
-              {group.items.map(item => <label key={item.value} className="choice-chip">
+        <ol className="planner-steps">
+          <li className="planner-step">
+            <h3>Wat ga je doen?</h3>
+            <div className="goal-options kind-options" role="radiogroup" aria-label="Wat ga je doen">
+              {KINDS.map(item => <label key={item.value} className="choice-chip">
+                <input type="radio" name="soort" value={item.value} checked={kind === item.value} onChange={() => chooseKind(item)} />
+                <span><item.icon aria-hidden="true" />{item.label}</span>
+              </label>)}
+            </div>
+            {currentKind.items.length > 1 ? <div className="activity-options" role="radiogroup" aria-label={`Hoe ga je ${currentKind.label.toLowerCase()}`}>
+              {currentKind.items.map(item => <label key={item.value} className="choice-chip choice-chip-quiet">
                 <input type="radio" name="activiteit" value={item.value} checked={activity === item.value} onChange={() => chooseActivity(item)} />
                 <span>{item.label}</span>
               </label>)}
-            </div>
-          </div>)}
-        </div>
-
-        <div className="planner-card">
-          <div className="planner-field">
-            <label htmlFor={startId}>Startplaats</label>
+            </div> : null}
+          </li>
+          <li className="planner-step">
+            <h3><label htmlFor={startId}>Vanwaar?</label></h3>
             <div className="start-input">
-            <input ref={startInput} id={startId} required maxLength={160} value={start} onChange={e => setStart(e.target.value)} placeholder="Plaats, adres of coördinaten" autoComplete="off" />
-              <button type="button" className="locate-button" onClick={locate} disabled={locating}><LocateFixed /><span>{locating ? "Zoeken…" : "Mijn locatie"}</span></button>
+              <button type="button" className="locate-button" onClick={locate} disabled={locating} aria-label="Hier, mijn locatie"><LocateFixed /><span>{locating ? "Zoeken…" : "Hier"}</span></button>
+              <input ref={startInput} id={startId} required maxLength={160} value={start} onChange={e => setStart(e.target.value)} placeholder="of zoek een plaats of adres" autoComplete="off" aria-label="Startplaats" />
             </div>
             {coordinates ? <small className="field-hint">Je huidige locatie. De route krijgt de naam van de dichtste plaats.</small> : null}
-          </div>
-
-          <div className="planner-field">
-            <label htmlFor={distanceId}>Afstand</label>
+            {recent.length > 0 && !start ? <div className="goal-options recent-starts" aria-label="Laatst gebruikte startpunten">{recent.map(item => <button type="button" key={item} className="recent-start" onClick={() => setStart(item)}>{item}</button>)}</div> : null}
+          </li>
+          <li className="planner-step">
+            <h3><label htmlFor={distanceId}>Hoe lang?</label></h3>
+            <div className="goal-options time-anchors" aria-label="Tijd">
+              {TIME_ANCHORS.map(anchor => { const anchorKm = kmForMinutes(anchor.minutes, activity, current.max); return <button type="button" key={anchor.label} className={`anchor-chip${anchorKm === km ? " anchor-chip-active" : ""}`} aria-pressed={anchorKm === km} onClick={() => changeKm(anchorKm)}>{anchor.label}<small>{anchorKm} km</small></button>; })}
+            </div>
             <div className="distance-control">
               <button type="button" className="step-button" onClick={() => changeKm(km - 1)} aria-label="1 km korter"><Minus /></button>
-              <output htmlFor={distanceId} aria-live="polite"><strong>{km}</strong> km</output>
+              <output htmlFor={distanceId} aria-live="polite"><strong>{km}</strong> km · ~{formatDuration(estimateMinutes(km, 0, activity))}</output>
               <button type="button" className="step-button" onClick={() => changeKm(km + 1)} aria-label="1 km langer"><Plus /></button>
-              <input id={distanceId} type="range" min="1" max={current.max} value={km} onChange={e => changeKm(Number(e.target.value))} aria-valuetext={`${km} kilometer`} />
+              <input id={distanceId} type="range" min="1" max={current.max} value={km} onChange={e => changeKm(Number(e.target.value))} aria-valuetext={`${km} kilometer, ongeveer ${formatDuration(estimateMinutes(km, 0, activity))}`} />
             </div>
-          </div>
-
-          <div className="planner-field" role="radiogroup" aria-label="Wat telt het meest">
-            <span className="field-label" aria-hidden="true">Wat telt het meest</span>
-            <div className="goal-options">
-              {GOALS.map(item => <label key={item.value} className="choice-chip choice-chip-quiet">
-                <input type="radio" name="doel" value={item.value} checked={goal === item.value} onChange={() => setGoal(item.value)} />
-                <span>{item.label}</span>
-              </label>)}
-            </div>
-          </div>
-
-          <button type="submit" className="planner-submit" disabled={busy}>{busy ? "Route wordt berekend…" : "Maak mijn route"}</button>
-        </div>
+          </li>
+        </ol>
+        <button type="submit" className="planner-submit" disabled={busy}>{busy ? "Route wordt berekend…" : "Maak mijn route"}</button>
       </fieldset>
     </form>
     {busy && <div ref={progressBox}><RouteProgress event={progress} /></div>}

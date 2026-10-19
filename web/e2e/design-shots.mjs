@@ -56,7 +56,7 @@ for (const vp of [{ name: "mobiel", width: 390, height: 844, mobile: true }, { n
   await page.goto(`${url}/?new=1`); await page.waitForSelector(".planner-title"); await page.waitForTimeout(600);
   await page.screenshot({ path: `${out}/${vp.name}-nieuw.png`, fullPage: false });
   await page.getByLabel("Startplaats").fill("Sint-Pietersplein, Gent");
-  await page.getByRole("radio", { name: "Racefiets" }).check(); await page.waitForTimeout(200);
+  await page.getByRole("radio", { name: "Fietsen" }).check(); await page.getByRole("radio", { name: "Racefiets" }).check(); await page.waitForTimeout(200);
   await page.screenshot({ path: `${out}/${vp.name}-nieuw-racefiets.png`, fullPage: true });
   await page.goto(`${url}/routes/r1`); await page.waitForSelector(".route-sheet, .route-detail", { timeout: 20000 }).catch(() => {}); await page.waitForTimeout(1200);
   await page.screenshot({ path: `${out}/${vp.name}-route.png` });

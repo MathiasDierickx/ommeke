@@ -18,8 +18,8 @@ const STARTERS = [
 export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }) {
   return (
     <section className="empty-chat" aria-labelledby="empty-chat-title">
-      <h2 id="empty-chat-title">Of beschrijf je lus zelf</h2>
-      <p>Vertel waar je start, hoe ver je wilt en wat de tocht goed maakt. Ommeke stelt alleen de vragen die voor jouw route tellen.</p>
+      <h2 id="empty-chat-title">Of vertel het gewoon</h2>
+      <p>Typ hieronder waar je start en wat de tocht goed maakt. Lus stelt alleen de vragen die voor jouw route tellen.</p>
       <div className="starter-list">
         {STARTERS.map((starter) => <button key={starter} onClick={() => onStarter(starter)}><span>{starter}</span><ArrowUp /></button>)}
       </div>

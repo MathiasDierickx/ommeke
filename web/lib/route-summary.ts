@@ -13,6 +13,12 @@ export function estimateMinutes(km?: number | null, ascendM?: number | null, act
   return Math.round((km / kmh) * 60 + ((ascendM || 0) / 100) * climbMin);
 }
 
+/** Afstand die in een gegeven tijd past, zonder hoogtemeters; voor de tijdankers op het startscherm. */
+export function kmForMinutes(minutes: number, activity?: string | null, max = Infinity): number {
+  const [kmh] = PACE[activity || ""] ?? PACE.fietsen;
+  return Math.max(1, Math.min(max, Math.round((minutes / 60) * kmh)));
+}
+
 /** "45 min", "1 u 05", "2 u 30". */
 export function formatDuration(minutes: number | null): string {
   if (minutes == null) return "—";
