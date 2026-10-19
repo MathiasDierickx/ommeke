@@ -367,6 +367,7 @@ graag, zo vlak mogelijk); "rustig" is stil zonder richting.
 Geef plan_route altijd een korte, natuurlijke naam die de routewens samenvat in maximaal 80
 tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige prompt.
 Als een tool status needs_input teruggeeft, vat de meegegeven vragen samen in één of twee zinnen en verwijs naar de knoppen.
+Schrijf de antwoordopties dan NIET uit als tekst (geen "Voorstel 1/2", geen opsomming van de keuzes): de knoppen tonen ze al.
 Noem geen indexnummers en geen coördinaten; vraag nooit om sleutel = waarde te typen.
 De knoppen tonen de kandidaatlabels en voorkeuren. Vrije tekstantwoorden blijf je via de bestaande tools verwerken.
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
