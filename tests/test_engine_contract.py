@@ -128,3 +128,8 @@ def test_readiness_skips_questions_already_covered_by_criteria():
     profile = profiles.default_document(); profile["activiteit"] = "wandelen"
     ids = [q["id"] for q in readiness.assess(d, profile, {})["vragen"]]
     assert "oversteken" not in ids and "stil" in ids
+
+
+def test_auto_route_name_uses_a_decimal_comma():
+    assert intents.suggest_route_name("Wetteren", target_km=3.1, max_km=None, doel="toeren", activiteit="wandelen").endswith("· 3,1 km")
+    assert intents.suggest_route_name("Wetteren", target_km=38, max_km=None, doel="toeren", activiteit="toerfiets").endswith("· 38 km")

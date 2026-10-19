@@ -108,7 +108,7 @@ def suggest_route_name(
     else:
         kind = "Fietslus"
     distance = target_km if target_km is not None else max_km
-    suffix = f" · {distance:g} km" if distance is not None else ""
+    suffix = f" · {distance:g} km".replace(".", ",") if distance is not None else ""
     return f"{kind} rond {place}{suffix}"[:80].rstrip()
 
 
