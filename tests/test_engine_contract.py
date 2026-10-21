@@ -240,3 +240,49 @@ def test_goal_is_never_pushed_out_by_answer_criteria():
             export_preview_fn=_export, save_fn=lambda _d: None, exports_root=Path(tmp),
         )
     assert [c["metriek"] for c in calls[0]["criteria"]] == ["stil", "hoogtemeters"]
+
+
+def test_anchor_may_use_at_most_70_percent_of_the_budget():
+    from lusmaker import optimizer
+    start = {"lat": 51.0, "lon": 3.87}
+    far = {"id": "far", "foot": [50.80, 3.87], "length_m": 800, "gain_m": 120}    # ~22 km hemelsbreed
+    near = {"id": "near", "foot": [50.93, 3.87], "length_m": 600, "gain_m": 60}   # ~8 km
+    assert optimizer._pick_anchor(start, {"far": far, "near": near}, max_km=72)["id"] == "near"
+
+
+def test_soft_target_fallback_is_a_pure_loop_and_never_keeps_far_overshoot():
+    state = _state() | {"computed": None}
+    calls = []
+
+    def optimize_fn(d, _db, **kwargs):
+        calls.append(kwargs.get("max_rounds"))
+        d["computed"] = _state()["computed"] | {"total_km": 89.4}
+        from lusmaker import draft as draft_mod
+        raise draft_mod.DraftError("De route wordt 89,4 km, langer dan je maximum van 72 km.")
+
+    try:
+        intents.plan_route(
+            "Wetteren", target_km=60, doel="hoogtemeters", activiteit="koersfiets",
+            create_fn=lambda **_k: {"id": "abc123"}, load_fn=lambda _i: state,
+            optimize_fn=optimize_fn, climbs_fn=dict, export_gpx_fn=_export,
+            export_preview_fn=_export, save_fn=lambda _d: None,
+        )
+    except Exception as exc:  # DraftError of IntentError: in elk geval geen 89 km als klaar
+        assert "89,4" in str(exc)
+    else:
+        raise AssertionError("89 km voor 60 km mag niet als klaar terugkomen")
+    assert calls == [None, 0]  # eerste poging normaal, terugval zonder klimrondes
+
+
+def test_refreshed_auto_name_is_persisted():
+    state = _state() | {"computed": None, "name": "Rondrit rond Wetteren · 9 km", "name_auto": True}
+    saved = []
+
+    def optimize_fn(d, _db, **_k):
+        d["computed"] = _state()["computed"] | {"total_km": 34.1}
+
+    intents._execute_request(state, {}, {"doel": "toeren", "target_km": 35, "max_km": 42, "max_km_explicit": False,
+                                         "tolerance_km": 2.5, "geen_opvulling": False},
+                             route_fn=lambda *_a: None, optimize_fn=optimize_fn,
+                             persist_fn=lambda d: saved.append(d["name"]), pois_fn=lambda _d: [])
+    assert state["name"] == "Rondrit rond Wetteren · 34 km" and saved[-1] == state["name"]

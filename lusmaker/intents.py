@@ -510,7 +510,7 @@ def _update_auto_name(d: dict, previous: dict, request: dict) -> None:
     if auto and old_distance is not None:
         suffix = f" · {old_distance:g} km"
         if name.endswith(suffix):
-            new_suffix = f" · {new_distance:g} km"
+            new_suffix = f" · {new_distance:g} km".replace(".", ",")
             d["name"] = name[:-len(suffix)][:80-len(new_suffix)].rstrip() + new_suffix
 
 
@@ -703,7 +703,10 @@ def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=
         if persist_fn:
             persist_fn(d)
         raise IntentError(problem)
+    before = d.get("name")
     _refresh_auto_name(d, actual)
+    if persist_fn and d.get("name") != before:
+        persist_fn(d)  # adjust_route herlaadt de draft; anders gaat de nieuwe naam verloren
 
 
 _AUTO_KM_SUFFIX = re.compile(r" · [\d.,]+ km$")
@@ -839,14 +842,16 @@ def _route_for_request(
                 d,
                 climb_db,
                 max_km=optimize_ceiling,  # de terugval mag een zacht doel niet verder oprekken
+                max_rounds=0,  # pure rondrit: geen nieuw (ver) klimanker zoeken
                 fill=True,
                 fill_target_km=fill_target,
                 objective=_tour_objective(request),
             )
         except draft.DraftError:
             # Zacht doel: liever een iets te lange route met een eerlijke waarschuwing
-            # (constraint_report) dan een fout terwijl de optimizer al een route bewaarde.
-            if not (d.get("computed") or {}).get("total_km"):
+            # dan een fout, maar nooit ver boven het doel (89 km voor 60 km).
+            actual = (d.get("computed") or {}).get("total_km") or 0.0
+            if not actual or (fill_target and actual > 1.35 * fill_target):
                 raise
 
 

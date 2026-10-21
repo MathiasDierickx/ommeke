@@ -338,8 +338,11 @@ def _pick_anchor(start: dict, climb_db: dict, max_km: float) -> dict | None:
         distance_m = geo.haversine(
             start["lat"], start["lon"], climb["foot"][0], climb["foot"][1]
         )
-        estimate_m = 2 * distance_m * 1.3 + climb["length_m"]
-        if estimate_m <= max_km * 1000:
+        # Heen en terug over de weg (~1,4x hemelsbreed) mag hoogstens 70 % van het budget
+        # kosten: een anker aan de rand van het budget (Bosweg, 46 km enkel) maakte van
+        # een rit van 60 km er een van 89 km.
+        estimate_m = 2 * distance_m * 1.4 + climb["length_m"]
+        if estimate_m <= 0.7 * max_km * 1000:
             reachable.append(climb)
     if not reachable:
         return None
@@ -770,7 +773,7 @@ def _optimize(d: dict, climb_db: dict, max_km: float, objective=None,
         # Offroad en een gewone toer jagen niet op klimmen: meteen opvullen.
         anchor = (
             None
-            if pure_offroad or tour_only
+            if pure_offroad or tour_only or max_rounds == 0  # max_rounds=0: alleen rondrit
             else _pick_anchor(d["start"], climb_db, max_km)
         )
         if anchor is None:

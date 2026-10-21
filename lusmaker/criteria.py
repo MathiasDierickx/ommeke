@@ -31,7 +31,7 @@ def _pct(key):
 
 
 def _pct_text(q, key, suffix):
-    return f"{q.get(key) or 0:g} % {suffix}".replace(".", ",")
+    return f"{round(q.get(key) or 0)} % {suffix}"  # gehele procenten: geen "11 %" naast "33,9 %"
 
 
 def _meters(key):
