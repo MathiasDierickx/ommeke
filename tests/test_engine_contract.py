@@ -315,3 +315,91 @@ def test_water_with_a_place_heads_to_the_place_and_returns_along_the_water():
     assert [leg["to"] for leg in legs][:2] == ["waterloop", "Meer"]
     back = legs[-1]["points"]
     assert legs[-1]["to"] == "start" and back[1:-1] == list(reversed([tuple(p) for p in via]))
+
+
+def test_far_place_asks_first_and_both_answers_resolve_it():
+    from lusmaker import profiles, readiness
+    d = {"id": "p1", "start": {"label": "Wetteren", "lat": 50.9986, "lon": 3.8717}, "end": None, "avoid_places": [],
+         "round_trip_anchor": {"label": "Donkmeer (Donk, Overmere)", "lat": 51.0357, "lon": 3.9692},
+         "route_request": {"doel": "toeren", "target_km": 14, "tolerance_km": 2.5, "max_km": 16.5, "max_km_explicit": False,
+                           "rond_plaats": "Donkmeer"},
+         "_probe": {"km": 15, "hm": 10, "kwaliteit": {}, "terrein": {"plaatskernen": []}}}
+    profile = profiles.default_document(); profile["activiteit"] = "wandelen"
+    first = readiness.assess(d, profile, {})["vragen"][0]
+    assert first["id"] == "plek_afstand" and set(first["opties"]) == {"ruimer", "zonder"}
+    assert "ongeveer 22 km" in first["vraag"]  # 8 km hemelsbreed x 2 x 1,4
+
+    import copy
+    wider = copy.deepcopy(d)
+    intents.apply_answers("p1", {"plek_afstand": "ruimer"}, load_fn=lambda _i: wider, save_fn=lambda _d: None,
+                          adjust_fn=lambda _i, **_k: {"status": "ready"})
+    assert wider["route_request"]["target_km"] == 22 and wider["route_request"]["max_km"] == 24.5
+    assert "plek_afstand" not in wider["route_request"]["expliciete_voorkeuren"]
+    assert readiness._place_distance_question(wider) is None
+
+    without = copy.deepcopy(d)
+    intents.apply_answers("p1", {"plek_afstand": "zonder"}, load_fn=lambda _i: without, save_fn=lambda _d: None,
+                          adjust_fn=lambda _i, **_k: {"status": "ready"})
+    assert "round_trip_anchor" not in without and without["route_request"]["rond_plaats"] is None
+
+
+def test_network_question_for_walkers_off_the_node_network_and_answer_becomes_criterion():
+    from lusmaker import profiles, questions
+    from lusmaker import criteria as crit
+    d = {"id": "k1", "start": {"label": "S", "lat": 51, "lon": 3.8}, "end": None, "avoid_places": [],
+         "_probe": {"km": 6, "hm": 5, "kwaliteit": {"gecureerd_pct": 20.0}, "terrein": {"plaatskernen": [], "netwerk_in_buurt": True}}}
+    walk = profiles.default_document(); walk["activiteit"] = "wandelen"
+    race = profiles.default_document(); race["activiteit"] = "koersfiets"
+    assert "knooppunten" in [q["id"] for q in questions.ask(d, walk, d["_probe"])]
+    assert "knooppunten" not in [q["id"] for q in questions.ask(d, race, d["_probe"])]
+    d["_probe"]["terrein"]["netwerk_in_buurt"] = False      # geen netwerk in de buurt: niet vragen
+    assert "knooppunten" not in [q["id"] for q in questions.ask(d, walk, d["_probe"])]
+    d["_probe"]["terrein"]["netwerk_in_buurt"] = True
+    d["_probe"]["kwaliteit"]["gecureerd_pct"] = 70.0
+    assert "knooppunten" not in [q["id"] for q in questions.ask(d, walk, d["_probe"])]
+    spec = crit.merge(None, crit.from_answers({"knooppunten": "graag"}))
+    assert spec[0]["metriek"] == "knooppunt"
+    line = crit.explain(spec, {"gecureerd_pct": 82.4}, {"total_km": 10})[0]
+    assert line["tekst"] == "82 % over knooppuntroutes" and line["ok"] is True
+
+
+def test_fill_prefers_a_compact_loop_over_a_stretched_one_of_the_same_length():
+    from lusmaker import optimizer
+    import math
+
+    def loop(radius_deg, stretch):
+        return [(51.0 + radius_deg * stretch * math.sin(t / 20 * 2 * math.pi),
+                 3.87 + radius_deg * math.cos(t / 20 * 2 * math.pi) / stretch) for t in range(21)]
+    compact = {"distance_m": 34000.0, "coords": loop(0.04, 1.0), "ascend_m": 50}
+    stretched = {"distance_m": 34000.0, "coords": loop(0.04, 3.0), "ascend_m": 50}
+    d = {"id": "f1", "start": {"lat": 51.0, "lon": 3.87}, "loop": True, "climbs": [], "opvullingen": [],
+         "computed": {"total_km": 0.0, "ascend_m": 0, "descend_m": 0, "legs": [], "kwaliteit": {}}, "_geometry": []}
+    chosen = []
+
+    def round_trip(anchor, distance, seed, **_k):
+        return [stretched, compact][seed % 2]
+
+    def router(dd, _db):
+        chosen.append(dd["opvullingen"][-1]["seed"])
+        dd["computed"] = {"total_km": 34.0, "ascend_m": 50, "descend_m": 50, "legs": [], "kwaliteit": {}}
+        dd["_geometry"] = [[(51.0, 3.87), (51.01, 3.88)]]
+
+    optimizer._fill_with_round_trip(d, {}, 40000.0, router=router, round_trip_fn=round_trip,
+                                    objective="toeren", target_total_m=34000.0)
+    assert chosen and chosen[0] % 2 == 1, "de compacte lus moet als eerste geprobeerd worden"
+
+
+def test_network_nearby_reads_the_route_source_database():
+    import sqlite3
+    from lusmaker import route_evidence
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Path(tmp) / "rs.sqlite"
+        con = sqlite3.connect(db)
+        con.executescript("""CREATE TABLE feature(id INTEGER PRIMARY KEY, layer, source_id, mode, role, geometry, properties);
+            CREATE TABLE bounds(id INTEGER, minlon, maxlon, minlat, maxlat);
+            INSERT INTO feature VALUES (1,'routes:traject_wandel','x','wandel','network','{}','{}');
+            INSERT INTO bounds VALUES (1, 3.70, 3.71, 51.05, 51.06);""")
+        con.commit(); con.close()
+        assert route_evidence.network_nearby([(51.055, 3.72)], "trail", database=db) is True
+        assert route_evidence.network_nearby([(51.20, 3.72)], "trail", database=db) is False
+        assert route_evidence.network_nearby([(51.055, 3.72)], "quiet", database=db) is False   # fietsmodus

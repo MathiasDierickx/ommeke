@@ -138,9 +138,48 @@ def _passed_places(d: dict, probe: dict) -> list[dict]:
 # Vraag-id -> metrieken die ze dekt; een criterium op zo'n metriek beantwoordt de vraag al.
 _QUESTION_METRICS = {
     "kasseien": {"kassei"}, "heuvels": {"hoogtemeters"}, "ondergrond": {"onverhard", "offroad"},
-    "fietspaden": {"fietspad"}, "oversteken": {"oversteken"}, "stil": {"stil"},
+    "fietspaden": {"fietspad"}, "oversteken": {"oversteken"}, "stil": {"stil"}, "knooppunten": {"knooppunt"},
     "autovrij": {"autovrij", "stil"}, "beton": {"beton"},
 }
+
+
+def place_round_trip_km(d: dict) -> float | None:
+    """Ruwe afstand start -> rond-plek -> start over de weg (1,4x hemelsbreed)."""
+    anchor, start = d.get("round_trip_anchor"), d.get("start") or {}
+    if not anchor or start.get("lat") is None:
+        return None
+    from . import geo
+    via = [tuple(p) for p in d.get("water_via") or []]
+    if via:
+        # Langs een meanderende rivier: gemeten 20 km heenweg voor een ketting van 10,8 km.
+        chain = [(start["lat"], start["lon"]), *via, (anchor["lat"], anchor["lon"])]
+        return round(2 * 1.8 * geo.path_length(chain) / 1000.0)
+    crow_km = geo.haversine(start["lat"], start["lon"], anchor["lat"], anchor["lon"]) / 1000.0
+    return round(2 * 1.4 * crow_km)
+
+
+def _place_distance_question(d: dict) -> dict | None:
+    request = d.get("route_request") or {}
+    target = request.get("target_km")
+    estimate = place_round_trip_km(d)
+    if not target or not estimate or request.get("max_km_explicit"):
+        return None
+    if estimate <= target + request.get("tolerance_km", 2.5):
+        return None
+    place = (d.get("round_trip_anchor") or {}).get("label") or request.get("rond_plaats") or "de plek"
+    return {
+        "id": "plek_afstand",
+        "prioriteit": 0,
+        "reden": f"{place} heen en terug is ongeveer {estimate} km, langer dan je gevraagde {target:g} km",
+        "vraag": (
+            f"{place} ligt ver voor {target:g} km: heen en terug is ongeveer {estimate} km. "
+            f"Wil je naar {place} (ongeveer {estimate} km), of een lus van {target:g} km zonder {place}?"
+        ),
+        "opties": {
+            "ruimer": {"label": f"Naar {place}, ~{estimate} km", "antwoord": {"plek_afstand": "ruimer"}},
+            "zonder": {"label": f"{target:g} km zonder {place}", "antwoord": {"plek_afstand": "zonder"}},
+        },
+    }
 
 
 def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
@@ -154,6 +193,9 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
 
     preferences = profiles.effective_preferences(profiel, profiel["activiteit"])
     questions = []
+    far_place = _place_distance_question(d)
+    if far_place:
+        questions.append(far_place)
     # Situationele vragen (kasseien, heuvels, ondergrond): zie questions.py.
     questions.extend(situational.ask(d, profiel, probe))
 
@@ -305,6 +347,7 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             "autovrij": "autovrijvraag",
             "gewichten": "gewichten",
             "vermijd_plaatsen": "plaatsvraag",
+            "plek_afstand": "afstandsvraag",
         }
         advice = f"stel de {labels[visible[0]['id']]} eerst"
         if len(visible) > 1:

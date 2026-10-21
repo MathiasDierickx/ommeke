@@ -113,7 +113,7 @@ opnieuw routeren. Enkel beschikbaar via de web-API
 | Parameter | CLI | MCP | Chat | Web | Default en opmerking |
 |---|---|---|---|---|---|
 | draft_id | — | — | — | `draft_id` | Padparameter. |
-| antwoorden | — | — | — | `antwoorden` | Verplicht object; leeg `{}` = "maak 'm maar": routeer met wat bekend is zonder nieuwe vragen. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `stil` (belangrijk, ok), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. Elk antwoord wordt ook een criterium (`criteria.ANSWER_CRITERIA`); `ok` verwijdert het. CLI: `lus draft answer <id> sleutel=waarde`. |
+| antwoorden | — | — | — | `antwoorden` | Verplicht object; leeg `{}` = "maak 'm maar": routeer met wat bekend is zonder nieuwe vragen. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `stil` (belangrijk, ok), `knooppunten` (graag, ok), `plek_afstand` (ruimer, zonder: bij een rond-plek die te ver ligt voor de doelafstand; ruimer zet de doelafstand op de schatting, zonder laat de plek vallen), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. Elk antwoord wordt ook een criterium (`criteria.ANSWER_CRITERIA`); `ok` verwijdert het. CLI: `lus draft answer <id> sleutel=waarde`. |
 | request_id | — | — | — | `request_id` | Verplicht in de web-API (receipt, scope `answers`). |
 
 De motor kent ook `expected_revision`; de web-endpoint geeft die niet door.

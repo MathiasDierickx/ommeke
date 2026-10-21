@@ -178,6 +178,28 @@ class Evidence:
         }
 
 
+def network_nearby(points, profile="quiet", *, radius_m=1000.0, database=None) -> bool | None:
+    """Ligt er een knooppunt- of icoontraject binnen `radius_m` van deze punten? None = geen bron."""
+    path = Path(database) if database is not None else database_path()
+    if path is None or not points:
+        return None
+    mode = "wandel" if profile in {"trail", "wandelen"} else "fiets"
+    lats, lons = [p[0] for p in points], [p[1] for p in points]
+    pad_lat = radius_m / 111320.0
+    pad_lon = radius_m / (111320.0 * math.cos(math.radians(sum(lats) / len(lats))))
+    evidence = Evidence(path)
+    try:
+        row = evidence.db.execute(
+            """SELECT 1 FROM bounds b JOIN feature f ON f.id=b.id
+               WHERE b.maxlon>=? AND b.minlon<=? AND b.maxlat>=? AND b.minlat<=?
+                 AND f.mode=? AND f.role='network' LIMIT 1""",
+            (min(lons) - pad_lon, max(lons) + pad_lon, min(lats) - pad_lat, max(lats) + pad_lat, mode),
+        ).fetchone()
+        return row is not None
+    finally:
+        evidence.close()
+
+
 def route_stats(legs, profile="quiet", *, database=None):
     path = Path(database) if database is not None else database_path()
     if path is None:

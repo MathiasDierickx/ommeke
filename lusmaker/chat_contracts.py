@@ -23,7 +23,7 @@ CRITERIA_SCHEMA = {
             "metriek": {"type": "string", "enum": [
                 "hoogtemeters", "kort", "offroad", "onverhard", "populair", "autovrij",
                 "stil", "kassei", "beton", "steenweg", "fietspad", "oversteken",
-                "toilet", "speeltuin", "zitbank",
+                "toilet", "speeltuin", "zitbank", "knooppunt",
             ]},
             "richting": {"type": "string", "enum": ["hoog", "laag"], "description": "Weglaten = natuurlijke richting (meer rustig/fietspad/autovrij is beter; minder kassei/beton/steenweg/oversteken is beter). Alleen zetten om af te wijken, bv. kassei hoog voor Flandriens of hoogtemeters laag voor vlak."},
             "gewicht": {"type": "number", "minimum": 0},
@@ -56,6 +56,7 @@ UPDATE_PROFILE_SCHEMA = {
                         "fietspaden": _choice("belangrijk", "ok"),
                         "oversteken": _choice("vermijd", "ok"),
                         "stil": _choice("belangrijk", "ok"),
+                        "knooppunten": _choice("graag", "ok"),
                     },
                 },
             },

@@ -1264,6 +1264,8 @@ ANSWER_VALUES = {
     "fietspaden": {"belangrijk", "ok"},
     "oversteken": {"vermijd", "ok"},
     "stil": {"belangrijk", "ok"},
+    "knooppunten": {"graag", "ok"},
+    "plek_afstand": {"ruimer", "zonder"},
 }
 
 
@@ -1318,6 +1320,23 @@ def apply_answers(
         antwoorden = {}
     elif "startplaats" in antwoorden:
         raise IntentError("deze route heeft geen open startplaatsvraag")
+    choice = antwoorden.pop("plek_afstand", None)
+    if choice == "zonder":
+        # Plek laten vallen: een lus van de gevraagde afstand langs het water of rond de start.
+        request["rond_plaats"] = None
+        request.pop("resolved_round_place", None)
+        d.pop("round_trip_anchor", None)
+    elif choice == "ruimer":
+        estimate = readiness.place_round_trip_km(d)
+        if estimate:
+            request["target_km"] = estimate
+            if not request.get("max_km_explicit", False):
+                request["max_km"] = round(estimate + request.get("tolerance_km", 2.5), 1)
+    if choice:
+        d["computed"] = None
+        d["opvullingen"] = []
+        for key in ("_probe", "_geometry", "open_vragen"):
+            d.pop(key, None)
     request["expliciete_voorkeuren"] = {**(request.get("expliciete_voorkeuren") or {}), **antwoorden}
     # Elk antwoord wordt ook een scorecriterium; 'ok' haalt een eerder criterium weg.
     request["criteria"] = criteria.merge(

@@ -382,3 +382,13 @@ def test_quiet_question_is_not_asked_without_reason():
     per_activity = _profile("wandelen")
     per_activity["voorkeuren_per_activiteit"] = {"wandelen": {"stil": "belangrijk"}}
     assert "stil" not in _ids(_busy(45.0), per_activity)
+
+
+def test_hills_question_needs_real_relief_not_srtm_noise():
+    d = _draft(km=19, hm=233)                       # Scheldevallei: veel 'hm' door SRTM-ruis
+    d["_probe"]["terrein"]["relief_m"] = 18.0
+    assert "heuvels" not in _ids(d, _profile("wandelen"))
+    d["_probe"]["terrein"]["relief_m"] = 60.0       # Vlaamse Ardennen
+    assert "heuvels" in _ids(d, _profile("wandelen"))
+    del d["_probe"]["terrein"]["relief_m"]          # geen hoogtes: oude gedrag
+    assert "heuvels" in _ids(d, _profile("wandelen"))

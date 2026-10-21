@@ -45,6 +45,9 @@ class Context:
     cycleway_pct: float | None
     crossings: float | None
     quiet_pct: float | None          # aandeel wegen zonder doorgaand autoverkeer
+    curated_pct: float | None        # aandeel op knooppunt-/icoonroutes van Toerisme Vlaanderen
+    network_nearby: bool | None      # loopt er bewegwijzerd netwerk binnen 1 km van de verkenning
+    relief_m: float | None           # hoogteverschil van de verkenning (robuust tegen SRTM-pieken)
     places: int
     goal: str | None
     preferences: dict
@@ -75,6 +78,9 @@ def context(d: dict, profiel: dict, probe: dict) -> Context:
         cycleway_pct=_metric(probe, "fietspad_pct", "fietspad_pct"),
         crossings=_metric(probe, "kruisingen", "steenweg_kruisingen"),
         quiet_pct=_metric(probe, "stil_pct", "stil_pct"),
+        curated_pct=_metric(probe, "gecureerd_pct", "gecureerd_pct"),
+        network_nearby=(probe.get("terrein") or {}).get("netwerk_in_buurt"),
+        relief_m=(probe.get("terrein") or {}).get("relief_m"),
         places=len((probe.get("terrein") or {}).get("plaatskernen") or []),
         goal=(d.get("route_request") or {}).get("doel"),
         preferences=profiles.effective_preferences(profiel, activity),
@@ -159,6 +165,9 @@ KASSEIEN = Row(
 
 # -- heuvels --------------------------------------------------------------
 
+_MIN_RELIEF_M = 25.0
+
+
 def _hills_threshold(ctx: Context) -> float:
     # De helft van de 'heuvelachtig'-grens: vraag ook bij licht golvend terrein.
     activity = activities.get(ctx.activity)
@@ -172,7 +181,9 @@ HEUVELS = Row(
     relevance=lambda ctx: 1.0,
     measure=lambda ctx: ctx.hm_per_km,
     threshold=_hills_threshold,
-    triggered=lambda ctx: ctx.goal not in _EXPLICIT_GOALS,
+    # SRTM telt bruggen en bomenrijen als stijging: in een vallei van -1 tot 25 m is er
+    # niets om te kiezen, hoeveel "hoogtemeters" de verkenning ook optelt (issue #30).
+    triggered=lambda ctx: ctx.goal not in _EXPLICIT_GOALS and (ctx.relief_m is None or ctx.relief_m >= _MIN_RELIEF_M),
     inclusive=True,
     reason=lambda ctx: (
         f"je verkenningsroute heeft {fmt(ctx.hm, 0)} hoogtemeters over "
@@ -363,7 +374,42 @@ STIL = Row(
 )
 
 
-ROWS = (KASSEIEN, HEUVELS, ONDERGROND, FIETSPADEN, OVERSTEKEN, STIL)
+# -- knooppunten ----------------------------------------------------------
+
+# Knooppuntnetwerken zijn gemaakt voor recreatief fietsen en wandelen; een racefiets
+# rijdt er vaak over kasseien of fietspaden naast steenwegen, dus daar vragen we niet.
+_NETWORK_RELEVANCE = {
+    "wandelen": 1.0, "toerfiets": 1.0, "stadsfiets": 0.8, "trail": 0.5, "wegloop": 0.4,
+    "gravel": 0.3, "mtb": 0.3,
+}
+_NETWORK_MIN_PCT = 50.0
+
+
+KNOOPPUNTEN = Row(
+    id="knooppunten",
+    key="knooppunten",
+    label="knooppuntvraag",
+    relevance=lambda ctx: _NETWORK_RELEVANCE.get(ctx.activity, 0.0),
+    measure=lambda ctx: None if ctx.curated_pct is None else 100.0 - ctx.curated_pct,
+    threshold=lambda ctx: 100.0 - _NETWORK_MIN_PCT,
+    # Geen netwerk in de buurt (Kalkense Meersen te voet): dan valt er niets te kiezen.
+    triggered=lambda ctx: ctx.network_nearby is True,
+    reason=lambda ctx: (
+        f"{fmt(ctx.curated_pct, 0)}% van je verkenningsroute ligt op knooppuntroutes; "
+        "netwerkvoorkeur onbekend"
+    ),
+    question=lambda ctx: (
+        f"Maar {fmt(ctx.curated_pct, 0)}% van je verkenningsroute volgt de bewegwijzerde "
+        "knooppuntroutes. Wil je zoveel mogelijk over knooppunten, of maakt het niet uit?"
+    ),
+    options=lambda ctx: {
+        "graag": _patch("knooppunten", "graag"),
+        "ok": _patch("knooppunten", "ok"),
+    },
+)
+
+
+ROWS = (KASSEIEN, HEUVELS, ONDERGROND, FIETSPADEN, OVERSTEKEN, STIL, KNOOPPUNTEN)
 LABELS = {row.id: row.label for row in ROWS}
 
 

@@ -875,9 +875,17 @@ def _route(
         is_climb = "climb" in leg or "climb_segment" in leg
         # Klim-legs en de terugweg langs het water niet blokkeren door de eigen corridor:
         # langs de rivier terug is daar precies de bedoeling (route 28e183).
-        own_corridor_ok = is_climb or leg.get("langs_water")
+        if is_climb:
+            leg_avoid = place_areas(d)
+        elif leg.get("langs_water"):
+            # Zachte eigen corridor: de andere oever wint als die er is, anders mag
+            # dezelfde rivierweg terug (een harde 0,30 gaf 38 km omweg bij Donkmeer).
+            leg_avoid = [*place_areas(d), *({**area, "factor": max(area["factor"], 0.8)}
+                                            for area in avoid[len(place_areas(d)):])]
+        else:
+            leg_avoid = avoid
         route_kwargs = {
-            "avoid_polygons": place_areas(d) if own_corridor_ok else avoid,
+            "avoid_polygons": leg_avoid,
             "strict": preferences["strict"],
             "avoid_cobbles": preferences["avoid_cobbles"],
             "avoid_concrete": preferences["avoid_concrete"],
@@ -984,6 +992,22 @@ def summary(d: dict) -> dict:
 
 
 
+def _relief_m(points) -> float | None:
+    """Robuust hoogteverschil (95e - 5e percentiel) van de verkenning; None zonder hoogtes."""
+    eles = sorted(p[2] for p in points if len(p) > 2 and p[2] is not None)
+    if len(eles) < 10:
+        return None
+    return round(eles[int(0.95 * (len(eles) - 1))] - eles[int(0.05 * (len(eles) - 1))], 1)
+
+
+def _network_nearby(route_coords, profile) -> bool | None:
+    from . import route_evidence
+    try:
+        return route_evidence.network_nearby(geo.resample(route_coords, 1000.0), profile)
+    except Exception:  # noqa: BLE001 - zonder bron geen knooppuntvraag, geen fout
+        return None
+
+
 def link_conversation(draft_id: str, conversation_id: str | None) -> None:
     """Onthoud (eenmalig) in welk gesprek een route is gemaakt, voor vrije tekst vanaf de routepagina."""
     if not conversation_id:
@@ -1027,6 +1051,7 @@ def probe(
         route_coords = [
             (point[0], point[1]) for point in exploratory.get("coords", [])
         ]
+        relief_points = exploratory.get("coords", [])
         sampled_route = geo.resample(route_coords, 500.0)
         from . import analysis
 
@@ -1058,6 +1083,7 @@ def probe(
             for leg in d.get("_geometry", [])
             for point in leg
         ]
+        relief_points = [point for leg in d.get("_geometry", []) for point in leg]
         route_km = d["computed"]["total_km"]
         route_hm = d["computed"]["ascend_m"]
         nearby_climbs = {
@@ -1109,6 +1135,8 @@ def probe(
                 for p in route_features["pois"][:20]
             ],
             "knooppunten_langs_route": len(route_features["knopen"]),
+            "netwerk_in_buurt": _network_nearby(route_coords, effective_profile),
+            "relief_m": _relief_m(relief_points),
         },
     }
     d["_probe"] = result

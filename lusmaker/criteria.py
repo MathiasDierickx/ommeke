@@ -82,6 +82,7 @@ METRICS = {
     "beton": ("Betonbanen", "beton", _meters("beton_m"), lambda q, c: f"{(q.get('beton_m') or 0) / 1000:.1f} km beton".replace(".", ",")),
     "steenweg": ("Steenwegen", "steenweg", _meters("steenweg_m"), lambda q, c: f"{(q.get('steenweg_m') or 0) / 1000:.1f} km steenweg".replace(".", ",")),
     "fietspad": ("Fietspaden", "fietspad", _pct("fietspad_pct"), lambda q, c: _pct_text(q, "fietspad_pct", "fietspad")),
+    "knooppunt": ("Knooppuntroutes", "knooppunt", _pct("gecureerd_pct"), lambda q, c: _pct_text(q, "gecureerd_pct", "over knooppuntroutes")),
     "oversteken": ("Drukke oversteken", None, _crossings, lambda q, c: f"{q.get('steenweg_kruisingen') or 0} drukke oversteken"),
     # Voorzieningen langs de route (Toerisme Vlaanderen-lagen), alleen uitleg/hard op de eindroute.
     "toilet": ("Toilet onderweg", None, _poi_value("toilet"), _poi_text("toilet", "toilet", "toiletten")),
@@ -90,7 +91,7 @@ METRICS = {
 }
 # Natuurlijke richting per metriek. Vast = de andere richting is nooit zinvol
 # ('weinig rustige wegen' wil niemand); standaard = overschrijfbaar (kasseien graag, vlak).
-FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog",
+FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog", "knooppunt": "hoog",
                    "toilet": "hoog", "speeltuin": "hoog", "zitbank": "hoog"}
 DEFAULT_DIRECTION = {"kassei": "laag", "beton": "laag", "steenweg": "laag", "oversteken": "laag",
                      "hoogtemeters": "hoog", "offroad": "hoog", "onverhard": "hoog", "populair": "hoog"}
@@ -170,6 +171,7 @@ ANSWER_CRITERIA = {
     ("fietspaden", "belangrijk"): {"metriek": "fietspad", "richting": "hoog", "gewicht": 1.0, "label": "Fietspaden"},
     ("oversteken", "vermijd"): {"metriek": "oversteken", "richting": "laag", "gewicht": 1.0, "drempel": 0.3, "label": "Weinig drukke oversteken"},
     ("stil", "belangrijk"): {"metriek": "stil", "richting": "hoog", "gewicht": 1.0, "drempel": 0.6, "label": "Rustige wegen"},
+    ("knooppunten", "graag"): {"metriek": "knooppunt", "richting": "hoog", "gewicht": 1.0, "drempel": 0.5, "label": "Over knooppuntroutes"},
 }
 
 

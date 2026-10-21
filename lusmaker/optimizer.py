@@ -125,6 +125,7 @@ def _candidate_surface_components(
     if popular_cells is _LOAD_HEAT or busy_cells is _LOAD_HEAT:
         evidence = route_evidence.route_stats([r.get("coords", []) for r in routes], profile)
         if evidence is not None:
+            result["knooppunt"] = evidence["gecureerd_pct"] / 100
             if popular_cells is _LOAD_HEAT:
                 result["populair"] = evidence["curatie_score"]
             if busy_cells is _LOAD_HEAT:
@@ -411,7 +412,7 @@ def _score_components(candidate: dict, budget_km: float) -> dict:
         "autovrij": min(1.0, max(0.0, surface.get("autovrij", 0.0))),
         "kort": min(1.0, max(0.0, 1.0 - extra_km / max(budget_km, 0.001))),
         **{key: min(1.0, max(0.0, surface.get(key, 0.0)))
-           for key in ("kassei", "onverhard", "beton", "steenweg", "fietspad", "stil")},
+           for key in ("kassei", "onverhard", "beton", "steenweg", "fietspad", "stil", "knooppunt")},
     }
 
 
@@ -637,8 +638,23 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     tolerance_m = _target_tolerance_m(d, target_total_m or 0.0)
     # A requested distance comes before soft surface/popularity preferences.
     # Without a distance target, preserve the existing objective ordering.
+    def spread(item):
+        coords, distance_m = item[4], item[3]["distance_m"]
+        if not coords or distance_m <= 0:
+            return 0.0
+        return max(geo.haversine(anchor[0], anchor[1], p[0], p[1]) for p in coords) / distance_m
+
+    # Een lus die ver uitwaaiert (heen en terug naar Gent op parallelle wegen, route e2697e:
+    # 12 km ver bij 34 km) telt als afwijking, maar alleen als er een compacte (<= 0,3) is.
+    has_compact = any(spread(item) <= 0.3 for item in candidates)
+
+    def stretch_m(item):
+        if not has_compact:
+            return 0.0
+        return max(0.0, spread(item) - 0.3) * item[3]["distance_m"] * 2.0
+
     ordered = sorted(candidates, key=lambda item: (
-        -abs(current_m + item[3]["distance_m"] - target_total_m) if target_total_m is not None else 0,
+        -(abs(current_m + item[3]["distance_m"] - target_total_m) + stretch_m(item)) if target_total_m is not None else 0,
         item[0],
         -_unpaved_m([item[3]]) if prefer_paved else 0,
         item[1]), reverse=True)
