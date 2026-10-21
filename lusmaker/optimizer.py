@@ -13,6 +13,7 @@ from . import geo, gh, profiles
 from .errors import DraftError
 
 FLAT = "vlak"
+CIRCLE_SEED_BASE = 100
 _LEGACY_HM = "__legacy_hm__"
 _LOAD_HEAT = object()
 
@@ -563,8 +564,15 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             )
         return {"filled": False, "reason": reason}
 
+    # Eigen rondere lussen naast GraphHopper's druppels; alleen met de echte router
+    # (geïnjecteerde testrouters en cassettes houden hun vaste kandidaten).
+    circle_seeds = (
+        range(CIRCLE_SEED_BASE, CIRCLE_SEED_BASE + 3)
+        if round_trip_fn is gh.round_trip and seed_start == 0 and target_total_m is not None else ()
+    )
+
     def seeds():
-        for seed in range(seed_start, 5 if seed_start == 0 else 20):
+        for seed in [*range(seed_start, 5 if seed_start == 0 else 20), *circle_seeds]:
             # Controleer vóór het inplannen van elke seed in een nieuwe batch.
             # De eerste poging mag altijd, ook wanneer de deadline verstreken is.
             if deadline is not None and seed > seed_start and clock() > deadline:
@@ -573,9 +581,10 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
 
     def evaluate(seed):
         from .progress import emit
-        emit("variants", f"Ik toets lusvariant {seed + 1} aan je gewenste afstand.")
+        emit("variants", f"Ik toets lusvariant {seed % CIRCLE_SEED_BASE + 1} aan je gewenste afstand.")
+        fn = gh.circle_round_trip if seed >= CIRCLE_SEED_BASE else round_trip_fn
         try:
-            candidate = round_trip_fn(
+            candidate = fn(
                 anchor,
                 requested_m,
                 seed,
@@ -649,9 +658,11 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
     has_compact = any(spread(item) <= 0.3 for item in candidates)
 
     def stretch_m(item):
+        # Eigen cirkels kunnen een spoor heen en terug naar een tussenpunt hebben; tel dat mee.
+        spur = 2.0 * geo.self_retrace_m([item[4]]) if item[2] >= CIRCLE_SEED_BASE else 0.0
         if not has_compact:
-            return 0.0
-        return max(0.0, spread(item) - 0.3) * item[3]["distance_m"] * 2.0
+            return spur
+        return spur + max(0.0, spread(item) - 0.3) * item[3]["distance_m"] * 2.0
 
     ordered = sorted(candidates, key=lambda item: (
         -(abs(current_m + item[3]["distance_m"] - target_total_m) + stretch_m(item)) if target_total_m is not None else 0,

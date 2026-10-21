@@ -1,5 +1,6 @@
 """Client voor de lokale GraphHopper-instantie."""
 import json
+import math
 import os
 import threading
 import time
@@ -455,6 +456,35 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
 
     data = post_fn("/route", body)
     return _path_result(data, details)
+
+
+ROAD_FACTOR_CIRCLE = 1.42  # gemeten rond Wetteren: vijfhoek van 35 km-cirkel gaf 40 km bij 1,25
+
+
+def circle_points(point, distance_m: float, seed: int) -> list[tuple[float, float]]:
+    """Start + vier punten van een regelmatige vijfhoek op een cirkel door de start + start."""
+    lat, lon = point
+    radius_m = distance_m / (2 * math.pi * ROAD_FACTOR_CIRCLE)
+    heading = math.radians((seed * 47) % 360)  # richting van start naar middelpunt
+    m_lat, m_lon = 111320.0, 111320.0 * math.cos(math.radians(lat))
+    c_lat = lat + radius_m * math.cos(heading) / m_lat
+    c_lon = lon + radius_m * math.sin(heading) / m_lon
+    back = heading + math.pi  # vanuit het middelpunt gezien ligt de start in deze richting
+    points = [(lat, lon)]
+    for k in range(1, 5):
+        angle = back + k * 2 * math.pi / 5
+        points.append((c_lat + radius_m * math.cos(angle) / m_lat, c_lon + radius_m * math.sin(angle) / m_lon))
+    points.append((lat, lon))
+    return points
+
+
+def circle_round_trip(point, distance_m: float, seed: int, **kwargs) -> dict:
+    """Rondere lus dan GraphHopper's round_trip, via een vijfhoek op een cirkel door de start.
+
+    GraphHopper's round_trip geeft rond Wetteren steeds een druppel (verste punt 0,31-0,37x
+    de lengte, heen en terug op parallelle wegen); een cirkel haalt ~0,23. De seed draait de cirkel.
+    """
+    return route(circle_points(point, distance_m, seed), **kwargs)
 
 
 def round_trip(point, distance_m: float, seed: int,

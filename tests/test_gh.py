@@ -333,3 +333,17 @@ def test_explicit_paved_answer_reaches_both_gh_request_models():
             assert rule in body['custom_model']['priority']
     state['route_request']['expliciete_voorkeuren']['ondergrond'] = 'ok'
     assert 'prefer_paved' not in draft._activity_kwargs(state)
+
+
+def test_circle_points_form_a_pentagon_through_the_start():
+    import math
+    from lusmaker import geo
+    start = (51.0, 3.87)
+    pts = gh.circle_points(start, 35000.0, 3)
+    assert pts[0] == pts[-1] == start and len(pts) == 6
+    radius = 35000.0 / (2 * math.pi * gh.ROAD_FACTOR_CIRCLE)
+    legs = [geo.haversine(*a, *b) for a, b in zip(pts, pts[1:])]
+    assert all(abs(leg - legs[0]) < 0.02 * legs[0] for leg in legs)        # gelijke zijden
+    far = max(geo.haversine(*start, *p) for p in pts)
+    assert 2 * radius * 0.9 < far <= 2 * radius * 1.001                       # cirkel door de start
+    assert far / sum(legs) < 0.33                                             # rond, geen druppel
