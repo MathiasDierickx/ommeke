@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { questionTopic, reasonAddsInfo, reasonText } from '../lib/question-labels.ts';
+import { optionLabel, questionTopic, reasonAddsInfo, reasonText } from '../lib/question-labels.ts';
 import { conversationPreview } from '../lib/route-library.ts';
 
 test('reden: hoofdletter en zonder technisch staartje', () => {
@@ -21,4 +21,12 @@ test('reden alleen als ze iets toevoegt; onderwerp voor het overzicht', () => {
   assert.equal(reasonAddsInfo({ vraag: 'Welke?', opties: {} }), false);
   assert.equal(questionTopic({ id: 'heuvels', vraag: 'x', opties: {} }), 'Heuvels');
   assert.equal(questionTopic({ vraag: 'x', opties: {} }), '');
+});
+
+test('knoptekst gebruikt het label van de engine voor elke vraag', () => {
+  const q = { id: 'plek_afstand', vraag: 'Donkmeer ligt ver.', opties: { ruimer: { label: 'Naar Donkmeer, ~39 km' }, zonder: { label: '14 km zonder Donkmeer' } } };
+  assert.equal(optionLabel(q, 'ruimer'), 'Naar Donkmeer, ~39 km');
+  assert.equal(optionLabel(q, 'zonder'), '14 km zonder Donkmeer');
+  assert.equal(optionLabel({ id: 'knooppunten', vraag: 'x', opties: { graag: {}, ok: {} } }, 'graag'), 'Graag via knooppunten');
+  assert.equal(optionLabel({ id: 'knooppunten', vraag: 'x', opties: { graag: {}, ok: {} } }, 'ok'), 'Maakt me niet uit');
 });

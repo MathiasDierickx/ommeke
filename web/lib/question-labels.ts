@@ -7,13 +7,13 @@ const OPTION_LABELS: Record<string, Record<string, string>> = {
   fietspaden: { belangrijk: "Liefst op fietspaden" },
   oversteken: { vermijd: "Liever weinig oversteken" },
   stil: { belangrijk: "Liefst rustige wegen" },
+  knooppunten: { graag: "Graag via knooppunten" },
 };
 
 export function optionLabel(question: RouteQuestion, option: string): string {
-  if (question.id === "startplaats") {
-    const value = question.opties[option] as { label?: unknown } | undefined;
-    if (typeof value?.label === "string") return value.label;
-  }
+  // De engine geeft soms een leesbaar label mee (startplaats, plek_afstand); dat wint altijd.
+  const value = question.opties[option] as { label?: unknown } | undefined;
+  if (typeof value?.label === "string" && value.label) return value.label;
   if (option === "ok") return "Maakt me niet uit";
   const label = question.id ? OPTION_LABELS[question.id]?.[option] : undefined;
   if (label) return label;
@@ -27,7 +27,7 @@ export function reasonText(reden?: string | null): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
 
-const TOPICS: Record<string, string> = { startplaats: "Startplaats", ondergrond: "Ondergrond", heuvels: "Heuvels", fietspaden: "Fietspaden", oversteken: "Oversteken", stil: "Rustige wegen", kasseien: "Kasseien" };
+const TOPICS: Record<string, string> = { startplaats: "Startplaats", ondergrond: "Ondergrond", heuvels: "Heuvels", fietspaden: "Fietspaden", oversteken: "Oversteken", stil: "Rustige wegen", kasseien: "Kasseien", knooppunten: "Knooppunten", plek_afstand: "Afstand" };
 
 /** Kort onderwerp voor het overzicht, zodat "Maakt me niet uit" zegt waarover het gaat. */
 export function questionTopic(question: RouteQuestion): string {
