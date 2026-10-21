@@ -19,6 +19,8 @@ test('reden alleen als ze iets toevoegt; onderwerp voor het overzicht', () => {
   assert.equal(reasonAddsInfo({ vraag: 'Slechts 25% van je verkenningsroute is fietspad, terwijl je door bebouwde kom rijdt. Wil je…?', reden: 'Slechts 25% van je verkenningsroute is fietspad, terwijl je door 3 bebouwde kernen rijdt', opties: {} }), false);
   assert.equal(reasonAddsInfo({ vraag: 'Het is hier heuvelachtig. Zoek je de heuvels op?', reden: 'je verkenningsroute heeft 90 hoogtemeters over 12,9 km (7,0 hm/km); heuvelvoorkeur onbekend', opties: {} }), true);
   assert.equal(reasonAddsInfo({ vraag: 'Welke?', opties: {} }), false);
+  assert.equal(reasonAddsInfo({ vraag: "Zo'n 43% van je verkenningsroute volgt wegen met doorgaand verkeer. Rustig?", reden: '43% van je verkenningsroute loopt over wegen met doorgaand verkeer', opties: {} }), false);
+  assert.equal(reasonAddsInfo({ vraag: 'Hoeveel heuvels wil je?', reden: 'Je voorkeur is nog onbekend.', opties: {} }), true);
   assert.equal(questionTopic({ id: 'heuvels', vraag: 'x', opties: {} }), 'Heuvels');
   assert.equal(questionTopic({ vraag: 'x', opties: {} }), '');
 });

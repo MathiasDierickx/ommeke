@@ -122,7 +122,7 @@ export function RouteDetail({
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onAdjust: (adjustment: RouteAdjustment) => Promise<void>;
-  onAnswers: (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => Promise<void>;
+  onAnswers: (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar?: boolean) => Promise<void>;
   onLoadClimbs: () => Promise<NearbyClimb[]>;
   onShare: () => Promise<{ token: string; url: string } | undefined>;
   onBack: () => void;

@@ -6,7 +6,8 @@ import { optionLabel, questionTopic, reasonAddsInfo, reasonText, type RouteQuest
 import type { ProgressEvent } from "@/lib/event-stream";
 import { RouteProgress } from "./route-progress";
 
-export type AnswerRoute = (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => Promise<void>;
+/** `klaar`: "Maak 'm maar" — gegeven antwoorden toepassen en routeren zonder nieuwe vragen. */
+export type AnswerRoute = (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar?: boolean) => Promise<void>;
 type QuestionRoute = Pick<Route, "id" | "vragen"> & { revision?: number };
 
 const key = (question: RouteQuestion) => question.id || question.vraag;
@@ -33,11 +34,11 @@ export function RouteQuestions({ route, onAnswers, onFreeText, disabled = false,
   // De startplaats is geen voorkeur: zonder keuze kan de engine niet verder.
   const mustAnswer = list.some(question => question.id === "startplaats" && !answers[key(question)]);
 
-  const submit = async (chosen: Record<string, string>) => {
+  const submit = async (chosen: Record<string, string>, klaar = false) => {
     if (disabled || lock.current) return;
     lock.current = true; setError(undefined);
     setAdjusting(true); onBusyChange?.(true); setAnswerProgress(null);
-    try { await onAnswers(chosen, setAnswerProgress); setAnswers({}); setIndex(0); }
+    try { await onAnswers(chosen, setAnswerProgress, klaar); setAnswers({}); setIndex(0); }
     catch (cause) { setAnswerProgress(null); setError(cause instanceof Error ? cause.message : "Route berekenen mislukt. Probeer opnieuw."); }
     finally { lock.current = false; setAdjusting(false); onBusyChange?.(false); }
   };
@@ -66,7 +67,7 @@ export function RouteQuestions({ route, onAnswers, onFreeText, disabled = false,
       <div className="question-actions">
         {"ok" in (current.opties ?? {}) ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => choose("ok")}>Maakt me niet uit</button> : null}
         {index > 0 ? <button type="button" className="button button-quiet" disabled={busy} onClick={() => setIndex(index - 1)}>Vorige</button> : null}
-        {!mustAnswer ? <button type="button" className="button button-quiet question-skip" disabled={busy} onClick={() => void submit(answers)}>Maak &rsquo;m maar</button> : null}
+        {!mustAnswer ? <button type="button" className="button button-quiet question-skip" disabled={busy} onClick={() => void submit(answers, true)}>Maak &rsquo;m maar</button> : null}
       </div>
     </>}
     {adjusting || answerProgress ? <RouteProgress event={answerProgress} /> : null}

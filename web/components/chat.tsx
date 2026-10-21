@@ -28,7 +28,7 @@ export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }
   );
 }
 
-export function Message({ message, onRoute, onOption, routes = [], questionRouteIds = [], onAnswers, token, onProposalApplied, busy = false }: { token?: string; onProposalApplied?: (data: ProposalResult) => void; questionRouteIds?: string[]; onAnswers?: (id: string, answers: Parameters<AnswerRoute>[0], onProgress: Parameters<AnswerRoute>[1]) => Promise<void>; busy?: boolean; routes?: Route[]; message: ChatMessage; onRoute: (id: string) => void; onOption: (value: string) => void }) {
+export function Message({ message, onRoute, onOption, routes = [], questionRouteIds = [], onAnswers, token, onProposalApplied, busy = false }: { token?: string; onProposalApplied?: (data: ProposalResult) => void; questionRouteIds?: string[]; onAnswers?: (id: string, answers: Parameters<AnswerRoute>[0], onProgress: Parameters<AnswerRoute>[1], klaar?: boolean) => Promise<void>; busy?: boolean; routes?: Route[]; message: ChatMessage; onRoute: (id: string) => void; onOption: (value: string) => void }) {
   const assistant = message.role === "assistant";
   const hasQuestions = routes.some(route => message.route_ids?.includes(route.id) && Boolean(route.vragen?.length));
   const hasProposals = routes.some(route => message.route_ids?.includes(route.id) && Boolean(route.voorstellen?.length));
@@ -43,7 +43,7 @@ export function Message({ message, onRoute, onOption, routes = [], questionRoute
         <div className="message-copy">{message.content.split("\n").map((line, index) => <p key={`${message.id}-${index}`}>{line ? formatLine(line) : "\u00a0"}</p>)}</div>
         {options.length ? <div className="option-chips" aria-label="Antwoordopties">{options.map((option) => <button key={option} onClick={() => onOption(option)}>{option}</button>)}</div> : null}
       </div>
-      {assistant && onAnswers ? routes.filter(route => questionRouteIds.includes(route.id) && route.vragen?.length).map(route => <RouteQuestions key={route.id} route={route} disabled={busy} onFreeText={onOption} onAnswers={(answers, onProgress) => onAnswers(route.id, answers, onProgress)} />) : null}
+      {assistant && onAnswers ? routes.filter(route => questionRouteIds.includes(route.id) && route.vragen?.length).map(route => <RouteQuestions key={route.id} route={route} disabled={busy} onFreeText={onOption} onAnswers={(answers, onProgress, klaar) => onAnswers(route.id, answers, onProgress, klaar)} />) : null}
       {assistant && token && onProposalApplied ? routes.filter(route => questionRouteIds.includes(route.id) && route.ready && route.voorstellen?.length).map(route => <RouteProposals key={route.id} routeId={route.id} proposals={route.voorstellen} token={token} disabled={busy} onApplied={onProposalApplied} />) : null}
       {routeId ? <div className="route-result">
         <button className="route-made" onClick={() => onRoute(routeId)}>{route?.ready ? <Check /> : <RouteIcon />}<span><strong>{route ? routeTitle(route) : "Je route"}</strong><small>{route?.ready ? `${route.total_km?.toLocaleString("nl-BE", { maximumFractionDigits: 1 }) || "—"} km · bekijk kaart en downloads` : route ? "Routeconcept · nog niet klaar om te vertrekken" : "Bekijk de route op de kaart"}</small></span><ArrowUp /></button>

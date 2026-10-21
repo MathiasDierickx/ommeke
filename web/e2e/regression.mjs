@@ -101,6 +101,8 @@ async function installBackend(page, { handlers = {}, session = true } = {}) {
     state.unexpected.push(`GEBLOKKEERD ${route.request().method()} ${route.request().url()}`);
     return route.abort();
   });
+  // Kaarttegels zijn geen API-verkeer: beantwoord ze met een leeg plaatje zodat de kaart niet tijdsafhankelijk lekt.
+  await page.route("https://*.tile.openstreetmap.org/**", route => route.fulfill({ status: 200, contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aOioAAAAASUVORK5CYII=", "base64") }));
   await page.route(`${API}/**`, async (route) => {
     const request = route.request();
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
@@ -1071,4 +1073,28 @@ test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de 
   await page.getByRole("button", { name: "Verstuur" }).click();
   await page.getByText("Ik pas de route aan.").waitFor();
   expectNoStrays(state, "zeg wat je anders wil");
+});
+
+test("Maak 'm maar na één antwoord stuurt dat antwoord met klaar: true", async ({ page, url }) => {
+  const questions = [
+    { id: "heuvels", vraag: "Hoeveel heuvels wil je?", opties: { zoek: {}, ok: {}, vlak: {} } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: {}, ok: {}, onverhard: {} } },
+  ];
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: s.route }),
+    "POST /api/routes/r1/answers/stream": ({ body, state: s }) => {
+      assert.deepEqual(body.antwoorden, { heuvels: "zoek" });
+      assert.equal(body.klaar, true);
+      s.route = { ...s.route, ready: true, vragen: [], total_km: 30, revision: s.route.revision + 1 };
+      return sse([["result", { status: "ready", draft: "r1" }]]);
+    },
+  } });
+  state.route = { ...state.route, ready: false, total_km: null, elevation_gain_m: null, download_url: null, constraints: { doel_km: 30, waarschuwingen: [] }, vragen: questions };
+  await openRoute(page, url);
+  await page.getByRole("button", { name: "Graag heuvels" }).click();
+  await page.getByText("Vraag 2 van 2").waitFor();
+  await page.getByRole("button", { name: "Maak ’m maar" }).click();
+  await page.getByRole("button", { name: "Neem mee" }).waitFor();
+  assert.equal(state.calls.filter(c => c.key.endsWith("answers/stream")).length, 1);
+  expectNoStrays(state, "maak 'm maar");
 });

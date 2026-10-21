@@ -396,20 +396,21 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     }
   };
 
-  const answerChatRoute = async (routeId: string, answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => {
+  const answerChatRoute = async (routeId: string, answers: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar = false) => {
     if (!session) return;
     setError(undefined);
     await apiStream(`/api/routes/${encodeURIComponent(routeId)}/answers/stream`, session.accessToken, {
       antwoorden: answers,
       request_id: crypto.randomUUID(),
+      ...(klaar ? { klaar: true } : {}),
     }, onProgress);
     const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, session.accessToken);
     setRoutes(current => mergeById(current, [data.route]));
     setSelectedRoute(current => current?.id === routeId ? data.route : current);
   };
 
-  const answerRoute = async (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void) => {
-    if (selectedRoute) await answerChatRoute(selectedRoute.id, answers, onProgress);
+  const answerRoute = async (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar = false) => {
+    if (selectedRoute) await answerChatRoute(selectedRoute.id, answers, onProgress, klaar);
   };
 
   const loadNearbyClimbs = async (): Promise<NearbyClimb[]> => {

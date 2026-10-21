@@ -132,13 +132,13 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
     finally { lock.current = false; setBusy(false); onBusyChange?.(false); }
   }
 
-  async function submitAnswers(antwoorden: Record<string, string>, onProgress: (event: ProgressEvent) => void) {
+  async function submitAnswers(antwoorden: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar = false) {
     if (!result) return;
-    const signature = JSON.stringify({ draft: result.draft, antwoorden });
+    const signature = JSON.stringify({ draft: result.draft, antwoorden, klaar });
     if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
     setProgress(null); setError("");
     try {
-      const next = await apiStream<Result>(`/api/routes/${encodeURIComponent(result.draft)}/answers/stream`, token, { antwoorden, request_id: pending.current.id }, event => { setProgress(event); onProgress(event); });
+      const next = await apiStream<Result>(`/api/routes/${encodeURIComponent(result.draft)}/answers/stream`, token, { antwoorden, ...(klaar ? { klaar: true } : {}), request_id: pending.current.id }, event => { setProgress(event); onProgress(event); });
       pending.current = null;
       finish(next);
     } catch (e) {
