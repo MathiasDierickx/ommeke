@@ -198,3 +198,11 @@ def test_coordinate_input_is_finite_and_has_nearby_place_label():
         try: geocode.resolve(text, gazetteer=gaz)
         except ValueError: pass
         else: raise AssertionError(f'Ongeldige coördinaten geaccepteerd: {text}')
+
+
+def test_candidate_label_names_the_two_nearest_places_within_three_km():
+    from lusmaker import geocode as g
+    places = [("Donk", "village", 51.0450, 3.9800), ("Overmere", "village", 51.0480, 3.9500),
+              ("Gent", "city", 51.05, 3.72)]
+    assert g._nearby_place_names(places, 51.040, 3.9785) == ["Donk", "Overmere"]
+    assert g._nearby_place_names(places, 51.05, 3.80) == ["Gent"]  # niets binnen 3 km: dichtste

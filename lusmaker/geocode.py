@@ -92,6 +92,17 @@ def _cluster(points, radius_m=1200.0):
     return clusters
 
 
+def _nearby_place_names(places, lat, lon, *, limit=2, within_m=3000.0):
+    """Tot `limit` plaatsnamen binnen `within_m`, dichtste eerst (label voor keuzevragen)."""
+    hits = sorted(
+        (geo.haversine(lat, lon, plat, plon), name)
+        for name, ptype, plat, plon in places
+        if PLACE_PRIO.get(ptype, 9) <= 3
+    )
+    names = [name for d, name in hits if d <= within_m][:limit]
+    return names or [name for _d, name in hits[:1]]
+
+
 def _nearest_place(places, lat, lon):
     best = None
     for name, ptype, plat, plon in places:
@@ -232,9 +243,10 @@ def ambiguous_candidates(query: str, hits: list[dict], gazetteer=None) -> list[d
         return []
     gaz = _load() if gazetteer is None else gazetteer
     for hit in candidates:
-        place = _nearest_place(gaz.get("places", []), hit["lat"], hit["lon"])
-        if place:
-            hit["label"] = f"{hit['label']} ({place})"
+        # Twee namen: het Donkmeer ligt het dichtst bij Donk, maar mensen kennen het als Overmere.
+        places = _nearby_place_names(gaz.get("places", []), hit["lat"], hit["lon"])
+        if places:
+            hit["label"] = f"{hit['label']} ({', '.join(places)})"
     return candidates[:4]
 
 
