@@ -221,6 +221,25 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
     return out[:limit]
 
 
+def _prefer_water(hits: list[dict]) -> list[dict]:
+    """Bij dezelfde naam binnen 3 km gaat het meer zelf voor het natuurgebied errond.
+
+    "Donkmeer" gaf eerst het reservaat (760 m van het water); een lus naar het meer hoort
+    bij het water uit te komen.
+    """
+    out = list(hits)
+    for i, hit in enumerate(hits):
+        if hit.get("kind") != "natural:water":
+            continue
+        for j, earlier in enumerate(out[:i]):
+            if (earlier.get("kind") != "natural:water" and _normalise(earlier["label"]) == _normalise(hit["label"])
+                    and geo.haversine(earlier["lat"], earlier["lon"], hit["lat"], hit["lon"]) <= 3000):
+                out.remove(hit)
+                out.insert(j, hit)
+                break
+    return out
+
+
 def ambiguous_candidates(query: str, hits: list[dict], gazetteer=None) -> list[dict]:
     """Gelijkwaardige naammatches, geografisch ontdubbeld op drie kilometer."""
     if "," in query or len(hits) < 2:
@@ -289,7 +308,7 @@ def resolve(
             label = f"Nabij {place} ({lat:.5f}, {lon:.5f})" if place else query
             return {"lat": lat, "lon": lon, "label": label}, []
 
-    hits = geocode(query, limit=5, gazetteer=gazetteer)
+    hits = _prefer_water(geocode(query, limit=5, gazetteer=gazetteer))
     if not hits or _is_generic_place_fallback(query, hits):
         resolver = (
             google_geocode.resolve

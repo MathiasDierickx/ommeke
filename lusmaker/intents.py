@@ -339,7 +339,31 @@ def explain_route(d: dict, request: dict | None = None) -> list[dict]:
             computed = {**computed, "pois": _route_poi_counts(d, heat.features_near_route)}
         except Exception:  # noqa: BLE001 - voorzieningen zijn uitleg, geen blokkade
             computed = {**computed, "pois": {}}
-    return criteria.explain(spec, computed.get("kwaliteit") or {}, computed)
+    lines = criteria.explain(spec, computed.get("kwaliteit") or {}, computed)
+    water = _water_line(d, request)
+    return lines + ([water] if water else [])
+
+
+def _water_line(d: dict, request: dict) -> dict | None:
+    """'Langs de Schelde · 63 % van de route': een gevraagde waterloop hoort in de uitleg."""
+    name = request.get("langs_water")
+    points = [(p[0], p[1]) for leg in d.get("_geometry") or [] for p in leg]
+    if not name or len(points) < 2:
+        return None
+    try:
+        with draft.region_scope(d):
+            segments = geocode.waterway_segments(name)
+    except Exception:  # noqa: BLE001 - uitleg, geen blokkade
+        segments = []
+    water = [tuple(p[:2]) for segment in segments for p in geo.resample([tuple(q[:2]) for q in segment], 100.0)]
+    if not water:
+        return {"id": "langs_water", "label": f"Langs de {name}", "hard": False, "waarde": None,
+                "tekst": "waterloop niet gevonden", "ok": False}
+    samples = geo.resample(points, 100.0)
+    near = sum(1 for p in samples if min(geo.haversine(p[0], p[1], w[0], w[1]) for w in water) <= 150.0)
+    share = near / len(samples)
+    return {"id": "langs_water", "label": f"Langs de {name}", "hard": False, "waarde": round(share, 3),
+            "tekst": f"{round(100 * share)} % van de route langs het water", "ok": share >= 0.4}
 
 
 def compact_result(
@@ -713,7 +737,11 @@ _AUTO_KM_SUFFIX = re.compile(r" · [\d.,]+ km$")
 
 
 def _refresh_auto_name(d: dict, actual_km: float) -> None:
-    """Een automatische naam toont de werkelijke afstand, niet de gevraagde."""
+    """Een automatische naam toont de werkelijke afstand, niet de gevraagde.
+
+    Automatisch is ook een naam van het chatmodel ("Wandeling naar Donkmeer · 14 km"):
+    die afstand is een gok uit de vraag; een zelf getypte naam blijft onaangeroerd.
+    """
     if not d.get("name_auto"):
         return
     name = d.get("name") or ""
@@ -1184,7 +1212,7 @@ def plan_route(
     created = create_fn(**create_kwargs)
     draft_id = created.get("id") or created.get("draft")
     d = load_fn(draft_id)
-    d["name_auto"] = naam is None
+    d["name_auto"] = naam is None or funnel.channel_var.get() == "chat"
     save_fn(d)
     candidates = d["start"].pop("candidates", [])
     if candidates:

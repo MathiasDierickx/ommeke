@@ -166,15 +166,13 @@ def _place_distance_question(d: dict) -> dict | None:
         return None
     if estimate <= target + request.get("tolerance_km", 2.5):
         return None
-    place = (d.get("round_trip_anchor") or {}).get("label") or request.get("rond_plaats") or "de plek"
+    label = (d.get("round_trip_anchor") or {}).get("label") or request.get("rond_plaats") or "de plek"
+    place = label.split(" (")[0]  # "Donkmeer (Donk, Overmere)" -> "Donkmeer": de keuze staat al vast
     return {
         "id": "plek_afstand",
         "prioriteit": 0,
-        "reden": f"{place} heen en terug is ongeveer {estimate} km, langer dan je gevraagde {target:g} km",
-        "vraag": (
-            f"{place} ligt ver voor {target:g} km: heen en terug is ongeveer {estimate} km. "
-            f"Wil je naar {place} (ongeveer {estimate} km), of een lus van {target:g} km zonder {place}?"
-        ),
+        "reden": f"heen en terug is ongeveer {estimate} km, langer dan je gevraagde {target:g} km",
+        "vraag": f"{place} ligt ver voor {target:g} km: heen en terug is ongeveer {estimate} km. Wat wil je?",
         "opties": {
             "ruimer": {"label": f"Naar {place}, ~{estimate} km", "antwoord": {"plek_afstand": "ruimer"}},
             "zonder": {"label": f"{target:g} km zonder {place}", "antwoord": {"plek_afstand": "zonder"}},

@@ -412,3 +412,42 @@ def test_klaar_applies_given_answers_and_routes_without_new_questions():
                           adjust_fn=lambda _i, **kw: calls.append(kw) or {"status": "ready"})
     assert calls == [{"doel": "toeren", "check_readiness": False}]
     assert state["route_request"]["expliciete_voorkeuren"] == {"ondergrond": "ok"}
+
+
+def test_lake_beats_the_nature_reserve_around_it():
+    from lusmaker import geocode as g
+    hits = [{"label": "Donkmeer", "kind": "leisure:nature_reserve", "lat": 51.0357, "lon": 3.9692, "type": "landmark"},
+            {"label": "Donkmeer", "kind": "natural:water", "lat": 50.8434, "lon": 3.5881, "type": "landmark"},
+            {"label": "Donkmeer", "kind": "natural:water", "lat": 51.0400, "lon": 3.9785, "type": "landmark"}]
+    out = g._prefer_water(hits)
+    assert (out[0]["kind"], out[0]["lat"]) == ("natural:water", 51.0400)
+    assert out[1]["kind"] == "leisure:nature_reserve" and out[2]["lat"] == 50.8434
+
+
+def test_water_line_reports_share_along_the_named_river():
+    from unittest import mock
+    d = _state() | {"_geometry": [[(51.0, 3.80), (51.0, 3.81), (51.0, 3.82), (51.01, 3.82)]]}
+    with mock.patch.object(intents.geocode, "waterway_segments", return_value=[[(51.0, 3.79), (51.0, 3.83)]]):
+        line = intents._water_line(d, {"langs_water": "Schelde"})
+    assert line["label"] == "Langs de Schelde" and line["ok"] is True and line["waarde"] > 0.5
+
+
+def test_model_name_counts_as_automatic_but_a_typed_name_stays():
+    state = _state() | {"computed": None}
+
+    def optimize_fn(d, _db, **_k):
+        d["computed"] = _state()["computed"] | {"total_km": 42.5}
+
+    def plan(channel):
+        with intents.funnel.channel(channel):
+            with tempfile.TemporaryDirectory() as tmp:
+                intents.plan_route("Wetteren", target_km=14, naam="Wandeling naar Donkmeer · 14 km",
+                                   create_fn=lambda **k: state.update(name=k["name"]) or {"id": "abc123"},
+                                   load_fn=lambda _i: state,
+                                   optimize_fn=optimize_fn, climbs_fn=dict, export_gpx_fn=_export,
+                                   export_preview_fn=_export, save_fn=lambda _d: None, exports_root=Path(tmp))
+    plan("chat")
+    assert state["name"] == "Wandeling naar Donkmeer · 42 km"
+    state.update(name="x", computed=None)
+    plan("quick")
+    assert state["name"] == "Wandeling naar Donkmeer · 14 km"     # door de gebruiker getypt
