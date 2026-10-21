@@ -217,7 +217,11 @@ async function refreshOnce(session: AuthSession): Promise<AuthSession | null> {
     if (storedSession()?.accessToken !== session.accessToken) return null;
     return result ? store(toSession(result, session)) : null;
   } catch (error) {
-    if (refreshRejected(error)) return null;
+    if (refreshRejected(error)) {
+      // Bewaar waarom Cognito weigerde: zonder die reden is een "plots uitgelogd" niet te verklaren.
+      try { localStorage.setItem(`${SESSION_KEY}.reden`, `${new Date().toISOString()} ${(error as AuthError).code}: ${(error as AuthError).message}`); } catch { /* opslag optioneel */ }
+      return null;
+    }
     throw error;
   }
 }
@@ -258,12 +262,13 @@ export async function currentSession(): Promise<AuthSession | null> {
   return fresh;
 }
 
+/** Meld alleen dit toestel af: GlobalSignOut zou de sessies op al je andere toestellen ook beëindigen. */
 export async function signOut(session: AuthSession | null): Promise<void> {
-  if (session?.accessToken) {
+  if (session?.refreshToken) {
     try {
-      await call("GlobalSignOut", { AccessToken: session.accessToken });
+      await call("RevokeToken", { Token: session.refreshToken, ClientId: clientId() });
     } catch {
-      /* token mogelijk al verlopen — lokaal opruimen volstaat */
+      /* token mogelijk al ingetrokken — lokaal opruimen volstaat */
     }
   }
   clearStored();
