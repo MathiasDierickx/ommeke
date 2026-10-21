@@ -24,3 +24,8 @@ def test_apply_only_fills_missing_keys():
     assert result["heuvels"] == "ok"          # expliciet antwoord blijft staan
     assert result["kasseien"] is False        # onbekend wordt aangevuld
     assert values["kasseien"] is None         # invoer wordt niet gemuteerd
+
+
+def test_named_activity_overrides_the_model_guess():
+    assert intent_hints.apply({"activiteit": "wandelen"}, "trail rondje vanuit brugse poort gent van 10 km")["activiteit"] == "trail"
+    assert intent_hints.apply({"activiteit": "koersfiets"}, "Maak een rustige lus van 30 km")["activiteit"] == "koersfiets"

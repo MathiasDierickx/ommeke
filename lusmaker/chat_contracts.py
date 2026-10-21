@@ -33,6 +33,36 @@ CRITERIA_SCHEMA = {
     },
 }
 
+def _choice(*values):
+    return {"type": "string", "enum": list(values)}
+
+
+UPDATE_PROFILE_SCHEMA = {
+    "type": "object", "required": ["patch"], "additionalProperties": False,
+    "properties": {
+        "naam": {"type": "string", "enum": ["standaard"]},
+        "patch": {
+            "type": "object", "additionalProperties": False,
+            "properties": {
+                "voorkeuren": {
+                    "type": "object", "additionalProperties": False,
+                    "properties": {
+                        "kasseien": _choice("graag", "ok", "vermijd"),
+                        "beton": _choice("graag", "ok", "vermijd"),
+                        "steenwegen": _choice("ok", "vermijd"),
+                        "autovrij": _choice("belangrijk", "ok"),
+                        "heuvels": _choice("zoek", "ok", "vlak"),
+                        "ondergrond": _choice("verhard", "ok", "onverhard"),
+                        "fietspaden": _choice("belangrijk", "ok"),
+                        "oversteken": _choice("vermijd", "ok"),
+                        "stil": _choice("belangrijk", "ok"),
+                    },
+                },
+            },
+        },
+    },
+}
+
 PLAN_ROUTE_SCHEMA = {
     "type": "object",
     "additionalProperties": False,

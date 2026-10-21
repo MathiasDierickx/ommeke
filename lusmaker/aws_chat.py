@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA
+from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA, UPDATE_PROFILE_SCHEMA
 
 from . import draft, funnel, intent_hints, intents, tenant, quotas, requests, telemetry, progress
 
@@ -291,7 +291,7 @@ TOOL_CONFIG = {
     "tools": [
         {"toolSpec":{"name":"reroute_from","description":"Breng de gebruiker vanaf geverifieerde huidige coördinaten terug naar de oorspronkelijke start; rest_km is een hard budget.","inputSchema":{"json":REROUTE_SCHEMA}}},
         {"toolSpec": {"name": "get_profile", "description": "Lees je voorkeurenprofiel voor readiness-vragen.", "inputSchema": {"json": {"type":"object","properties":{"naam":{"type":"string"}},"additionalProperties":False}}}},
-        {"toolSpec": {"name": "update_profile", "description": "Bewaar expliciete antwoorden op profielvragen; pas daarna het routeconcept aan.", "inputSchema": {"json": {"type":"object","required":["naam","patch"],"properties":{"naam":{"type":"string"},"patch":{"type":"object"}},"additionalProperties":False}}}},
+        {"toolSpec": {"name": "update_profile", "description": "Bewaar expliciete antwoorden op profielvragen; pas daarna het routeconcept aan.", "inputSchema": {"json": UPDATE_PROFILE_SCHEMA}}},
         {"toolSpec": {
             "name": "nearby_places", "description": "Zoek OSM-parkings, hotels, stranden of oversteekplaatsen rond geverifieerde coördinaten. Geeft bronnen en toegangstags, geen veiligheidsgarantie.",
             "inputSchema": {"json": {"type": "object", "required": ["lat", "lon", "kind"],
@@ -387,6 +387,14 @@ Gebruik voor wandelingen standaard doel=toeren, behalve bij een expliciete wens 
 De functie langs_water geldt voor rivieren en kanalen, niet voor een garantie van maximale strandlengte.
 Meld expliciet wanneer zulke wensen niet door tools zijn geverifieerd. Een concept of needs_input is geen voltooide route.
 Beslisregels die altijd voorgaan:
+- Vraag nooit eerst naar de afstand: noemt de gebruiker er geen, gebruik dan target_km 5 voor
+  wandelen, 8 voor trail en wegloop, 40 voor fietsen; bij een lus rond een plek of via een
+  klim met "kort" mag target_km weg. Plan meteen; de route kan daarna bijgestuurd worden.
+- Lijkt een wens onhaalbaar (drie klimmen binnen 10 km), roep plan_route toch aan met de
+  wens zoals gevraagd; de tool meldt wat niet past. Weiger niet zelf.
+- "trail" of "traillopen" is activiteit trail; "lopen" of "looptoer" zonder ondergrond is wegloop.
+- Bij update_profile is de patch altijd {"voorkeuren": {sleutel: waarde}} met de waarden uit de
+  vraag (kasseien graag/ok/vermijd, heuvels zoek/ok/vlak, ...), nooit true/false.
 - Een afstands- of vermijdwens over een route die al in het gesprek staat ("maak er 20 km van",
   "vermijd X", "korter", "rustiger") is ALTIJD een adjust_route-aanroep op dat draft-id, nooit
   alleen tekst. Bied daarna geen voorstellen aan die tegen die wens ingaan (geen klim erbij als
@@ -463,7 +471,8 @@ class RouteToolExecutor:
             from . import profiles
             if name == "get_profile":
                 return profiles.load(arguments.get("naam", "standaard"))
-            return profiles.apply_patch(arguments["naam"], arguments["patch"], bron="chat")
+            # De chat werkt altijd op het profiel 'standaard'; een verzonnen naam maakte een tweede profiel.
+            return profiles.apply_patch("standaard", arguments["patch"], bron="chat")
         if name == "nearby_places":
             from .place_search import nearby_places
             return nearby_places(**arguments)

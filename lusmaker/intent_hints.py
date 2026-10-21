@@ -59,6 +59,8 @@ def apply(values: dict, text: str) -> dict:
     """Vul alleen ontbrekende of ``None``-waarden aan; geef een kopie terug."""
     result = dict(values)
     for key, value in hints(text).items():
-        if result.get(key) is None:
+        # Een activiteit die de gebruiker letterlijk noemt ("trail rondje") wint van de
+        # gok van het model (dat koos live 'wandelen'); andere voorkeuren vullen alleen aan.
+        if result.get(key) is None or key == "activiteit":
             result[key] = value
     return result

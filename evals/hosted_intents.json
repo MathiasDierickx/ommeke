@@ -121,12 +121,12 @@
     "prompt": "Loop 5 km rond de Blaarmeersen in Gent.",
     "expected_tool": "plan_route",
     "expected_arguments": {
-      "target_km": 5,
-      "activiteit": "trail",
-      "rond_plaats": "Blaarmeersen, Gent"
+      "target_km": 5
     },
-    "required_arguments": [],
-    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek",
+    "required_arguments": [
+      "rond_plaats"
+    ],
+    "provenance": "bestaande synthetische intentcase; geen bewezen afzonderlijk gebruikersgesprek; 'Loop' is in het Nederlands lopen of wandelen; activiteit en exacte plekspelling niet meer vastgepind",
     "argument_aliases": {
       "rond_plaats": [
         "Blaarmeersen",
@@ -163,9 +163,9 @@
     "expected_tool": "plan_route",
     "expected_arguments": {
       "target_km": 3,
-      "activiteit": "trail"
+      "activiteit": "wandelen"
     },
-    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek; sinds de acht activiteiten (okt 2026) is een wandeling 'wandelen', niet 'trail'",
     "required_arguments": []
   },
   {
@@ -174,9 +174,9 @@
     "expected_tool": "plan_route",
     "expected_arguments": {
       "max_km": 3,
-      "activiteit": "trail"
+      "activiteit": "wandelen"
     },
-    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek; sinds de acht activiteiten (okt 2026) is een wandeling 'wandelen', niet 'trail'",
     "required_arguments": []
   },
   {
@@ -259,10 +259,10 @@
     "expected_tool": "plan_route",
     "expected_arguments": {
       "target_km": 8,
-      "activiteit": "trail",
+      "activiteit": "wandelen",
       "doel": "offroad"
     },
-    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek",
+    "provenance": "synthetische regressievariant; geen afzonderlijk gebruikersgesprek; sinds de acht activiteiten (okt 2026) is een wandeling 'wandelen', niet 'trail'",
     "required_arguments": []
   },
   {
