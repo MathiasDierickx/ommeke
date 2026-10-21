@@ -486,7 +486,7 @@ def cmd_draft_answer(args):
             raise ValueError("antwoorden zijn sleutel=waarde, bv. kasseien=vermijd")
         key, value = item.split("=", 1)
         answers[key.strip()] = value.strip()
-    return intents.apply_answers(args.id, answers, expected_revision=args.expected_revision)
+    return intents.apply_answers(args.id, answers, expected_revision=args.expected_revision, klaar=args.klaar)
 
 
 def cmd_draft_optimize(args):
@@ -983,7 +983,8 @@ def main(argv=None):
     s = dsub.add_parser("answer", help="beantwoord open routevragen (sleutel=waarde) en routeer opnieuw")
     _region_arg(s)
     s.add_argument("id")
-    s.add_argument("antwoord", nargs="+", help="bv. kasseien=vermijd stil=belangrijk")
+    s.add_argument("antwoord", nargs="*", help="bv. kasseien=vermijd stil=belangrijk")
+    s.add_argument("--klaar", action="store_true", help="geen nieuwe vragen meer: routeer nu ('maak 'm maar')")
     s.add_argument("--expected-revision", type=int)
     s.set_defaults(func=cmd_draft_answer)
     s = dsub.add_parser("optimize", help="vul de route greedy met klimmen binnen een budget")

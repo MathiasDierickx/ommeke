@@ -403,3 +403,12 @@ def test_network_nearby_reads_the_route_source_database():
         assert route_evidence.network_nearby([(51.055, 3.72)], "trail", database=db) is True
         assert route_evidence.network_nearby([(51.20, 3.72)], "trail", database=db) is False
         assert route_evidence.network_nearby([(51.055, 3.72)], "quiet", database=db) is False   # fietsmodus
+
+
+def test_klaar_applies_given_answers_and_routes_without_new_questions():
+    state = {"id": "d1", "revision": 1, "route_request": {"doel": "toeren", "activiteit": "toerfiets", "profiel_naam": "standaard"}}
+    calls = []
+    intents.apply_answers("d1", {"ondergrond": "ok"}, klaar=True, load_fn=lambda _i: state, save_fn=lambda _d: None,
+                          adjust_fn=lambda _i, **kw: calls.append(kw) or {"status": "ready"})
+    assert calls == [{"doel": "toeren", "check_readiness": False}]
+    assert state["route_request"]["expliciete_voorkeuren"] == {"ondergrond": "ok"}

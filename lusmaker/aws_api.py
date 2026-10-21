@@ -418,15 +418,18 @@ async def route_answers(request: Request) -> JSONResponse:
         draft_id = _draft_id(request)
         body = await _json_body(request)
         answers = body.get("antwoorden")
+        done = body.get("klaar", False)
+        if not isinstance(done, bool):
+            raise ChatError("klaar moet true of false zijn")
         rid = body.get("request_id")
         requests.request_path("answers", rid)
-        values = {"draft_id": draft_id, "antwoorden": answers}
+        values = {"draft_id": draft_id, "antwoorden": answers, **({"klaar": True} if done else {})}
 
         def execute():
             from .progress import emit
             emit("routing", "Ik verwerk je keuzes en bereken je lus opnieuw.")
             with funnel.channel("quick"):
-                return intents.apply_answers(draft_id, answers)
+                return intents.apply_answers(draft_id, answers, klaar=done)
 
         result = await asyncio.to_thread(requests.once, "answers", rid, values, execute)
         return JSONResponse(result)

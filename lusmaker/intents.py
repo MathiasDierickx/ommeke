@@ -1274,6 +1274,7 @@ def apply_answers(
     antwoorden: dict,
     *,
     expected_revision: int | None = None,
+    klaar: bool = False,
     load_fn=draft.load,
     save_fn=draft.save,
     adjust_fn=None,
@@ -1286,8 +1287,8 @@ def apply_answers(
     """
     if not isinstance(antwoorden, dict):
         raise IntentError("antwoorden moet een object zijn")
-    # Leeg = "maak 'm maar": routeer met wat bekend is; open vragen blokkeren niet meer.
-    skip_questions = not antwoorden
+    # Leeg of klaar = "maak 'm maar": routeer met wat bekend is; open vragen blokkeren niet meer.
+    skip_questions = not antwoorden or klaar
     for key, value in antwoorden.items():
         if key not in ANSWER_VALUES or not isinstance(value, str) or value not in ANSWER_VALUES[key]:
             raise IntentError(f"onbekend antwoord: {key}={value}")
