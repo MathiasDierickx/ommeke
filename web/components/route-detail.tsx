@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, ArrowLeft, Bike, Check, CircleHelp, Copy, Footprints, LoaderCircle, MapPin, Menu, Mountain, Pencil, Plus, Send, Share2, Smartphone, Trash2, TriangleAlert, Watch, X } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Bike, Check, CircleHelp, Copy, Footprints, MapPin, Menu, Mountain, Pencil, Plus, Send, Share2, Smartphone, Trash2, TriangleAlert, Watch, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { NearbyClimb, Route, RouteAdjustment, RouteGeometry, RouteReason, SharedRoute } from "@/lib/types";
@@ -11,6 +11,7 @@ import { activityKind, activityLabel, routeTitle } from "@/lib/route-library";
 import { Logo } from "./brand";
 import { OfflineRoute } from "./offline-route";
 import { ReturnRoute } from "./return-route";
+import { RouteProgress } from "./route-progress";
 import { RouteMap } from "./route-map";
 
 export function StatGrid({ route }: { route: Route | SharedRoute }) {
@@ -36,7 +37,7 @@ export function WhyList({ reasons }: { reasons?: RouteReason[] }) {
         {reasons.map(reason => {
           const tone = reasonTone(reason);
           const Icon = REASON_ICONS[tone];
-          return <li key={reason.id} className={`why-${tone}`}><Icon aria-hidden="true" /><span className="sr-only">{{ ok: "Gehaald", soft: "Niet helemaal", hard: "Niet gehaald", unknown: "Niet gemeten" }[tone]}: </span><strong>{reason.label}</strong><span>{reason.tekst}</span></li>;
+          return <li key={reason.id} className={`why-${tone}`}><Icon aria-hidden="true" /><span className="sr-only">{{ ok: "Gehaald", soft: "Niet helemaal", hard: "Niet gehaald", unknown: "Niet gemeten" }[tone]}: </span><strong>{reason.label.charAt(0).toUpperCase() + reason.label.slice(1)}</strong><span>{reason.tekst}</span></li>;
         })}
       </ul>
     </section>
@@ -218,7 +219,7 @@ export function RouteDetail({
                 <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: (route.total_km || 0) + distanceStep })}>Langer <small>+{distanceStep} km</small></button>
                 {route.voorstellen?.map(proposal => <button key={proposal.titel} title={proposal.uitleg} disabled={adjusting} onClick={() => void adjust(proposal.adjust_route)}>{proposal.titel}</button>)}
               </div>
-              <span role="status">{adjusting ? <><LoaderCircle className="spin" aria-hidden="true" /><span className="sr-only">Route aanpassen…</span></> : null}</span>
+              {adjusting ? <RouteProgress event={{ stage: "adjusting", message: "Route aanpassen…" }} /> : null}
             </section>
           ) : null}
           {route.ready ? <button className="button button-primary take-along-button" aria-expanded={takeAlong} onClick={() => setTakeAlong(open => !open)}><ArrowDownToLine /> Neem mee</button> : null}

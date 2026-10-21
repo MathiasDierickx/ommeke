@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Route } from "@/lib/types";
-import { optionLabel, reasonText, type RouteQuestion } from "@/lib/question-labels";
+import { optionLabel, questionTopic, reasonAddsInfo, reasonText, type RouteQuestion } from "@/lib/question-labels";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { RouteProgress } from "./route-progress";
 
@@ -52,12 +52,12 @@ export function RouteQuestions({ route, onAnswers, onFreeText, disabled = false,
     {done ? <>
       <p className="question-step">Klaar</p>
       <h3>Je keuzes</h3>
-      <ul className="question-summary">{list.map((question, at) => <li key={key(question)}><button type="button" disabled={busy} onClick={() => setIndex(at)} aria-label={`${question.vraag}: ${answers[key(question)] ? optionLabel(question, answers[key(question)]) : "nog geen antwoord"}, wijzigen`}>{answers[key(question)] ? optionLabel(question, answers[key(question)]) : "Nog geen antwoord"}</button></li>)}</ul>
+      <ul className="question-summary">{list.map((question, at) => <li key={key(question)}><button type="button" disabled={busy} onClick={() => setIndex(at)} aria-label={`${question.vraag}: ${answers[key(question)] ? optionLabel(question, answers[key(question)]) : "nog geen antwoord"}, wijzigen`}>{questionTopic(question) ? <small>{questionTopic(question)}</small> : null}{answers[key(question)] ? optionLabel(question, answers[key(question)]) : "Nog geen antwoord"}</button></li>)}</ul>
       <button className="button button-primary" disabled={busy || mustAnswer} onClick={() => void submit(answers)}>{adjusting ? "Route wordt berekend…" : submitLabel}</button>
     </> : <>
       <p className="question-step">Vraag {index + 1} van {list.length}</p>
       <h3>{current.vraag}</h3>
-      {reasonText(current.reden) ? <p className="question-reason">{reasonText(current.reden)}</p> : null}
+      {reasonAddsInfo(current) ? <p className="question-reason">{reasonText(current.reden)}</p> : null}
       <ol className="question-options">{options.map((option, at) => <li key={option}><button type="button" className="question-option" disabled={busy} aria-pressed={answers[key(current)] === option} onClick={() => choose(option)}><span className="question-number" aria-hidden="true">{at + 1}</span>{optionLabel(current, option)}</button></li>)}</ol>
       {onFreeText ? <form className="question-note" onSubmit={event => { event.preventDefault(); const text = note.trim(); if (text) { onFreeText(text); setNote(""); } }}>
         <input value={note} onChange={event => setNote(event.target.value)} maxLength={500} disabled={busy} placeholder="of typ je eigen antwoord…" aria-label="Eigen antwoord" />

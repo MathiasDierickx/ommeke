@@ -232,8 +232,7 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .route-why li > span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .route-why svg { width: 1.05rem; height: 1.05rem; }
 .why-ok svg { color: var(--green); } .why-soft svg { color: #b57a1e; } .why-hard svg { color: var(--danger); } .why-unknown svg { color: var(--muted); }
-.route-steer { margin-top: 1rem; display: flex; align-items: center; gap: .5rem; }
-.route-steer > span { flex: 0 0 auto; color: var(--green); }
+.route-steer { margin-top: 1rem; display: grid; gap: .6rem; }
 .steer-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
 .steer-chips button { min-height: 40px; padding: .5rem .85rem; border: 1px solid rgba(36, 90, 67, .24); border-radius: 999px; display: inline-flex; align-items: baseline; gap: .3rem; color: var(--green-deep); background: var(--white); font-size: .78rem; font-weight: 650; cursor: pointer; }
 .steer-chips button small { color: var(--muted); font-weight: 500; }
@@ -502,6 +501,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 .question-actions .button { min-height: 40px; padding: .45rem .85rem; font-weight: 600; }
 .question-skip { margin-left: auto; color: var(--green); border-color: rgba(36, 90, 67, .4); }
 .question-summary button::before { content: "✓"; color: var(--green); }
+.question-summary small { min-width: 5.5rem; color: var(--muted); font-size: .72rem; font-weight: 600; }
 .question-card [role="alert"] { margin: 0; padding: .6rem .8rem; border-radius: .7rem; color: #82382e; background: #fff1ed; font-size: .85rem; line-height: 1.45; }
 .route-pending { display: grid; gap: .8rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 1rem; background: #f5f8f3; }
 .route-pending h3, .route-pending p { margin: 0; }

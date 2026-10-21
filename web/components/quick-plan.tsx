@@ -106,7 +106,8 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
   function promptFromForm(): string {
     const label = current.label.toLowerCase();
     const what = kind === "voet" ? "wandeling" : kind === "lopen" ? `loopje (${label})` : `fietstocht (${label})`;
-    return `Een ${what} van ${km} km vanuit ${start.trim()}. ${notes.trim()}`;
+    // De activiteitssleutel letterlijk meegeven: anders kiest het model soms een andere fiets.
+    return `Een ${what} van ${km} km vanuit ${start.trim()} (activiteit: ${activity}). ${notes.trim()}`;
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault(); if (lock.current) return;

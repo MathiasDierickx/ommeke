@@ -422,9 +422,9 @@ test("GPX- en FIT-download geven een downloadevent", async ({ page, url }) => {
   await openRoute(page, url);
   await openTakeAlong(page);
   const [gpx] = await Promise.all([page.waitForEvent("download", { timeout: TIMEOUT }), page.getByRole("button", { name: "Download GPX" }).click()]);
-  assert.equal(gpx.suggestedFilename(), "Berendries-lus.gpx");
+  assert.equal(gpx.suggestedFilename(), "Berendries-lus · 30 km.gpx");
   const [fit] = await Promise.all([page.waitForEvent("download", { timeout: TIMEOUT }), page.getByRole("button", { name: "Download FIT" }).click()]);
-  assert.equal(fit.suggestedFilename(), "Berendries-lus.fit");
+  assert.equal(fit.suggestedFilename(), "Berendries-lus · 30 km.fit");
   // Een geslaagde download mag geen foutmelding achterlaten (bv. "Illegal invocation").
   await page.waitForTimeout(300);
   assert.equal(await alerts(page).count(), 0, `onverwachte melding: ${await alerts(page).allInnerTexts()}`);
@@ -1043,7 +1043,7 @@ test("startscherm: eigen notities gaan via het gesprek, niet via de snelplanner"
     "POST /api/conversations": () => json(200, { conversation }),
     "GET /api/conversations/c7/messages": () => json(200, { conversation, messages: [] }),
     "POST /api/conversations/c7/messages/stream": ({ body }) => {
-      assert.equal(body.content, "Een wandeling van 6 km vanuit Markt, Wetteren. rustig, langs het water, met de kinderen");
+      assert.equal(body.content, "Een wandeling van 6 km vanuit Markt, Wetteren (activiteit: wandelen). rustig, langs het water, met de kinderen");
       return sse([["result", { message: { id: "a1", conversation_id: "c7", role: "assistant", content: "Ik stel je drie vragen.", created_at: "2026-10-19T19:00:01Z" }, route_ids: [] }]]);
     },
   } });

@@ -340,7 +340,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       const separator = path.includes("?") ? "&" : "?";
       const downloadUrl = poiKind === "alle" ? path : `${path}${separator}poi=${encodeURIComponent(poiKind)}`;
       const blob = await authenticatedBlob(downloadUrl, session.accessToken);
-      saveBlob(blob, safeFilename(selectedRoute.name, format));
+      saveBlob(blob, safeFilename(selectedRoute.total_km != null ? `${routeTitle(selectedRoute)} · ${selectedRoute.total_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km` : selectedRoute.name, format));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Download mislukt."); }
   };
 

@@ -26,3 +26,16 @@ export function reasonText(reden?: string | null): string {
   const text = (reden || "").replace(/;\s*[^;]*onbekend\.?\s*$/i, "").trim();
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
+
+const TOPICS: Record<string, string> = { startplaats: "Startplaats", ondergrond: "Ondergrond", heuvels: "Heuvels", fietspaden: "Fietspaden", oversteken: "Oversteken", stil: "Rustige wegen", kasseien: "Kasseien" };
+
+/** Kort onderwerp voor het overzicht, zodat "Maakt me niet uit" zegt waarover het gaat. */
+export function questionTopic(question: RouteQuestion): string {
+  return (question.id && TOPICS[question.id]) || "";
+}
+
+/** Toon de reden alleen als ze iets toevoegt aan de vraag zelf. */
+export function reasonAddsInfo(question: RouteQuestion): boolean {
+  const reason = reasonText(question.reden).toLowerCase();
+  return Boolean(reason) && !question.vraag.toLowerCase().includes(reason.slice(0, 30));
+}
