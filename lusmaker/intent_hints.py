@@ -1,9 +1,10 @@
 """Deterministische backstop voor zwakkere modellen.
 
 Herkent een handvol ondubbelzinnige uitdrukkingen in de eerste vraag en vult
-daarmee uitsluitend ontbrekende (``None``) plan_route-argumenten aan. Een
-waarde die het model of de gebruiker al gaf wordt nooit overschreven, en bij
-twijfel blijft het veld leeg: de situationele vragen doen de rest.
+daarmee ontbrekende (``None``) plan_route-argumenten aan. Een voorkeur die het
+model al gaf wordt nooit overschreven; alleen een letterlijk genoemde activiteit
+("trail", "mtb") wint van de modelkeuze. Bij twijfel blijft het veld leeg: de
+situationele vragen doen de rest.
 """
 
 from __future__ import annotations

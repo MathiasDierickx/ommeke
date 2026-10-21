@@ -61,13 +61,13 @@ def test_chat_fills_only_null_preferences_from_the_user_message():
     assert values["ondergrond"] is None         # niet genoemd: onbekend blijft onbekend
 
 
-def test_chat_hints_never_override_what_the_model_already_chose():
+def test_chat_hints_keep_model_preferences_but_a_named_activity_wins():
     values = _plan_calls(
         "Vlakke mtb-rit zonder kasseien",
         {"start": "Gent", "activiteit": "gravel", "heuvels": "ok", "kasseien": None},
     )
-    assert values["activiteit"] == "gravel"
-    assert values["heuvels"] == "ok"
+    assert values["activiteit"] == "mtb"        # de gebruiker zei letterlijk mtb (sinds 21 okt 2026)
+    assert values["heuvels"] == "ok"            # een gekozen voorkeur blijft staan
     assert values["kasseien"] is False          # null = onbekend: wel aangevuld
 
 
