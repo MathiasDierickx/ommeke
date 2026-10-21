@@ -215,8 +215,8 @@ export function RouteDetail({
           {route.ready ? (
             <section className="route-steer" aria-label="Bijsturen">
               <div className="steer-chips">
-                <button disabled={adjusting || route.total_km == null || route.total_km <= 1} onClick={() => void adjust({ target_km: Math.max(1, (route.total_km || 0) - distanceStep) })}>Korter <small>−{distanceStep} km</small></button>
-                <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: (route.total_km || 0) + distanceStep })}>Langer <small>+{distanceStep} km</small></button>
+                <button disabled={adjusting || route.total_km == null || route.total_km <= 1} onClick={() => void adjust({ target_km: Math.max(1, Math.round((route.total_km || 0) - distanceStep)) })}>Korter <small>−{distanceStep} km</small></button>
+                <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: Math.round((route.total_km || 0) + distanceStep) })}>Langer <small>+{distanceStep} km</small></button>
                 {route.voorstellen?.map(proposal => <button key={proposal.titel} title={proposal.uitleg} disabled={adjusting} onClick={() => void adjust(proposal.adjust_route)}>{proposal.titel}</button>)}
               </div>
               {adjusting ? <RouteProgress event={{ stage: "adjusting", message: "Route aanpassen…" }} /> : null}
