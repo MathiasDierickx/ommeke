@@ -906,26 +906,26 @@ def _set_water_via(d: dict, request: dict, water_fn) -> bool:
     if not name or distance_km is None:
         return False
     segments = water_fn(name)
+    anchor = d.get("round_trip_anchor")
     via = draft.water_via_points(
         (d["start"]["lat"], d["start"]["lon"]),
         segments,
         distance_km,
+        toward=(anchor["lat"], anchor["lon"]) if anchor else None,
     )
     if not via:
         return False
     first = via[0]
     first_lat, first_lon = (first["lat"], first["lon"]) if isinstance(first, dict) else first
     reach_km = geo.haversine(d["start"]["lat"], d["start"]["lon"], first_lat, first_lon) / 1000.0
-    if reach_km > max(1.5, 0.5 * distance_km):
+    if not anchor and reach_km > max(1.5, 0.5 * distance_km):
         # De waterloop ligt te ver om binnen de gevraagde afstand te halen (Dender vanuit Wetteren).
         d["water_note"] = f"{name} ligt {reach_km:.0f} km van je start, te ver voor {distance_km:g} km"
         return False
     for point in via:
         lat, lon = (point["lat"], point["lon"]) if isinstance(point, dict) else point
         coverage.check_point({"lat": lat, "lon": lon}, "via-punt")
-    d["water_via"] = via
-    # Een waterloop en rond-plek zijn alternatieve lusankers; water wint.
-    d.pop("round_trip_anchor", None)
+    d["water_via"] = via  # een rond-plek blijft het keerpunt na het water (Donkmeer)
     d["opvullingen"] = []
     d["computed"] = None
     d.pop("_geometry", None)
@@ -1202,8 +1202,7 @@ def plan_route(
         for climb in _resolve_climbs(via_klimmen, climb_db):
             add_climb_fn(draft_id, climb["id"])
         d = load_fn(draft_id)
-        water_active = _set_water_via(d, request, water_fn)
-        if rond_plaats and not water_active:
+        if rond_plaats:
             anchor, _alternatives = resolve_fn(rond_plaats)
             candidates = anchor.pop("candidates", [])
             if candidates:
@@ -1213,6 +1212,7 @@ def plan_route(
             d["opvullingen"] = []
             d["computed"] = None
             d.pop("_geometry", None)
+        _set_water_via(d, request, water_fn)
         d["route_request"] = request
         save_fn(d)
         pending = _place_input(d, request, save_fn)
@@ -1555,8 +1555,7 @@ def adjust_route(
             d.pop("_geometry", None)
             d.pop("fill_note", None)
             d.pop("optimize_note", None)
-        water_active = _set_water_via(d, request, water_fn)
-        if effective_round_place and not water_active:
+        if effective_round_place:
             resolved = request.get("resolved_round_place") or {}
             if resolved.get("query") == effective_round_place:
                 anchor = dict(resolved["point"])
@@ -1571,6 +1570,7 @@ def adjust_route(
                 d["opvullingen"] = []
                 d["computed"] = None
                 d.pop("_geometry", None)
+        _set_water_via(d, request, water_fn)
         _update_auto_name(d, previous_request, request)
         d["route_request"] = request
         save_fn(d)

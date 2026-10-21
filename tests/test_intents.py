@@ -422,7 +422,6 @@ def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
             "Teststad",
             target_km=6,
             langs_water="Testrivier",
-            rond_plaats="Genegeerde plek",
             create_fn=lambda **_kwargs: {"id": state["id"]},
             load_fn=lambda _draft_id: state,
             route_fn=route_fn,

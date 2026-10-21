@@ -433,9 +433,13 @@ def _point_along_path(path, distance_m: float) -> tuple[float, float]:
 
 
 def water_via_points(
-    start_latlon, segments, target_km, *, max_points=8
+    start_latlon, segments, target_km, *, max_points=8, toward=None
 ) -> list[tuple[float, float]]:
-    """Kies deterministische via-punten vanaf de dichtste waterlooplocatie."""
+    """Kies deterministische via-punten vanaf de dichtste waterlooplocatie.
+
+    Met ``toward`` (een plek als Donkmeer) volgt de rij de richting die het dichtst
+    bij die plek komt en stopt ze op het waterpunt het dichtst erbij.
+    """
     if not segments or target_km <= 0 or max_points <= 0:
         return []
 
@@ -470,14 +474,22 @@ def water_via_points(
     else:
         forward = [projected, *segment[point_index + 1 :]]
         backward = [projected, *reversed(segment[: point_index + 1])]
-        # Bij gelijke lengte wint de oorspronkelijke OSM-richting.
-        path = (
-            forward
-            if geo.path_length(forward) >= geo.path_length(backward)
-            else backward
-        )
+        if toward is not None:
+            def closest(candidate):
+                return min(range(len(candidate)), key=lambda i: geo.haversine(*candidate[i][:2], *toward[:2]))
+            def gap(candidate):
+                return geo.haversine(*candidate[closest(candidate)][:2], *toward[:2])
+            path = forward if gap(forward) <= gap(backward) else backward
+            path = path[: closest(path) + 1]
+        else:
+            # Bij gelijke lengte wint de oorspronkelijke OSM-richting.
+            path = (
+                forward
+                if geo.path_length(forward) >= geo.path_length(backward)
+                else backward
+            )
     available_m = geo.path_length(path)
-    travel_m = min(target_km * 500.0, available_m)
+    travel_m = available_m if toward is not None else min(target_km * 500.0, available_m)
     if travel_m <= 0:
         return [projected]
     path = _trim_path(path, travel_m)
@@ -539,7 +551,7 @@ def _base_waypoints(d: dict, climb_db: dict) -> list[dict]:
         legs.append({"from": f"{c['name']} (voet)", "to": f"{c['name']} (top)",
                      "points": via, "climb": cid, "hints": [name_hint] * len(via)})
         prev_label, prev_pt = f"{c['name']} (top)", top
-    round_anchor = None if water_via else d.get("round_trip_anchor")
+    round_anchor = d.get("round_trip_anchor")
     if round_anchor:
         anchor = (round_anchor["lat"], round_anchor["lon"])
         anchor_label = round_anchor.get("label") or "rond-plek"
@@ -552,7 +564,14 @@ def _base_waypoints(d: dict, climb_db: dict) -> list[dict]:
                 }
             )
         prev_label, prev_pt = anchor_label, anchor
-    if d["loop"]:
+    if d["loop"] and water_via:
+        # "Zo lang mogelijk langs het water": ook de terugweg volgt de waterloop.
+        back = [prev_pt]
+        for point in [*reversed(water_via), start]:
+            if point != back[-1]:
+                back.append(point)
+        legs.append({"from": prev_label, "to": "start", "points": back, "langs_water": True})
+    elif d["loop"]:
         legs.append({"from": prev_label, "to": "start", "points": [prev_pt, start]})
     elif d.get("end"):
         end = (d["end"]["lat"], d["end"]["lon"])
@@ -854,9 +873,11 @@ def _route(
 
     for leg in legs:
         is_climb = "climb" in leg or "climb_segment" in leg
-        # klim-legs niet blokkeren door de eigen corridor: zonder avoid routen
+        # Klim-legs en de terugweg langs het water niet blokkeren door de eigen corridor:
+        # langs de rivier terug is daar precies de bedoeling (route 28e183).
+        own_corridor_ok = is_climb or leg.get("langs_water")
         route_kwargs = {
-            "avoid_polygons": place_areas(d) if is_climb else avoid,
+            "avoid_polygons": place_areas(d) if own_corridor_ok else avoid,
             "strict": preferences["strict"],
             "avoid_cobbles": preferences["avoid_cobbles"],
             "avoid_concrete": preferences["avoid_concrete"],

@@ -816,7 +816,7 @@ def main(argv=None):
     s.add_argument("--verwijder-klim", action="append", default=[])
     s.add_argument("--vermijd-plaats", action="append", default=[])
     s.add_argument("--niet-meer-vermijden", action="append", default=[])
-    s.add_argument("--sta-plaats-toe", action="append", default=[])
+    s.add_argument("--sta-plaats-toe", dest="sta_plaatsen_toe", action="append", default=[])
     s.add_argument("--max-km", type=float)
     s.add_argument("--target-km", type=float)
     s.add_argument("--tolerance-km", type=float)

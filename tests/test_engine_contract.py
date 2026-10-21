@@ -286,3 +286,32 @@ def test_refreshed_auto_name_is_persisted():
                              route_fn=lambda *_a: None, optimize_fn=optimize_fn,
                              persist_fn=lambda d: saved.append(d["name"]), pois_fn=lambda _d: [])
     assert state["name"] == "Rondrit rond Wetteren · 34 km" and saved[-1] == state["name"]
+
+
+def test_water_with_a_place_heads_to_the_place_and_returns_along_the_water():
+    from lusmaker import draft as draft_mod
+    river = [(51.0, 3.5 + index * 0.01) for index in range(11)]   # west-oost, 3.50 .. 3.60
+    state = {"id": "w2", "name": "x", "start": {"label": "Teststad", "lat": 51.001, "lon": 3.55},
+             "loop": True, "climbs": [], "avoid_places": [], "computed": None}
+    seen = {}
+
+    def route_fn(d, db):
+        seen["legs"] = draft_mod._waypoints(d, db)
+        d["computed"] = _state()["computed"] | {"total_km": 11.0}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        intents.plan_route(
+            "Teststad", target_km=6, activiteit="wandelen", langs_water="Testrivier", rond_plaats="Meer",
+            create_fn=lambda **_k: {"id": "w2"}, load_fn=lambda _i: state, route_fn=route_fn,
+            optimize_fn=lambda *_a, **_k: None, climbs_fn=dict, export_gpx_fn=_export,
+            export_preview_fn=_export, save_fn=lambda _d: None, exports_root=Path(tmp),
+            resolve_fn=lambda _q: ({"label": "Meer", "lat": 51.004, "lon": 3.505}, []),
+            water_fn=lambda _name: [river],
+        )
+    via = state["water_via"]
+    assert via[-1][1] <= 3.51 + 1e-9, "de waterpunten lopen naar het westen, richting het meer"
+    assert state["round_trip_anchor"]["label"] == "Meer"
+    legs = seen["legs"]
+    assert [leg["to"] for leg in legs][:2] == ["waterloop", "Meer"]
+    back = legs[-1]["points"]
+    assert legs[-1]["to"] == "start" and back[1:-1] == list(reversed([tuple(p) for p in via]))
