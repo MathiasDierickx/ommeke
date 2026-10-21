@@ -151,9 +151,10 @@ def place_round_trip_km(d: dict) -> float | None:
     from . import geo
     via = [tuple(p) for p in d.get("water_via") or []]
     if via:
-        # Langs een meanderende rivier: gemeten 20 km heenweg voor een ketting van 10,8 km.
+        # Langs een meanderende rivier: Donkmeer via de Schelde gaf 41,5 en 46 km op schattingen
+        # van 39 en 41 km met factor 1,8; 2,0 zit op beide metingen binnen 5 %.
         chain = [(start["lat"], start["lon"]), *via, (anchor["lat"], anchor["lon"])]
-        return round(2 * 1.8 * geo.path_length(chain) / 1000.0)
+        return round(2 * 2.0 * geo.path_length(chain) / 1000.0)
     crow_km = geo.haversine(start["lat"], start["lon"], anchor["lat"], anchor["lon"]) / 1000.0
     return round(2 * 1.4 * crow_km)
 
