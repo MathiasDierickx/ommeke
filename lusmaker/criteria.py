@@ -172,6 +172,8 @@ ANSWER_CRITERIA = {
     ("oversteken", "vermijd"): {"metriek": "oversteken", "richting": "laag", "gewicht": 1.0, "drempel": 0.3, "label": "Weinig drukke oversteken"},
     ("stil", "belangrijk"): {"metriek": "stil", "richting": "hoog", "gewicht": 1.0, "drempel": 0.6, "label": "Rustige wegen"},
     ("knooppunten", "graag"): {"metriek": "knooppunt", "richting": "hoog", "gewicht": 1.0, "drempel": 0.5, "label": "Over knooppuntroutes"},
+    ("speeltuin", "graag"): {"metriek": "speeltuin", "richting": "hoog", "gewicht": 1.0, "label": "Speeltuinen onderweg"},
+    ("toilet", "graag"): {"metriek": "toilet", "richting": "hoog", "gewicht": 1.0, "label": "Toilet onderweg"},
 }
 
 

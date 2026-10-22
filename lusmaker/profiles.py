@@ -22,12 +22,12 @@ STIL_VALUES = {None, "belangrijk", "ok"}
 KNOOPPUNTEN_VALUES = {None, "graag", "ok"}
 # Nullable situationele voorkeuren: null = onbekend (mag gevraagd worden),
 # "ok" = expliciet onverschillig (nooit meer vragen, niets wijzigen).
-OPTIONAL_PREFERENCES = ("heuvels", "ondergrond", "fietspaden", "oversteken", "stil", "knooppunten")
+OPTIONAL_PREFERENCES = ("heuvels", "ondergrond", "fietspaden", "oversteken", "stil", "knooppunten", "speeltuin", "toilet")
 # Sleutels van ``voorkeuren`` die per activiteit kunnen verschillen
 # (``vermijd_plaatsen`` is activiteitsneutraal en blijft bovenaan staan).
 ACTIVITY_PREFERENCE_KEYS = (
     "kasseien", "beton", "steenwegen", "autovrij", "heuvels", "ondergrond",
-    "fietspaden", "oversteken", "stil", "knooppunten",
+    "fietspaden", "oversteken", "stil", "knooppunten", "speeltuin", "toilet",
 )
 _NAME_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
@@ -65,6 +65,8 @@ def default_document(name: str = "standaard") -> dict:
             "oversteken": None,
             "stil": None,
             "knooppunten": None,
+            "speeltuin": None,
+            "toilet": None,
             "vermijd_plaatsen": [],
         },
         "voorkeuren_per_activiteit": {},
@@ -125,6 +127,8 @@ def _check_preference_value(key: str, value) -> None:
     elif key == "knooppunten":
         if value not in KNOOPPUNTEN_VALUES:
             raise ProfileError(f"knooppunten: ongeldige waarde {value!r}")
+    elif key in ("speeltuin", "toilet") and value not in {None, "graag", "ok"}:
+        raise ProfileError(f"{key}: ongeldige waarde {value!r}")
 
 
 def _validate_per_activity(raw) -> dict:
@@ -200,6 +204,7 @@ def _validate(profile: dict, expected_name: str | None = None) -> dict:
     if not isinstance(preferences, dict) or set(preferences) != {
         "kasseien", "beton", "steenwegen", "autovrij", "heuvels",
         "ondergrond", "fietspaden", "oversteken", "stil", "knooppunten", "vermijd_plaatsen",
+        "speeltuin", "toilet",
     }:
         raise ProfileError("voorkeuren bevatten ontbrekende of onbekende velden")
     for key in ("kasseien", "beton", "steenwegen"):

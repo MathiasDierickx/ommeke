@@ -13,6 +13,9 @@ from functools import lru_cache
 from typing import Any
 
 from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA, UPDATE_PROFILE_SCHEMA
+from .conversation_context import USER_TEXT
+
+_USER_TEXT = USER_TEXT  # compat: bestaande callers lezen dezelfde ContextVar
 
 from . import draft, funnel, intent_hints, intents, tenant, quotas, requests, telemetry, progress
 
@@ -429,9 +432,6 @@ Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een u
 # executor leest het voor de deterministische intent_hints. Een contextvar
 # houdt de bestaande ``execute(name, arguments, *, request_id)``-signatuur
 # (en de subklassen/fakes die erop leunen) ongewijzigd.
-_USER_TEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "lusmaker_chat_user_text", default=None
-)
 # Gesprek van de lopende beurt, zodat een nieuwe route eraan gekoppeld wordt.
 _CONVERSATION_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "lusmaker_chat_conversation_id", default=None
@@ -491,7 +491,7 @@ class RouteToolExecutor:
             values = {key: value for key, value in arguments.items() if key in allowed}
             # Backstop voor zwakkere modellen: vul uitsluitend ontbrekende of
             # null-voorkeuren aan uit het gebruikersbericht ("vlak", "mtb", ...).
-            text = user_text if user_text is not None else _USER_TEXT.get()
+            text = user_text if user_text is not None else USER_TEXT.get()
             if text:
                 values = {
                     key: value for key, value in intent_hints.apply(values, text).items()
@@ -623,11 +623,11 @@ class BedrockRouteAgent:
 
     def _reply(self, history: list[dict[str, Any]], request_id: str,
                usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:
-        token = _USER_TEXT.set(_latest_user_text(history))
+        token = USER_TEXT.set(_latest_user_text(history))
         try:
             return self._reply_inner(history, request_id, usage, state)
         finally:
-            _USER_TEXT.reset(token)
+            USER_TEXT.reset(token)
 
     def _reply_inner(self, history: list[dict[str, Any]], request_id: str,
                      usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:

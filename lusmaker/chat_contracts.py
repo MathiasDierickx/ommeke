@@ -57,6 +57,8 @@ UPDATE_PROFILE_SCHEMA = {
                         "oversteken": _choice("vermijd", "ok"),
                         "stil": _choice("belangrijk", "ok"),
                         "knooppunten": _choice("graag", "ok"),
+                        "speeltuin": _choice("graag", "ok"),
+                        "toilet": _choice("graag", "ok"),
                     },
                 },
             },

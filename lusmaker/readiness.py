@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
 from . import activities
 from . import questions as situational
+from . import question_composer
+from .conversation_context import USER_TEXT
 
 
 def _metric(probe: dict, terrain_key: str, quality_key: str | None = None, default=0):
@@ -140,6 +144,7 @@ _QUESTION_METRICS = {
     "kasseien": {"kassei"}, "heuvels": {"hoogtemeters"}, "ondergrond": {"onverhard", "offroad"},
     "fietspaden": {"fietspad"}, "oversteken": {"oversteken"}, "stil": {"stil"}, "knooppunten": {"knooppunt"},
     "autovrij": {"autovrij", "stil"}, "beton": {"beton"},
+    "speeltuin": {"speeltuin"}, "toilet": {"toilet"},
 }
 
 
@@ -181,7 +186,7 @@ def _place_distance_question(d: dict) -> dict | None:
     }
 
 
-def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
+def assess(d: dict, profiel: dict, climb_db: dict, *, composer=None, wens=None) -> dict:
     """Beoordeel welke routevoorkeuren nu materieel bevraagd moeten worden."""
     del climb_db  # de probe bevat de vooraf gefilterde klimpool al
     probe = d.get("_probe")
@@ -321,6 +326,23 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
                 }
             )
 
+    request = d.get("route_request") or {}
+    wens = USER_TEXT.get() if wens is None else wens
+    composer_enabled = composer is not None or os.environ.get("LUSMAKER_QUESTION_COMPOSER", "regels") == "bedrock"
+    if profiel["activiteit"] in {"wandelen", "wegloop", "stadsfiets"} and (wens or composer_enabled):
+        pois = (probe.get("terrein") or {}).get("pois_langs_route") or {}
+        for poi_id, label in (("speeltuin", "speeltuin"), ("toilet", "toilet")):
+            count = pois.get(poi_id, 0)
+            if isinstance(count, dict):
+                count = count.get("aantal", 0)
+            count = count or 0
+            questions.append({
+                "id": poi_id, "prioriteit": 6,
+                "reden": f"de verkenning passeert {count} {label}{'en' if label == 'speeltuin' and count != 1 else ('ten' if label == 'toilet' and count != 1 else '')}",
+                "vraag": f"Zijn {label}{'en' if label == 'speeltuin' else 'ten'} onderweg belangrijk?",
+                "opties": {value: {"patch": {"voorkeuren": {poi_id: value}}} for value in ("graag", "ok")},
+            })
+
     # Wat de gebruiker al als criterium zei, vragen we niet opnieuw.
     known = {c["metriek"] for c in (d.get("route_request") or {}).get("criteria") or []}
     questions = [q for q in questions if not (_QUESTION_METRICS.get(q["id"], set()) & known)]
@@ -333,8 +355,21 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
     # wie een plaats wil mijden zegt dat expliciet via adjust_route.
     non_blocking = {"vermijd_plaatsen"}
     blocking = [q for q in questions if q["id"] not in non_blocking]
-    ready = not blocking
-    visible = blocking[:3]
+    metrics = probe.get("terrein") or {}
+    compose_context = {
+        "activiteit": profiel.get("activiteit"), "doel": request.get("doel"),
+        "doelafstand": request.get("target_km"), "wenstekst": wens,
+        "metingen": {k: metrics[k] for k in ("pois_langs_route", "relief_m", "netwerk_in_buurt") if k in metrics},
+    }
+    visible = question_composer.compose(blocking, compose_context, provider=composer)
+    visible = visible[:3]
+    if blocking and blocking[0]["id"] == "plek_afstand" and (not visible or visible[0]["id"] != "plek_afstand"):
+        visible = [blocking[0], *[q for q in visible if q["id"] != "plek_afstand"]][:3]
+    selected_ids = {q["id"] for q in visible}
+    for optional_id in ("speeltuin", "toilet"):
+        if optional_id in unknown and optional_id not in selected_ids:
+            unknown.remove(optional_id)
+    ready = not any(q["id"] not in {"speeltuin", "toilet"} or q["id"] in selected_ids for q in blocking)
     if not visible:
         advice = "profiel is klaar; routeer nu met optimize"
     else:
@@ -347,6 +382,8 @@ def assess(d: dict, profiel: dict, climb_db: dict) -> dict:
             "gewichten": "gewichten",
             "vermijd_plaatsen": "plaatsvraag",
             "plek_afstand": "afstandsvraag",
+            "speeltuin": "speeltuinvraag",
+            "toilet": "toiletvraag",
         }
         advice = f"stel de {labels[visible[0]['id']]} eerst"
         if len(visible) > 1:
