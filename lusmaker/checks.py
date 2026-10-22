@@ -17,7 +17,7 @@ GROUPS = {
     "api": ["aws_app", "aws_chat", "aws_sharing", "aws_state", "draft_storage", "user_scope", "user_agent", "oauth", "quotas", "account", "pagination", "telemetry", "funnel", "observability", "requests", "pilot", "route_library", "quick_plan", "streaming"],
     "mcp": ["mcp", "mcp_evals", "appsdk", "artifacts", "preview", "contracts", "contract_matrix", "contract_gaps"],
     "infra": ["aws_deploy", "aws_gh_service"],
-    "tooling": ["checks", "e2e_prod", "metrics", "local_chat", "model_evals", "inspect_download"],
+    "tooling": ["checks", "e2e_prod", "metrics", "local_chat", "model_evals", "inspect_download", "benchmark"],
 }
 
 
