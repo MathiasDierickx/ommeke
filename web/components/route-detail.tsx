@@ -78,6 +78,7 @@ export function ElevationSparkline({ values }: { values?: RouteGeometry["elevati
         <path className="elevation-fill" d={`${chart.line} L${CHART_WIDTH},${CHART_HEIGHT} L0,${CHART_HEIGHT} Z`} />
         <path className="elevation-line" d={chart.line} />
       </svg>
+      <small className="elevation-source">Hoogtegegevens: Digitaal Vlaanderen</small>
     </figure>
   );
 }
@@ -88,6 +89,10 @@ export function QualityChips({ route }: { route: Route | SharedRoute }) {
     quality?.kassei_m != null ? `${Math.round(quality.kassei_m)} m kassei` : null,
     quality?.offroad_pct != null ? `${Math.round(quality.offroad_pct)}% offroad` : null,
     quality?.populair_pct != null ? `${Math.round(quality.populair_pct)}% populair` : null,
+    quality?.bos_pct != null ? `${Math.round(quality.bos_pct)}% bos of schaduw` : null,
+    quality?.verlicht_pct != null ? `${Math.round(quality.verlicht_pct)}% verlicht` : null,
+    quality?.trappen_m ? `${Math.round(quality.trappen_m)} m trappen` : null,
+    quality?.gecureerd_pct != null ? `${Math.round(quality.gecureerd_pct)}% knooppuntroutes` : null,
   ].filter((value): value is string => Boolean(value));
   if (!chips.length) return null;
   return <div className="quality-chips" aria-label="Routekwaliteit">{chips.map((chip) => <span key={chip}>{chip}</span>)}</div>;

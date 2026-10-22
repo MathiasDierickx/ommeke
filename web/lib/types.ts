@@ -72,6 +72,10 @@ export type RouteQuality = {
   populair_pct?: number;
   stil_pct?: number;
   autovrij_pct?: number;
+  bos_pct?: number;
+  verlicht_pct?: number;
+  trappen_m?: number;
+  gecureerd_pct?: number;
 };
 
 export type NearbyClimb = {

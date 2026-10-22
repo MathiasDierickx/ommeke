@@ -211,6 +211,7 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .elevation-profile { margin: .9rem 0 0; }
 .elevation-profile figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: .61rem; }
 .elevation-profile figcaption span:last-child { font-variant-numeric: tabular-nums; }
+.elevation-source { display: block; margin-top: .15rem; color: var(--muted); font-size: .58rem; text-align: right; }
 .elevation-profile svg { display: block; width: 100%; height: 4rem; margin-top: .25rem; overflow: visible; }
 .elevation-fill { fill: rgba(36, 90, 67, .1); stroke: none; }
 .elevation-line { fill: none; stroke: var(--green); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
