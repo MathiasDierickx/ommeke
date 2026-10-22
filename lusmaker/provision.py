@@ -266,13 +266,14 @@ def _registered(slug: str, home: Path) -> config.Region | None:
 
 
 def _default_build(region: config.Region, pbf_url: str) -> dict:
-    from . import climbs, data, gh_config, heat, osm
+    from . import climbs, data, gh_config, heat, omgeving, osm
 
     tvl_areas: list[str] = []
     with config.use_region(region.slug):
         setup_result = data.setup(pbf_url=pbf_url)
         extract = osm.build_extract(force=True)
         osm.build_gazetteer(extract, force=True)
+        environment = omgeving.build()
         config.ensure_dirs()
         config.CLIMBS_JSON.write_text(
             json.dumps({"climbs": {}, "failed": []}), encoding="utf-8"
@@ -295,6 +296,7 @@ def _default_build(region: config.Region, pbf_url: str) -> dict:
         "plaatsen": len(extract["places"]),
         "auto_klimmen": len(detected["auto"]),
         "tvl_areas": tvl_areas,
+        "omgeving": environment,
         "gh_files": gh_files,
     }
 

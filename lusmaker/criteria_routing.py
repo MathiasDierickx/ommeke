@@ -24,6 +24,7 @@ def priority_rules(criteria: list[dict] | None, *, profile: str) -> list[dict]:
             ("onverhard", "hoog"): [("surface == ASPHALT || surface == CONCRETE || surface == PAVED", 0.15 if item.get("hard") else max(0.6, 1 - 0.4 * weight))],
             ("offroad", "hoog"): [("surface == ASPHALT || surface == CONCRETE || surface == PAVED", 0.15 if item.get("hard") else max(0.6, 1 - 0.4 * weight))],
             ("fietspad", "hoog"): [("road_class != CYCLEWAY && bike_network == MISSING", factor)],
+            ("trappen", "laag"): [("road_class == STEPS", 0.05 if item.get("hard") else max(0.35, 1 - 0.6 * weight))],
         }.get((metric, direction), [])
         if metric == "knooppunt" and direction == "hoog" and profile == "quiet":
             conditions = [("bike_network == MISSING", factor)]

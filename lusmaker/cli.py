@@ -399,6 +399,12 @@ def cmd_heat_status(args):
     return heat.status()
 
 
+def cmd_omgeving(args):
+    from . import omgeving
+    with config.use_region(args.region):
+        return omgeving.build() if args.subcmd == "build" else omgeving.info()
+
+
 def cmd_draft_route(args):
     from . import climbs, draft
 
@@ -915,6 +921,15 @@ def main(argv=None):
     s = hsub.add_parser("status")
     _region_arg(s)
     s.set_defaults(func=cmd_heat_status)
+
+    o = sub.add_parser("omgeving", help="OSM-metingen voor bos en verlichting")
+    osub = o.add_subparsers(dest="subcmd", required=True)
+    s = osub.add_parser("build", help="bos- en verlichtingscellen uit regio-PBF bouwen")
+    _region_arg(s)
+    s.set_defaults(func=cmd_omgeving)
+    s = osub.add_parser("info", help="beschikbaarheid van de omgevingscache")
+    _region_arg(s)
+    s.set_defaults(func=cmd_omgeving)
 
     d = sub.add_parser("draft", help="routes bouwen")
     dsub = d.add_subparsers(dest="subcmd", required=True)
