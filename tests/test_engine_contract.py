@@ -37,15 +37,16 @@ def test_plan_route_geeft_criteria_als_objective_en_waarom_terug():
         )
     spec = calls[0]["objective"]["criteria"]
     assert [c["id"] for c in spec] == ["stil", "kassei"] and spec[0]["gewicht"] == 1.0
-    assert state["route_request"]["criteria"] == spec
+    assert [c["id"] for c in state["route_request"]["criteria"]] == ["stil", "kassei"]
     assert [(w["id"], w["ok"]) for w in result["waarom"]] == [("stil", True), ("kassei", True)]
     assert result["waarom"][0]["tekst"] == "81 % rustige wegen"
 
 
 def test_plan_route_weigert_onbekende_metriek():
     try:
-        intents.plan_route("Wetteren", target_km=9, criteria=[{"metriek": "bos"}],
-                           create_fn=lambda **_k: {"id": "x"}, load_fn=lambda _i: _state())
+        intents.plan_route("Wetteren", target_km=9, criteria=[{"metriek": "onbekend"}],
+                           create_fn=lambda **_k: {"id": "x"}, load_fn=lambda _i: _state(),
+                           save_fn=lambda _d: None)
     except intents.IntentError as exc:
         assert "onbekende metriek" in str(exc)
     else:
@@ -60,9 +61,14 @@ def test_plan_route_eind_maakt_rit_in_lijn_zonder_opvulling():
         created.update(kwargs)
         return {"id": "abc123"}
 
+    spec = [{"metriek": "bos", "gewicht": 1}]
+
     def route_fn(d, _db):
         routed.append(True)
+        from lusmaker import draft
+        assert draft.routing_preferences(d)["criteria"][0]["metriek"] == "bos"
         d["computed"] = _state()["computed"] | {"total_km": 21.0}
+        d["computed"]["kwaliteit"] = {"bos_pct": 70}
 
     def unexpected(*_a, **_k):
         raise AssertionError("rit in lijn mag niet optimaliseren")
@@ -70,12 +76,15 @@ def test_plan_route_eind_maakt_rit_in_lijn_zonder_opvulling():
     with tempfile.TemporaryDirectory() as tmp:
         result = intents.plan_route(
             "Wetteren", eind="Gent", activiteit="koersfiets",
+            criteria=spec,
             create_fn=create_fn, load_fn=lambda _i: state, route_fn=route_fn,
             optimize_fn=unexpected, climbs_fn=dict, export_gpx_fn=_export,
             export_preview_fn=_export, save_fn=lambda _d: None, exports_root=Path(tmp),
         )
     assert created["loop"] is False and created["end"] == "Gent"
     assert routed and result["km"] == 21.0 and state["route_request"]["eind"] == "Gent"
+    assert state["route_request"]["criteria"][0]["metriek"] == "bos"
+    assert result["waarom"][0]["tekst"] == "70 % door bos"
 
 
 def test_route_detail_toont_verkenning_en_waarom():

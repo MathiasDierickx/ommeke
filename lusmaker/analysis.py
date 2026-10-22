@@ -145,7 +145,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
     cobble_cells = surfaces.get("kassei", set())
     unpaved_cells = surfaces.get("onverhard", set())
     missing_surface, missing_unpaved = [], []
-    kassei = beton = steenweg = offroad = onverhard = fietspad = stil = 0.0
+    kassei = beton = steenweg = offroad = onverhard = fietspad = stil = trappen = 0.0
     for leg, det in zip(legs_geometry, legs_details):
         if not det and database is None:
             continue
@@ -167,6 +167,7 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         steenweg += detail_meters(leg, road_details, BIG_ROADS)
         fietspad += detail_meters(leg, road_details, CYCLEWAY_CLASSES)
         stil += detail_meters(leg, road_details, QUIET_CLASSES)
+        trappen += detail_meters(leg, road_details, {"steps"})
         leg_offroad = detail_meters(leg, road_details, OFFROAD_CLASSES)
         offroad += leg_offroad
         onverhard += leg_offroad
@@ -201,12 +202,20 @@ def route_stats(legs_geometry, legs_details, profile: str = "quiet") -> dict:
         "fietspad_pct": round(fietspad / total_m * 100, 1),
         "stil_m": round(stil),
         "stil_pct": round(stil / total_m * 100, 1),
+        "trappen_m": round(trappen),
     }
     cells = heat.popular_cells(profile)
     if cells is not None:
         pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
         hits = sum(1 for p in pts if geo.cell(*p) in cells)
         out["populair_pct"] = round(hits / max(len(pts), 1) * 100, 1)
+    from . import omgeving
+    environment = omgeving.load()
+    if environment is not None:
+        pts = geo.resample([(c[0], c[1]) for c in all_coords], 60.0)
+        for metric, key in (("bos", "bos_pct"), ("verlicht", "verlicht_pct")):
+            hits = sum(geo.cell(*point) in environment[metric] for point in pts)
+            out[key] = round(hits / max(len(pts), 1) * 100, 1)
     network_cells = vlaanderen["fiets"] | vlaanderen["wandel"]
     if vlaanderen["version"] == 2 and network_cells:
         pts = [(coordinate[0], coordinate[1]) for coordinate in all_coords]

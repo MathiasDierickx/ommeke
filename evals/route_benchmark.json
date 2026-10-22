@@ -252,6 +252,11 @@
           "richting": "laag",
           "gewicht": 1,
           "hard": false
+        },
+        {
+          "metriek": "verlicht",
+          "label": "Verlicht voor 's avonds",
+          "gewicht": 1
         }
       ]
     },
@@ -455,6 +460,11 @@
           "richting": "hoog",
           "gewicht": 1,
           "hard": false
+        },
+        {
+          "metriek": "bos",
+          "label": "Door het bos",
+          "gewicht": 1
         }
       ]
     },
@@ -629,6 +639,13 @@
           "richting": "hoog",
           "gewicht": 1,
           "hard": false
+        },
+        {
+          "metriek": "trappen",
+          "label": "Kinderwagen, geen trappen",
+          "richting": "laag",
+          "hard": true,
+          "drempel": 0
         }
       ]
     },
