@@ -202,8 +202,8 @@ def test_iteration_limit_does_not_present_needs_input_as_ready():
 
 
 def test_needs_input_prompt_refers_to_buttons_without_raw_answer_instructions():
-    assert "vat de meegegeven vragen samen in één of twee zinnen" in SYSTEM_PROMPT
-    assert "verwijs naar de knoppen" in SYSTEM_PROMPT
+    assert "herhaal de vragen niet" in SYSTEM_PROMPT
+    assert "kaarten met knoppen" in SYSTEM_PROMPT
     assert "geen indexnummers en geen coördinaten" in SYSTEM_PROMPT
     assert "vraag nooit om sleutel = waarde te typen" in SYSTEM_PROMPT
     assert "Vrije tekstantwoorden" in SYSTEM_PROMPT
