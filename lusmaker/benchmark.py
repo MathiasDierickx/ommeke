@@ -57,7 +57,8 @@ def run(cases, *, planner=intents.plan_route, answer=intents.apply_answers,
                             "draft": draft_id}
             expected = case["verwacht"]
             target = route_request.get("target_km")
-            maximum = route_request.get("max_km")
+            # Alleen een expliciet maximum is hard; doel + tolerantie is een zacht plafond.
+            maximum = route_request.get("max_km") if route_request.get("max_km_explicit", True) else None
             if target and km is not None and abs(km - target) / target * 100 > expected["km_tolerantie_pct"]:
                 errors.append(f"afstand {km} km buiten tolerantie van {target} km")
             elif maximum and km is not None and km > maximum:

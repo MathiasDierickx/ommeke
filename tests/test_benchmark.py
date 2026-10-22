@@ -75,3 +75,19 @@ def test_needs_input_place_selection_uses_first_candidate():
         return {"id": "bench-place", "computed": {"total_km": 1, "ascend_m": 0}, "_geometry": [[(51, 3), (51.001, 3)]], "route_request": {"target_km": 1}}
     benchmark.run([case], planner=planner, answer=answer, load=load)
     assert answers == [({"startplaats": "0"}, {})]
+
+
+def test_soft_ceiling_is_not_a_hard_maximum():
+    from lusmaker import benchmark
+    draft_state = {"id": "b1", "loop": True, "start": {"lat": 51.0, "lon": 3.87},
+                   "route_request": {"target_km": 50, "max_km": 52.5, "max_km_explicit": False},
+                   "computed": {"total_km": 55.8, "ascend_m": 100, "legs": [], "kwaliteit": {}},
+                   "_geometry": [[(51.0, 3.87, 5), (51.05, 3.9, 6), (51.0, 3.87, 5)]]}
+    case = {"id": "x", "regio": "R", "plan": {"start": "S", "activiteit": "toerfiets", "target_km": 50},
+            "verwacht": {"km_tolerantie_pct": 25, "max_heen_en_weer_m": 1e9, "max_sluiting_m": 100,
+                         "max_spreiding": 1, "criteria_ok": [], "max_seconden": 999}}
+    result = benchmark.run([case], planner=lambda **_k: {"status": "ready", "draft": "b1"},
+                           answer=lambda *_a, **_k: {"status": "ready", "draft": "b1"},
+                           load=lambda _i: draft_state)
+    rows = result.get("cases") or result.get("resultaten")
+    assert not any("maximum" in f for f in rows[0]["fouten"])
