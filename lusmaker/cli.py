@@ -210,6 +210,22 @@ def cmd_region_info(args):
             **pack_manifest.describe({"slug": region.slug, **pack_manifest.metadata(region)})}
 
 
+def cmd_terrain(args):
+    from . import terrain, draft
+    if args.subcmd == "fetch": return terrain.fetch_tiles(args.dest)
+    if args.subcmd == "build":
+        src=Path(args.src); return terrain.build_grid(sorted(src.glob('*.zip'))+sorted(src.glob('*.tif')), args.out or src/'terrain', args.cell)
+    if args.subcmd == "info":
+        d=terrain.grid_dir(); path=d/'dtm20.json'
+        return {"beschikbaar":terrain.available(),"map":str(d),**(json.loads(path.read_text()) if path.exists() else {})}
+    if args.subcmd == "sample": return {"lat":args.lat,"lon":args.lon,"hoogte_m":terrain.sample([(args.lat,args.lon)])[0]}
+    item=draft.load(args.id)
+    coords=[point for leg in item.get('_geometry',[]) for point in leg]
+    if not coords: raise ValueError('draft heeft geen gerouteerde coördinaten')
+    result=terrain.ascent(coords)
+    return {"draft_id":args.id,"dtm_hoogtemeters":result['ascend_m'],"srtm_hoogtemeters":item.get('computed',{}).get('ascend_m')}
+
+
 def cmd_geocode(args):
     from . import geocode
 
@@ -650,6 +666,14 @@ def main(argv=None):
     s = sub.add_parser("setup", help="download OSM-extract + DEM en schrijf GraphHopper-config")
     _region_arg(s)
     s.set_defaults(func=cmd_setup)
+
+    t=sub.add_parser("terrain",help="Vlaams DTM beheren en hoogtes inspecteren")
+    ts=t.add_subparsers(dest="subcmd",required=True)
+    s=ts.add_parser("fetch"); s.add_argument("--dest",required=True); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("build"); s.add_argument("--src",required=True); s.add_argument("--out"); s.add_argument("--cell",type=int,default=20); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("info"); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("sample"); s.add_argument("lat",type=float); s.add_argument("lon",type=float); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("ascent"); s.add_argument("id"); s.set_defaults(func=cmd_terrain)
 
     s = sub.add_parser("build", help="bouw lokale caches: extract, gazetteer, klim-database")
     _region_arg(s)

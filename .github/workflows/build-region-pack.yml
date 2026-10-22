@@ -65,6 +65,12 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
 
+      - name: Bouw DTM Vlaanderen
+        if: inputs.slug == 'vlaanderen'
+        run: |
+          python -m lusmaker.cli terrain fetch --dest /tmp/dhm-tiles
+          python -m lusmaker.cli terrain build --src /tmp/dhm-tiles --out "$LUSMAKER_HOME/regions/vlaanderen/terrain"
+
       - name: Bouw graph, caches en regiopack
         env:
           LUSMAKER_PACK_UPLOAD: s3://${{ env.TF_STATE_BUCKET }}/region-packs
