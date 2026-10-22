@@ -1269,3 +1269,14 @@ def test_legacy_auto_name_detection_is_conservative():
         original = state['name']
         intents._update_auto_name(state, request, updated)
         assert state['name'] == original
+
+
+def test_model_name_with_tilde_distance_follows_the_actual_km():
+    # Live: "Wandeling Wetteren – Donkmeer ~12 km" bleef staan bij 9,9 km (route 22afea).
+    for name in ("Wandeling Wetteren – Donkmeer ~12 km", "Lus Gent (12 km)", "Rondje - 12km"):
+        d = {"name": name, "name_auto": True}
+        intents._refresh_auto_name(d, 9.94)
+        assert d["name"].endswith(" · 9,9 km") and "12" not in d["name"], d["name"]
+    d = {"name": "Mijn 12 km", "name_auto": False}
+    intents._refresh_auto_name(d, 9.9)
+    assert d["name"] == "Mijn 12 km"
