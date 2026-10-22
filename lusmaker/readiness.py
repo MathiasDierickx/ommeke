@@ -340,7 +340,7 @@ def assess(d: dict, profiel: dict, climb_db: dict, *, composer=None, wens=None) 
                 "id": poi_id, "prioriteit": 6,
                 "reden": f"de verkenning passeert {count} {label}{'en' if label == 'speeltuin' and count != 1 else ('ten' if label == 'toilet' and count != 1 else '')}",
                 "vraag": f"Zijn {label}{'en' if label == 'speeltuin' else 'ten'} onderweg belangrijk?",
-                "opties": {value: {"patch": {"voorkeuren": {poi_id: value}}} for value in ("graag", "ok")},
+                "opties": {value: situational._patch(poi_id, value) for value in ("graag", "ok")},
             })
 
     # Wat de gebruiker al als criterium zei, vragen we niet opnieuw.

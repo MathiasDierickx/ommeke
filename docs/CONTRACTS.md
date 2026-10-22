@@ -65,6 +65,8 @@ Een dubbelzinnige start of `rond_plaats` geeft eerst alleen de vraag
 een leesbaar label en een patch met lat/lon/label. De server bewaart de kandidaten;
 de client stuurt alleen de optiesleutel. Pas na de keuze draait de locatieafhankelijke
 probe. Bij twee dubbelzinnige plaatsen volgen de plaatsvragen één voor één.
+Elke optie van elke vraag draagt een leesbaar `label` (bv. "Liever niet"); toon dat in
+plaats van een eigen tabel per optiesleutel.
 
 ## adjust_route
 
