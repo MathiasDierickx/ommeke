@@ -376,7 +376,7 @@ def test_plan_route_defaults_landmark_loop_to_five_km():
     assert calls[0]["max_km"] == 7.5
 
 
-def test_water_via_points_follow_longest_direction_for_half_target():
+def test_water_via_points_follow_longest_direction_for_35_percent_of_target():
     river = [(51.0, 3.0 + index * 0.01) for index in range(11)]
     start = (51.001, 3.04)
 
@@ -389,7 +389,7 @@ def test_water_via_points_follow_longest_direction_for_half_target():
     assert all(abs(lat - 51.0) < 1e-9 for lat, _lon in first)
     assert first[0][1] == 3.04
     assert all(a[1] <= b[1] for a, b in zip(first, first[1:]))
-    assert 2_950 <= geo.path_length(first) <= 3_050
+    assert 2_050 <= geo.path_length(first) <= 2_150      # 35 % van 6 km: heen én terug langs het water
 
 
 def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
@@ -441,7 +441,7 @@ def test_plan_route_passes_waterway_via_points_to_router_without_optimizing():
         *via,
     ]
     assert all(abs(lat - 51.0) < 1e-9 for lat, _lon in via)
-    assert 2_950 <= geo.path_length(via) <= 3_050
+    assert 2_050 <= geo.path_length(via) <= 2_150
     assert state["route_request"]["langs_water"] == "Testrivier"
     assert state["route_request"]["input_signature"]["langs_water"] == "Testrivier"
 

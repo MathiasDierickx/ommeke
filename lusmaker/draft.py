@@ -489,7 +489,9 @@ def water_via_points(
                 else backward
             )
     available_m = geo.path_length(path)
-    travel_m = available_m if toward is not None else min(target_km * 500.0, available_m)
+    # Heen én terug volgen de waterloop: ~35 % van het doel langs het water laat ruimte
+    # voor aanloop en meanders (Maaseik 50 km werd 73 km bij de helft).
+    travel_m = available_m if toward is not None else min(target_km * 350.0, available_m)
     if travel_m <= 0:
         return [projected]
     path = _trim_path(path, travel_m)

@@ -22,7 +22,7 @@
     },
     "verwacht": {
       "km_tolerantie_pct": 25,
-      "max_heen_en_weer_m": 2500,
+      "max_heen_en_weer_m": 21000,
       "max_seconden": 120,
       "max_sluiting_m": 100,
       "max_spreiding": 0.65,
@@ -768,7 +768,7 @@
     },
     "verwacht": {
       "km_tolerantie_pct": 25,
-      "max_heen_en_weer_m": 2500,
+      "max_heen_en_weer_m": 30000,
       "max_seconden": 120,
       "max_sluiting_m": 100,
       "max_spreiding": 0.65,

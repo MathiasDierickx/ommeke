@@ -14,6 +14,7 @@ from .errors import DraftError
 
 FLAT = "vlak"
 CIRCLE_SEED_BASE = 100
+CIRCLE_MAX_SPUR_M = 400.0
 _LEGACY_HM = "__legacy_hm__"
 _LOAD_HEAT = object()
 
@@ -612,6 +613,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         if candidate is None:
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
+        if seed >= CIRCLE_SEED_BASE and geo.self_retrace_m([coords]) > CIRCLE_MAX_SPUR_M:
+            continue  # cirkel met een spoor heen en terug naar een tussenpunt (Wetteren: 4,5 km)
         if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:
             continue
         overlap_m = max(
