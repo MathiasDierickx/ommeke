@@ -262,7 +262,8 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   heat_activity: str | None = None,
                   activity: str | None = None,
                   prefer_paved: bool = False,
-                  prefer_cycleways: bool = False) -> dict:
+                  prefer_cycleways: bool = False,
+                  criteria: list[dict] | None = None) -> dict:
     """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes.
 
     ``activity`` kiest het request-time fragment uit ``activities``. Zonder
@@ -303,6 +304,14 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
         custom["priority"].append(
             {"if": "in_onverhard", "multiply_by": "0.55"}
         )
+    if criteria:
+        from .criteria_routing import priority_rules
+        for rule in priority_rules(criteria, profile=profile):
+            previous = next((r for r in custom["priority"] if r.get("if") == rule["if"]), None)
+            if previous:
+                previous["multiply_by"] = str(min(float(previous["multiply_by"]), float(rule["multiply_by"])))
+            else:
+                custom["priority"].append(rule)
     if avoid_polygons:
         features = []
         for k, item in enumerate(avoid_polygons):
@@ -388,6 +397,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           activity: str | None = None,
           prefer_paved: bool = False,
           prefer_cycleways: bool = False,
+          criteria: list[dict] | None = None,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
@@ -452,6 +462,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         avoid_busy, profile=profile, area_evs=area_evs,
         heat_activity=heat_activity, activity=activity,
         prefer_cycleways=prefer_cycleways, prefer_paved=prefer_paved,
+        criteria=criteria,
     )
 
     data = post_fn("/route", body)
@@ -496,6 +507,7 @@ def round_trip(point, distance_m: float, seed: int,
                activity: str | None = None,
                prefer_paved: bool = False,
                prefer_cycleways: bool = False,
+               criteria: list[dict] | None = None,
                area_evs: set[str] | frozenset[str] | None = None,
                post_fn=_post) -> dict:
     """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
@@ -516,6 +528,7 @@ def round_trip(point, distance_m: float, seed: int,
             avoid_busy, profile=profile, area_evs=area_evs,
             heat_activity=heat_activity, activity=activity,
             prefer_cycleways=prefer_cycleways, prefer_paved=prefer_paved,
+            criteria=criteria,
         ),
     }
     if details:

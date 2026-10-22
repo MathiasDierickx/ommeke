@@ -705,6 +705,10 @@ def routing_preferences(d: dict) -> dict:
     # Antwoorden op de situationele vragen gelden voor deze rit.
     if explicit.get("oversteken") == "vermijd":
         effective["strict"] = True
+    request = d.get("route_request") or {}
+    if request.get("criteria"):
+        from . import criteria
+        effective["criteria"] = criteria.with_goal(request["criteria"], request.get("doel"))
     return effective
 
 
@@ -892,6 +896,7 @@ def _route(
             "avoid_busy": preferences["avoid_busy"],
             "details": True,
             "profile": preferences["profile"],
+            "criteria": preferences.get("criteria"),
             "heat_activity": _heat_activity(d),
             **_activity_kwargs(d),
         }
@@ -1044,6 +1049,7 @@ def probe(
             avoid_concrete=preferences["avoid_concrete"],
             avoid_busy=preferences["avoid_busy"],
             profile=preferences["profile"],
+            criteria=preferences.get("criteria"),
             heat_activity=_heat_activity(d),
             **_activity_kwargs(d),
             details=True,
