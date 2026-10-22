@@ -2,9 +2,9 @@ from lusmaker import pack_manifest, heat
 from tests.test_aws_state import _aws_bucket
 
 
-def test_pack_version_validation_accepts_legacy_but_rejects_incompatible_data():
-    assert pack_manifest.validate({'slug': 'vlaanderen'})['legacy']
-    for manifest in ({'pack_format_version': 99}, {'extract_format_version': -1}, {'gh_image': 'wrong:version'}):
+def test_pack_version_validation_rejects_legacy_and_incompatible_data():
+    for manifest in ({'slug': 'vlaanderen'}, {'pack_format_version': 99},
+                     {'extract_format_version': -1}, {'gh_image': 'wrong:version'}):
         try:
             pack_manifest.validate(manifest)
         except ValueError:

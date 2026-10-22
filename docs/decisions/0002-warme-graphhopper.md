@@ -1,6 +1,6 @@
 # 0002 — Altijd-warme GraphHopper achter een schakelaar
 
-- Status: aangenomen, uitrol en metingen nog uit te voeren
+- Status: aangenomen 6 oktober 2026; uitgesteld 19 oktober 2026 (serverless-besluit)
 - Datum: 6 oktober 2026
 - Issue: #19
 
@@ -67,3 +67,10 @@ Terraform verwijdert de service inclusief graphvolume. De S3-bronpack blijft.
 
 Er zijn tijdens deze implementatie geen AWS-resources toegepast, geen live
 smoke-tests uitgevoerd en geen latentie- of geheugencijfers gemeten.
+
+## Herziening 22 oktober 2026
+
+Uitgesteld omdat zero cost bij zero calls de vaste EC2-kosten niet rechtvaardigt.
+LM in de Lambda is het serverless alternatief: GraphHopper bereidt LM bij de regiopackbuild voor.
+`gh_service_enabled` blijft `false`; Ommeke blijft zonder EC2 en provisioned concurrency.
+Zie [Landmarks in het regiopack](../AWS.md#landmarks-in-het-regiopack-19) in docs/AWS.md.

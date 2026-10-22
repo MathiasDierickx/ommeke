@@ -521,3 +521,34 @@ def round_trip(point, distance_m: float, seed: int,
     if details:
         body["details"] = ["surface", "road_class"]
     return _path_result(post_fn("/route", body), details)
+
+
+def bench_router(n: int = 10, *, route_fn=route, round_trip_fn=round_trip,
+                 circle_round_trip_fn=circle_round_trip) -> dict:
+    """Meet vaste representatieve GraphHopper-calls en rapporteer percentielen."""
+    if n <= 0:
+        raise ValueError("n moet positief zijn")
+    min_lat, min_lon, max_lat, max_lon = config.current_region().bbox
+    point = ((min_lat + max_lat) / 2, (min_lon + max_lon) / 2)
+    other = (point[0] + 0.005, point[1] + 0.005)
+    calls = {
+        "route": lambda: route_fn([point, other], activity="toerfiets"),
+        "round_trip": lambda: round_trip_fn(point, 12000, 17, activity="toerfiets"),
+        "circle_round_trip": lambda: circle_round_trip_fn(point, 12000, 17, activity="toerfiets"),
+    }
+    report = {}
+    for call_type, call in calls.items():
+        samples = []
+        for _ in range(n):
+            started = time.perf_counter()
+            call()
+            samples.append((time.perf_counter() - started) * 1000)
+        samples.sort()
+
+        def percentile(value):
+            index = (len(samples) - 1) * value
+            low, high = math.floor(index), math.ceil(index)
+            return round(samples[low] + (samples[high] - samples[low]) * (index - low), 1)
+
+        report[call_type] = {"n": n, "p50_ms": percentile(0.50), "p95_ms": percentile(0.95)}
+    return report
