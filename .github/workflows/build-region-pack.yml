@@ -58,18 +58,19 @@ jobs:
       - name: Installeer Lusmaker
         run: python -m pip install --disable-pip-version-check -e .
 
+      - name: Bouw DTM Vlaanderen
+        if: inputs.slug == 'vlaanderen'
+        run: |
+          python -m lusmaker.cli terrain fetch --dest /tmp/dhm-tiles
+          python -m lusmaker.cli terrain build --src /tmp/dhm-tiles --out "$LUSMAKER_HOME/regions/vlaanderen/terrain"
+
+      # Pas na de DTM-bouw (~50 min, geen AWS nodig): het OIDC-token leeft een uur.
       - name: Neem tijdelijke AWS-credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
-
-      - name: Bouw DTM Vlaanderen
-        if: inputs.slug == 'vlaanderen'
-        run: |
-          python -m lusmaker.cli terrain fetch --dest /tmp/dhm-tiles
-          python -m lusmaker.cli terrain build --src /tmp/dhm-tiles --out "$LUSMAKER_HOME/regions/vlaanderen/terrain"
 
       - name: Bouw graph, caches en regiopack
         env:
