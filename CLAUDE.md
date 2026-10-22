@@ -50,6 +50,7 @@ webapp of taalmodel kunt itereren (GraphHopper lokaal:
 | Routemotor benchmarken (lokale GraphHopper) | `lus benchmark [--only bredene,kemmel] [--json /tmp/benchmark.json] [--md /tmp/benchmark.md] [--opruimen]` |
 | Verkenning + vragen | `lus plan-route --start ... --target-km N --profiel-naam standaard --check-readiness [--criteria '<json>']` |
 | Een vraag beantwoorden (wordt ook criterium) | `lus draft answer <id> oversteken=vermijd stil=belangrijk`; "maak 'm maar" zonder antwoorden = `lus adjust-route <id>` |
+| Vraagkandidaten en formulering inspecteren | `lus draft questions <id> [--composer regels|bedrock] [--wens "<tekst>"]` |
 | Rit in lijn | `lus plan-route --start A --eind B --activiteit koersfiets` |
 | Waarom deze route (offline op een gerouteerde draft) | `lus criteria explain <id> [--criteria '<json>']` |
 | Kandidaatkeuze met criteria | `lus draft optimize <id> --max-km 45 --criteria '<json>'` |

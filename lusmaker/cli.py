@@ -417,6 +417,24 @@ def cmd_draft_readiness(args):
         return readiness.assess(d, profiles.load(args.profiel_naam), climb_db)
 
 
+def cmd_draft_questions(args):
+    from . import climbs, draft, profiles, readiness, question_composer
+
+    d = draft.load(args.id)
+    captured = {}
+    def choose(candidates, context):
+        captured["kandidaten"] = candidates
+        captured["context"] = context
+        if args.composer == "bedrock":
+            return question_composer._bedrock(candidates, context)
+        return question_composer.deterministic(candidates, context)
+    with draft.region_scope(d):
+        climb_db = climbs.all_climbs()
+        draft.probe(d, climb_db)
+        result = readiness.assess(d, profiles.load("standaard"), climb_db, composer=choose, wens=args.wens)
+    return {"kandidaten": captured.get("kandidaten", []), "vragen": result["vragen"]}
+
+
 def cmd_draft_suggest(args):
     from . import climbs, draft
 
@@ -1027,6 +1045,12 @@ def main(argv=None):
     s.add_argument("id")
     s.add_argument("--profiel-naam", default="standaard")
     s.set_defaults(func=cmd_draft_readiness)
+    s = dsub.add_parser("questions", help="inspecteer vraagkandidaten en composerkeuze")
+    _region_arg(s)
+    s.add_argument("id")
+    s.add_argument("--composer", choices=("regels", "bedrock"), default="regels")
+    s.add_argument("--wens")
+    s.set_defaults(func=cmd_draft_questions)
     s = dsub.add_parser("suggest", help="klimmen die weinig omweg vragen")
     _region_arg(s)
     s.add_argument("id")

@@ -261,3 +261,8 @@ gecontroleerd.
   hebben er een op MCP, chat (impliciet) en web, niet op de CLI. Bij web-adjust
   is `request_id` optioneel en telt `max_km` (afgeleid van de huidige lengte)
   niet mee in de vergelijking.
+# Vraagteksten
+
+Vraagteksten kunnen door het taalmodel kort worden herschreven op basis van de
+verkenningsmeting. Vraag-ids en antwoordopties blijven deterministisch en
+ongewijzigd; antwoorden op knoppen worden door de engine verwerkt.

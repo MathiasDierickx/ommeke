@@ -374,6 +374,7 @@ resource "aws_lambda_function" "app" {
       AWS_LWA_INVOKE_MODE         = "response_stream"
       JAVA_OPTS                   = var.java_opts
       LUSMAKER_BEDROCK_MODEL_ID   = var.bedrock_model_id
+      LUSMAKER_QUESTION_COMPOSER  = "bedrock"
       LUSMAKER_BEDROCK_REGION     = var.aws_region
       LUSMAKER_CHAT_TABLE         = aws_dynamodb_table.chat.name
       LUSMAKER_AUTH_MODE          = "cognito"

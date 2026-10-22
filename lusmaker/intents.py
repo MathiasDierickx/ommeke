@@ -1294,6 +1294,8 @@ ANSWER_VALUES = {
     "stil": {"belangrijk", "ok"},
     "knooppunten": {"graag", "ok"},
     "plek_afstand": {"ruimer", "zonder"},
+    "speeltuin": {"graag", "ok"},
+    "toilet": {"graag", "ok"},
 }
 
 
