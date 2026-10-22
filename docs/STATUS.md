@@ -39,7 +39,7 @@ is geen E2E-bewijs.
 | Packprovenance (#14) | Manifest, hashes, versievalidatie | Pack-tests | `/health` toont `region_pack` | Reviewer herbouwt legacy packs |
 | Pagineren routebibliotheek (#15) | Keysetpagina's, `order=updated` met S3-metadata, zoeken/filter in UI | 248+ tests, I/O-proef 100 routes: 20 HEAD-reads | | Zoekindex over alle routes |
 | MCP-distributie (#17) | Lite- en full-toolset, submissionchecklist, ChatGPT-component | Protocoltests | | Echte Claude/ChatGPT-review en directorysubmission |
-| Latentie (#19) | Kandidaatcache per optimize-run, hit/miss-tellers; MMAP-fix tegen Lambda-OOM | Unit-tests | Koude start API 3,5 s (was 19 s); Lambda-OOM opgelost via MMAP | Warme GraphHopper-service, p50/p95-doel |
+| Latentie (#19) | Kandidaatcache per optimize-run; LM voorbereid in regiopack voor quiet/trail; `lus bench-router` | Config- en LM-veiligheidstests | Koude start API 3,5 s (was 19 s); Lambda-OOM opgelost via MMAP | p50/p95 voor/na packbuild, preparatieduur en geheugen meten |
 | Dekking en packs (#20) | Bredene op geïsoleerde kustdata; coördinatenvalidatie | Bredene-test | Bredene 5 km live | Volledig Vlaanderen-pack, gestructureerde dekkingsfout |
 | Fietscomputer-export (#21) | FIT-course-encoder, GPX-cues, API/CLI/webdownload | CRC- en parserproeven | FIT-download in Chrome: CRC ok, sport `walking`; GPX 1007 trackpunten, 199 aanwijzingen | Echt Garmin-toestel; providerpush uitgesteld |
 | Snelplanner (#22) | GPS, afstand, activiteit, doel, quota/receipts, vraagknoppen | Browserproef na standaardprofielfix | Zie "Nieuwe route via snelformulier" | Mobiele layout |

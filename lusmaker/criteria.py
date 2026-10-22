@@ -78,6 +78,9 @@ METRICS = {
     "populair": ("Populaire wegen", "populair", _pct("populair_pct"), lambda q, c: _pct_text(q, "populair_pct", "bekende wegen")),
     "autovrij": ("Autovrij", "autovrij", _pct("autovrij_pct"), lambda q, c: _pct_text(q, "autovrij_pct", "autovrij")),
     "stil": ("Rustige wegen", "stil", _pct("stil_pct"), lambda q, c: _pct_text(q, "stil_pct", "rustige wegen")),
+    "bos": ("Bos en schaduw", "bos", _pct("bos_pct"), lambda q, c: _pct_text(q, "bos_pct", "door bos")),
+    "verlicht": ("Verlichte wegen", "verlicht", _pct("verlicht_pct"), lambda q, c: _pct_text(q, "verlicht_pct", "verlicht")),
+    "trappen": ("Trappen", "trappen", _meters("trappen_m"), lambda q, c: f"{round(q.get('trappen_m') or 0)} m trappen"),
     "kassei": ("Kasseien", "kassei", _meters("kassei_m"), lambda q, c: f"{(q.get('kassei_m') or 0) / 1000:.1f} km kassei".replace(".", ",")),
     "beton": ("Betonbanen", "beton", _meters("beton_m"), lambda q, c: f"{(q.get('beton_m') or 0) / 1000:.1f} km beton".replace(".", ",")),
     "steenweg": ("Steenwegen", "steenweg", _meters("steenweg_m"), lambda q, c: f"{(q.get('steenweg_m') or 0) / 1000:.1f} km steenweg".replace(".", ",")),
@@ -91,10 +94,10 @@ METRICS = {
 }
 # Natuurlijke richting per metriek. Vast = de andere richting is nooit zinvol
 # ('weinig rustige wegen' wil niemand); standaard = overschrijfbaar (kasseien graag, vlak).
-FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog", "knooppunt": "hoog",
+FIXED_DIRECTION = {"stil": "hoog", "autovrij": "hoog", "fietspad": "hoog", "kort": "hoog", "knooppunt": "hoog", "bos": "hoog", "verlicht": "hoog",
                    "toilet": "hoog", "speeltuin": "hoog", "zitbank": "hoog"}
 DEFAULT_DIRECTION = {"kassei": "laag", "beton": "laag", "steenweg": "laag", "oversteken": "laag",
-                     "hoogtemeters": "hoog", "offroad": "hoog", "onverhard": "hoog", "populair": "hoog"}
+                     "hoogtemeters": "hoog", "offroad": "hoog", "onverhard": "hoog", "populair": "hoog", "trappen": "laag"}
 # Standaarddrempel voor de uitleg wanneer het criterium er geen meegeeft.
 _DEFAULT_THRESHOLD = {"hoog": 0.4, "laag": 0.1}
 
@@ -172,6 +175,8 @@ ANSWER_CRITERIA = {
     ("oversteken", "vermijd"): {"metriek": "oversteken", "richting": "laag", "gewicht": 1.0, "drempel": 0.3, "label": "Weinig drukke oversteken"},
     ("stil", "belangrijk"): {"metriek": "stil", "richting": "hoog", "gewicht": 1.0, "drempel": 0.6, "label": "Rustige wegen"},
     ("knooppunten", "graag"): {"metriek": "knooppunt", "richting": "hoog", "gewicht": 1.0, "drempel": 0.5, "label": "Over knooppuntroutes"},
+    ("speeltuin", "graag"): {"metriek": "speeltuin", "richting": "hoog", "gewicht": 1.0, "label": "Speeltuinen onderweg"},
+    ("toilet", "graag"): {"metriek": "toilet", "richting": "hoog", "gewicht": 1.0, "label": "Toilet onderweg"},
 }
 
 

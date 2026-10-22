@@ -210,6 +210,22 @@ def cmd_region_info(args):
             **pack_manifest.describe({"slug": region.slug, **pack_manifest.metadata(region)})}
 
 
+def cmd_terrain(args):
+    from . import terrain, draft
+    if args.subcmd == "fetch": return terrain.fetch_tiles(args.dest)
+    if args.subcmd == "build":
+        src=Path(args.src); return terrain.build_grid(sorted(src.glob('*.zip'))+sorted(src.glob('*.tif')), args.out or src/'terrain', args.cell)
+    if args.subcmd == "info":
+        d=terrain.grid_dir(); path=d/'dtm20.json'
+        return {"beschikbaar":terrain.available(),"map":str(d),**(json.loads(path.read_text()) if path.exists() else {})}
+    if args.subcmd == "sample": return {"lat":args.lat,"lon":args.lon,"hoogte_m":terrain.sample([(args.lat,args.lon)])[0]}
+    item=draft.load(args.id)
+    coords=[point for leg in item.get('_geometry',[]) for point in leg]
+    if not coords: raise ValueError('draft heeft geen gerouteerde coördinaten')
+    result=terrain.ascent(coords)
+    return {"draft_id":args.id,"dtm_hoogtemeters":result['ascend_m'],"srtm_hoogtemeters":item.get('computed',{}).get('ascend_m')}
+
+
 def cmd_geocode(args):
     from . import geocode
 
@@ -399,6 +415,12 @@ def cmd_heat_status(args):
     return heat.status()
 
 
+def cmd_omgeving(args):
+    from . import omgeving
+    with config.use_region(args.region):
+        return omgeving.build() if args.subcmd == "build" else omgeving.info()
+
+
 def cmd_draft_route(args):
     from . import climbs, draft
 
@@ -415,6 +437,24 @@ def cmd_draft_readiness(args):
         climb_db = climbs.all_climbs()
         draft.probe(d, climb_db)
         return readiness.assess(d, profiles.load(args.profiel_naam), climb_db)
+
+
+def cmd_draft_questions(args):
+    from . import climbs, draft, profiles, readiness, question_composer
+
+    d = draft.load(args.id)
+    captured = {}
+    def choose(candidates, context):
+        captured["kandidaten"] = candidates
+        captured["context"] = context
+        if args.composer == "bedrock":
+            return question_composer._bedrock(candidates, context)
+        return question_composer.deterministic(candidates, context)
+    with draft.region_scope(d):
+        climb_db = climbs.all_climbs()
+        draft.probe(d, climb_db)
+        result = readiness.assess(d, profiles.load("standaard"), climb_db, composer=choose, wens=args.wens)
+    return {"kandidaten": captured.get("kandidaten", []), "vragen": result["vragen"]}
 
 
 def cmd_draft_suggest(args):
@@ -448,10 +488,51 @@ def cmd_criteria_metrics(_args):
     }
 
 
+def cmd_benchmark(args):
+    from . import benchmark, draft
+
+    cases = benchmark.load_cases(args.cases)
+    if args.only:
+        selected = set(args.only.split(","))
+        unknown = selected - {case["id"] for case in cases}
+        if unknown:
+            raise ValueError("onbekende benchmark-cases: " + ", ".join(sorted(unknown)))
+        cases = [case for case in cases if case["id"] in selected]
+    report = benchmark.run(cases)
+    if args.opruimen:
+        for row in report["cases"]:
+            draft_id = row.get("metingen", {}).get("draft")
+            if draft_id:
+                cmd_draft_delete(argparse.Namespace(id=draft_id))
+    if args.json:
+        Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.md:
+        Path(args.md).write_text(benchmark.markdown(report), encoding="utf-8")
+    return report
+
+
+def add_benchmark_parser(sub):
+    parser = sub.add_parser("benchmark", help="benchmark lokale routemotor op vaste routevragen")
+    parser.add_argument("--cases", default="evals/route_benchmark.json")
+    parser.add_argument("--only", help="komma-gescheiden case-id's")
+    parser.add_argument("--json", help="schrijf volledig JSON-rapport naar bestand")
+    parser.add_argument("--md", help="schrijf Markdown-tabel naar bestand")
+    parser.add_argument("--opruimen", action="store_true", help="verwijder aangemaakte benchmark-drafts")
+    parser.set_defaults(func=cmd_benchmark)
+
+
 def cmd_criteria_check(args):
     from . import criteria
 
     return {"criteria": criteria.parse(parse_criteria(args.criteria))}
+
+
+def cmd_criteria_rules(args):
+    from . import criteria, criteria_routing
+
+    spec = criteria.parse(parse_criteria(args.criteria))
+    profile = activities.graph_profile(args.activiteit)
+    return {"priority": criteria_routing.priority_rules(spec, profile=profile)}
 
 
 def cmd_criteria_explain(args):
@@ -591,6 +672,7 @@ def _region_arg(parser):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="lus", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
+    add_benchmark_parser(sub)
     check = sub.add_parser("check", help="controleer componenten offline, zonder runtimewijzigingen")
     check.add_argument("check_args", nargs=argparse.REMAINDER)
     def run_checks(args):
@@ -598,6 +680,13 @@ def main(argv=None):
         check_main(args.check_args)
         raise SystemExit(0)
     check.set_defaults(func=run_checks)
+
+    bench = sub.add_parser("bench-router", help="meet GraphHopper-routerlatentie")
+    bench.add_argument("--n", type=int, default=10, help="aantal calls per type")
+    def bench_router_command(args):
+        from .gh import bench_router
+        return bench_router(args.n)
+    bench.set_defaults(func=bench_router_command)
 
     from .local_chat import command as chat_command
     chat = sub.add_parser("chat", help="voer een vrije routeprompt lokaal uit met de hosted routeagent")
@@ -651,6 +740,14 @@ def main(argv=None):
     _region_arg(s)
     s.set_defaults(func=cmd_setup)
 
+    t=sub.add_parser("terrain",help="Vlaams DTM beheren en hoogtes inspecteren")
+    ts=t.add_subparsers(dest="subcmd",required=True)
+    s=ts.add_parser("fetch"); s.add_argument("--dest",required=True); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("build"); s.add_argument("--src",required=True); s.add_argument("--out"); s.add_argument("--cell",type=int,default=20); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("info"); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("sample"); s.add_argument("lat",type=float); s.add_argument("lon",type=float); s.set_defaults(func=cmd_terrain)
+    s=ts.add_parser("ascent"); s.add_argument("id"); s.set_defaults(func=cmd_terrain)
+
     s = sub.add_parser("build", help="bouw lokale caches: extract, gazetteer, klim-database")
     _region_arg(s)
     s.add_argument("--force", action="store_true")
@@ -667,6 +764,10 @@ def main(argv=None):
     s = rsub.add_parser("check", help="valideer en normaliseer een criterialijst")
     s.add_argument("criteria", help="JSON-lijst of .json-bestand")
     s.set_defaults(func=cmd_criteria_check)
+    s = rsub.add_parser("rules", help="toon GraphHopper-prioriteiten voor criteria")
+    s.add_argument("criteria", help="JSON-lijst of .json-bestand")
+    s.add_argument("--activiteit", choices=activities.ACCEPTED, default=activities.DEFAULT)
+    s.set_defaults(func=cmd_criteria_rules)
     s = rsub.add_parser("explain", help="'waarom deze route' voor een gerouteerde draft")
     _region_arg(s)
     s.add_argument("id")
@@ -904,6 +1005,15 @@ def main(argv=None):
     _region_arg(s)
     s.set_defaults(func=cmd_heat_status)
 
+    o = sub.add_parser("omgeving", help="OSM-metingen voor bos en verlichting")
+    osub = o.add_subparsers(dest="subcmd", required=True)
+    s = osub.add_parser("build", help="bos- en verlichtingscellen uit regio-PBF bouwen")
+    _region_arg(s)
+    s.set_defaults(func=cmd_omgeving)
+    s = osub.add_parser("info", help="beschikbaarheid van de omgevingscache")
+    _region_arg(s)
+    s.set_defaults(func=cmd_omgeving)
+
     d = sub.add_parser("draft", help="routes bouwen")
     dsub = d.add_subparsers(dest="subcmd", required=True)
     s = dsub.add_parser("new", help="nieuwe draft")
@@ -974,6 +1084,12 @@ def main(argv=None):
     s.add_argument("id")
     s.add_argument("--profiel-naam", default="standaard")
     s.set_defaults(func=cmd_draft_readiness)
+    s = dsub.add_parser("questions", help="inspecteer vraagkandidaten en composerkeuze")
+    _region_arg(s)
+    s.add_argument("id")
+    s.add_argument("--composer", choices=("regels", "bedrock"), default="regels")
+    s.add_argument("--wens")
+    s.set_defaults(func=cmd_draft_questions)
     s = dsub.add_parser("suggest", help="klimmen die weinig omweg vragen")
     _region_arg(s)
     s.add_argument("id")

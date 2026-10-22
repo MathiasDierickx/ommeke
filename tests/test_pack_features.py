@@ -39,19 +39,18 @@ def test_manifest_records_source_date_and_profile_versions_and_validates():
     summary = pack_manifest.describe(manifest)
     assert summary['brondata_datum'] == manifest['source_data_date']
     assert summary['features']['persoonlijke_heat'] is False
-    assert set(summary['features']) == {'waterlopen', 'landmarks', 'gebieden', 'persoonlijke_heat'}
+    assert set(summary['features']) == {'waterlopen', 'landmarks', 'gebieden', 'omgeving', 'terreinmodel', 'persoonlijke_heat'}
 
 
-def test_old_manifests_still_validate_and_new_profile_mismatch_is_rejected():
+def test_old_manifests_without_lm_profile_version_are_rejected():
     old = {'pack_format_version': 2, 'features': {'landmarks': True}, 'built_at': '2026-01-01T00:00:00+00:00'}
-    assert pack_manifest.validate(old)['profile_config_version'] is None
     assert pack_manifest.describe(old)['brondata_datum'] is None
     try:
-        pack_manifest.validate({**old, 'profile_config_version': pack_manifest.PROFILE_CONFIG_VERSION + 1})
+        pack_manifest.validate(old)
     except ValueError as exc:
         assert 'opnieuw bouwen' in str(exc)
     else:
-        raise AssertionError('andere profielconfiguratie aanvaard')
+        raise AssertionError('pack zonder LM-configuratie aanvaard')
 
 
 def test_region_info_cli_reads_pack_and_local_region_in_dutch_json():
@@ -91,7 +90,8 @@ def test_prepare_region_rejects_pack_with_personal_heat():
         pack = root / 'pack.tar.gz'
         payload = root / 'pack.json'
         payload.write_text(json.dumps({'slug': 'zeeland', 'contains_personal_heat': True,
-                                       'gh_image': config.GRAPH_HOPPER_IMAGE}))
+                                       'gh_image': config.GRAPH_HOPPER_IMAGE,
+                                       'profile_config_version': pack_manifest.PROFILE_CONFIG_VERSION}))
         with tarfile.open(pack, 'w:gz') as archive:
             archive.add(payload, arcname='pack.json')
         try:

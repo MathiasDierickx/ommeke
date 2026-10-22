@@ -65,6 +65,8 @@ Een dubbelzinnige start of `rond_plaats` geeft eerst alleen de vraag
 een leesbaar label en een patch met lat/lon/label. De server bewaart de kandidaten;
 de client stuurt alleen de optiesleutel. Pas na de keuze draait de locatieafhankelijke
 probe. Bij twee dubbelzinnige plaatsen volgen de plaatsvragen één voor één.
+Elke optie van elke vraag draagt een leesbaar `label` (bv. "Liever niet"); toon dat in
+plaats van een eigen tabel per optiesleutel.
 
 ## adjust_route
 
@@ -261,3 +263,8 @@ gecontroleerd.
   hebben er een op MCP, chat (impliciet) en web, niet op de CLI. Bij web-adjust
   is `request_id` optioneel en telt `max_km` (afgeleid van de huidige lengte)
   niet mee in de vergelijking.
+# Vraagteksten
+
+Vraagteksten kunnen door het taalmodel kort worden herschreven op basis van de
+verkenningsmeting. Vraag-ids en antwoordopties blijven deterministisch en
+ongewijzigd; antwoorden op knoppen worden door de engine verwerkt.

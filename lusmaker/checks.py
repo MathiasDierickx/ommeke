@@ -12,12 +12,12 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 GROUPS = {
-    "engine": ["activities", "questions", "slice2", "slice3", "intent_hints", "analysis", "climbs", "gh", "intents", "startplaats", "optimize", "probe", "profiles", "readiness", "suggest", "regression", "quality", "acceptance", "route_cache", "fit_course", "reroute", "coverage", "criteria", "engine_contract"],
-    "data": ["discover", "geocode", "google_geocode", "heat", "osm", "provision", "boundary", "regions", "recording", "pack_manifest", "pack_features", "route_sources", "route_pois"],
+    "engine": ["activities", "questions", "question_composer", "slice2", "slice3", "intent_hints", "analysis", "climbs", "gh", "lm", "intents", "startplaats", "optimize", "probe", "profiles", "readiness", "suggest", "regression", "quality", "acceptance", "route_cache", "fit_course", "reroute", "coverage", "criteria", "criteria_routing", "engine_contract"],
+    "data": ["discover", "geocode", "google_geocode", "heat", "osm", "provision", "boundary", "regions", "recording", "pack_manifest", "pack_features", "route_sources", "route_pois", "omgeving_metrics", "terrain"],
     "api": ["aws_app", "aws_chat", "aws_sharing", "aws_state", "draft_storage", "user_scope", "user_agent", "oauth", "quotas", "account", "pagination", "telemetry", "funnel", "observability", "requests", "pilot", "route_library", "quick_plan", "streaming"],
     "mcp": ["mcp", "mcp_evals", "appsdk", "artifacts", "preview", "contracts", "contract_matrix", "contract_gaps"],
     "infra": ["aws_deploy", "aws_gh_service"],
-    "tooling": ["checks", "e2e_prod", "metrics", "local_chat", "model_evals", "inspect_download"],
+    "tooling": ["checks", "e2e_prod", "metrics", "local_chat", "model_evals", "inspect_download", "benchmark"],
 }
 
 

@@ -1,0 +1,950 @@
+[
+  {
+    "id": "bredene",
+    "beschrijving": "toerfiets in Bredene",
+    "regio": "Kust",
+    "plan": {
+      "start": "Bredene",
+      "activiteit": "toerfiets",
+      "target_km": 35,
+      "doel": "toeren",
+      "langs_water": "Noordzee",
+      "criteria": [
+        {
+          "id": "hoogtemeters",
+          "label": "hoogtemeters",
+          "metriek": "hoogtemeters",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 21000,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "knokke",
+    "beschrijving": "stadsfiets in Markt, Knokke-Heist",
+    "regio": "Kust",
+    "plan": {
+      "start": "Markt, Knokke-Heist",
+      "activiteit": "stadsfiets",
+      "target_km": 30,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "kort",
+          "label": "kort",
+          "metriek": "kort",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "de_panne",
+    "beschrijving": "gravel in Markt, De Panne",
+    "regio": "Kust",
+    "plan": {
+      "start": "Markt, De Panne",
+      "activiteit": "gravel",
+      "target_km": 40,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "offroad",
+          "label": "offroad",
+          "metriek": "offroad",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "ieper",
+    "beschrijving": "koersfiets in Markt, Ieper",
+    "regio": "Westhoek",
+    "plan": {
+      "start": "Markt, Ieper",
+      "activiteit": "koersfiets",
+      "target_km": 65,
+      "doel": "hoogtemeters",
+      "criteria": [
+        {
+          "id": "onverhard",
+          "label": "onverhard",
+          "metriek": "onverhard",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "kemmel",
+    "beschrijving": "toerfiets in Markt, Heuvelland",
+    "regio": "Westhoek",
+    "plan": {
+      "start": "Markt, Heuvelland",
+      "activiteit": "toerfiets",
+      "target_km": 55,
+      "doel": "hoogtemeters",
+      "via_klimmen": [
+        "Kemmelberg"
+      ],
+      "criteria": [
+        {
+          "id": "populair",
+          "label": "populair",
+          "metriek": "populair",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "kortrijk",
+    "beschrijving": "stadsfiets in Grote Markt, Kortrijk",
+    "regio": "Leiestreek",
+    "plan": {
+      "start": "Grote Markt, Kortrijk",
+      "activiteit": "stadsfiets",
+      "target_km": 28,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "autovrij",
+          "label": "autovrij",
+          "metriek": "autovrij",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "oudenaarde",
+    "beschrijving": "koersfiets in Markt, Oudenaarde",
+    "regio": "Vlaamse Ardennen",
+    "plan": {
+      "start": "Markt, Oudenaarde",
+      "activiteit": "koersfiets",
+      "target_km": 70,
+      "doel": "hoogtemeters",
+      "criteria": [
+        {
+          "id": "stil",
+          "label": "stil",
+          "metriek": "stil",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "geraardsbergen",
+    "beschrijving": "gravel in Markt, Geraardsbergen",
+    "regio": "Vlaamse Ardennen",
+    "plan": {
+      "start": "Markt, Geraardsbergen",
+      "activiteit": "gravel",
+      "target_km": 55,
+      "doel": "hoogtemeters",
+      "criteria": [
+        {
+          "id": "kassei",
+          "label": "kassei",
+          "metriek": "kassei",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "gent_stad",
+    "beschrijving": "wandelen in Korenmarkt, Gent",
+    "regio": "Gent",
+    "plan": {
+      "start": "Korenmarkt, Gent",
+      "activiteit": "wandelen",
+      "target_km": 8,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "beton",
+          "label": "beton",
+          "metriek": "beton",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        },
+        {
+          "metriek": "verlicht",
+          "label": "Verlicht voor 's avonds",
+          "gewicht": 1
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "blaarmeersen",
+    "beschrijving": "wegloop in Blaarmeersen, Gent",
+    "regio": "Gent",
+    "plan": {
+      "start": "Blaarmeersen, Gent",
+      "activiteit": "wegloop",
+      "target_km": 7,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "steenweg",
+          "label": "steenweg",
+          "metriek": "steenweg",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "wetteren",
+    "beschrijving": "toerfiets in Markt, Wetteren",
+    "regio": "Scheldeland",
+    "plan": {
+      "start": "Markt, Wetteren",
+      "activiteit": "toerfiets",
+      "target_km": 50,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "fietspad",
+          "label": "fietspad",
+          "metriek": "fietspad",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "dendermonde",
+    "beschrijving": "stadsfiets in Grote Markt, Dendermonde",
+    "regio": "Scheldeland",
+    "plan": {
+      "start": "Grote Markt, Dendermonde",
+      "activiteit": "stadsfiets",
+      "target_km": 35,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "knooppunt",
+          "label": "knooppunt",
+          "metriek": "knooppunt",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "donkmeer",
+    "beschrijving": "wandelen in Donkmeer, Berlare",
+    "regio": "Scheldeland",
+    "plan": {
+      "start": "Donkmeer, Berlare",
+      "activiteit": "wandelen",
+      "target_km": 9,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "oversteken",
+          "label": "oversteken",
+          "metriek": "oversteken",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "sint_niklaas",
+    "beschrijving": "toerfiets in Grote Markt, Sint-Niklaas",
+    "regio": "Waasland",
+    "plan": {
+      "start": "Grote Markt, Sint-Niklaas",
+      "activiteit": "toerfiets",
+      "target_km": 45,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "toilet",
+          "label": "toilet",
+          "metriek": "toilet",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "antwerpen",
+    "beschrijving": "stadsfiets in Groenplaats, Antwerpen",
+    "regio": "Antwerpen",
+    "plan": {
+      "start": "Groenplaats, Antwerpen",
+      "activiteit": "stadsfiets",
+      "target_km": 25,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "speeltuin",
+          "label": "speeltuin",
+          "metriek": "speeltuin",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "kalmthout",
+    "beschrijving": "trail in De Vroente, Kalmthout",
+    "regio": "Antwerpen",
+    "plan": {
+      "start": "De Vroente, Kalmthout",
+      "activiteit": "trail",
+      "target_km": 12,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "zitbank",
+          "label": "zitbank",
+          "metriek": "zitbank",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        },
+        {
+          "metriek": "bos",
+          "label": "Door het bos",
+          "gewicht": 1
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "mol",
+    "beschrijving": "gravel in Markt, Mol",
+    "regio": "Kempen",
+    "plan": {
+      "start": "Markt, Mol",
+      "activiteit": "gravel",
+      "target_km": 60,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "hoogtemeters",
+          "label": "hoogtemeters",
+          "metriek": "hoogtemeters",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "turnhout",
+    "beschrijving": "toerfiets in Grote Markt, Turnhout",
+    "regio": "Kempen",
+    "plan": {
+      "start": "Grote Markt, Turnhout",
+      "activiteit": "toerfiets",
+      "target_km": 50,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "kort",
+          "label": "kort",
+          "metriek": "kort",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "lommel_mtb",
+    "beschrijving": "mtb in Station, Lommel",
+    "regio": "Kempen",
+    "plan": {
+      "start": "Station, Lommel",
+      "activiteit": "mtb",
+      "target_km": 45,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "offroad",
+          "label": "offroad",
+          "metriek": "offroad",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "diest",
+    "beschrijving": "koersfiets in Grote Markt, Diest",
+    "regio": "Hageland",
+    "plan": {
+      "start": "Grote Markt, Diest",
+      "activiteit": "koersfiets",
+      "target_km": 55,
+      "doel": "hoogtemeters",
+      "criteria": [
+        {
+          "id": "onverhard",
+          "label": "onverhard",
+          "metriek": "onverhard",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "aarschot",
+    "beschrijving": "toerfiets in Grote Markt, Aarschot",
+    "regio": "Hageland",
+    "plan": {
+      "start": "Grote Markt, Aarschot",
+      "activiteit": "toerfiets",
+      "target_km": 45,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "populair",
+          "label": "populair",
+          "metriek": "populair",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "leuven",
+    "beschrijving": "stadsfiets in Grote Markt, Leuven",
+    "regio": "Leuven",
+    "plan": {
+      "start": "Grote Markt, Leuven",
+      "activiteit": "stadsfiets",
+      "target_km": 25,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "autovrij",
+          "label": "autovrij",
+          "metriek": "autovrij",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        },
+        {
+          "metriek": "trappen",
+          "label": "Kinderwagen, geen trappen",
+          "richting": "laag",
+          "hard": true,
+          "drempel": 0
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "tervuren",
+    "beschrijving": "gravel in Markt, Tervuren",
+    "regio": "Brabant",
+    "plan": {
+      "start": "Markt, Tervuren",
+      "activiteit": "gravel",
+      "target_km": 42,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "stil",
+          "label": "stil",
+          "metriek": "stil",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "genk_mtb",
+    "beschrijving": "mtb in Markt, Genk",
+    "regio": "Limburg",
+    "plan": {
+      "start": "Markt, Genk",
+      "activiteit": "mtb",
+      "target_km": 45,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "kassei",
+          "label": "kassei",
+          "metriek": "kassei",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "hasselt",
+    "beschrijving": "wegloop in Grote Markt, Hasselt",
+    "regio": "Limburg",
+    "plan": {
+      "start": "Grote Markt, Hasselt",
+      "activiteit": "wegloop",
+      "target_km": 8,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "beton",
+          "label": "beton",
+          "metriek": "beton",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "maaseik",
+    "beschrijving": "toerfiets in Markt, Maaseik",
+    "regio": "Limburg",
+    "plan": {
+      "start": "Markt, Maaseik",
+      "activiteit": "toerfiets",
+      "target_km": 50,
+      "doel": "toeren",
+      "langs_water": "Maas",
+      "criteria": [
+        {
+          "id": "steenweg",
+          "label": "steenweg",
+          "metriek": "steenweg",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 30000,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "gooik",
+    "beschrijving": "koersfiets in Markt, Gooik",
+    "regio": "Pajottenland",
+    "plan": {
+      "start": "Markt, Gooik",
+      "activiteit": "koersfiets",
+      "target_km": 60,
+      "doel": "hoogtemeters",
+      "criteria": [
+        {
+          "id": "fietspad",
+          "label": "fietspad",
+          "metriek": "fietspad",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "gent_brugge",
+    "beschrijving": "koersfiets in Sint-Baafsplein, Gent",
+    "regio": "Lijnritten",
+    "plan": {
+      "start": "Sint-Baafsplein, Gent",
+      "activiteit": "koersfiets",
+      "target_km": 50,
+      "doel": "toeren",
+      "eind": "Markt, Brugge",
+      "criteria": [
+        {
+          "id": "knooppunt",
+          "label": "knooppunt",
+          "metriek": "knooppunt",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "leuven_mechelen",
+    "beschrijving": "toerfiets in Grote Markt, Leuven",
+    "regio": "Lijnritten",
+    "plan": {
+      "start": "Grote Markt, Leuven",
+      "activiteit": "toerfiets",
+      "target_km": 30,
+      "doel": "toeren",
+      "eind": "Grote Markt, Mechelen",
+      "criteria": [
+        {
+          "id": "oversteken",
+          "label": "oversteken",
+          "metriek": "oversteken",
+          "richting": "laag",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "de_haan",
+    "beschrijving": "trail in Markt, De Haan",
+    "regio": "Kust",
+    "plan": {
+      "start": "Markt, De Haan",
+      "activiteit": "trail",
+      "target_km": 10,
+      "doel": "offroad",
+      "criteria": [
+        {
+          "id": "toilet",
+          "label": "toilet",
+          "metriek": "toilet",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "aalst",
+    "beschrijving": "wandelen in Grote Markt, Aalst",
+    "regio": "Scheldeland",
+    "plan": {
+      "start": "Grote Markt, Aalst",
+      "activiteit": "wandelen",
+      "target_km": 8,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "speeltuin",
+          "label": "speeltuin",
+          "metriek": "speeltuin",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  },
+  {
+    "id": "houthalen",
+    "beschrijving": "wegloop in Kerkplein, Houthalen-Helchteren",
+    "regio": "Limburg",
+    "plan": {
+      "start": "Kerkplein, Houthalen-Helchteren",
+      "activiteit": "wegloop",
+      "target_km": 10,
+      "doel": "toeren",
+      "criteria": [
+        {
+          "id": "zitbank",
+          "label": "zitbank",
+          "metriek": "zitbank",
+          "richting": "hoog",
+          "gewicht": 1,
+          "hard": false
+        }
+      ]
+    },
+    "verwacht": {
+      "km_tolerantie_pct": 25,
+      "max_heen_en_weer_m": 2500,
+      "max_seconden": 120,
+      "max_sluiting_m": 100,
+      "max_spreiding": 0.65,
+      "criteria_ok": []
+    }
+  }
+]

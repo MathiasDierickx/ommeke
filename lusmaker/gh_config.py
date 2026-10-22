@@ -24,6 +24,10 @@ graphhopper:
       custom_model_files: [foot.json, trail.json]
 
   profiles_ch: []
+  profiles_lm:
+    - profile: quiet
+    - profile: trail
+  prepare.lm.landmarks: 16
   prepare.min_network_size: 200
 
 server:

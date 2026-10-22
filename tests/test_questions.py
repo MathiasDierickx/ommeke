@@ -392,3 +392,19 @@ def test_hills_question_needs_real_relief_not_srtm_noise():
     assert "heuvels" in _ids(d, _profile("wandelen"))
     del d["_probe"]["terrein"]["relief_m"]          # geen hoogtes: oude gedrag
     assert "heuvels" in _ids(d, _profile("wandelen"))
+
+
+def test_every_terrain_and_poi_option_carries_a_label():
+    d = _draft(km=45, hm=700, cobble=2400, unpaved=3000)
+    for activity in ("koersfiets", "wandelen", "gravel"):
+        for q in questions.ask(d, _profile(activity), d["_probe"]):
+            assert all(o.get("label") for o in q["opties"].values()), q["id"]
+    from lusmaker.conversation_context import USER_TEXT
+    walk = {"_probe": {"km": 10, "hm": 0, "kwaliteit": {}, "terrein": {"pois_langs_route": {"speeltuin": 2, "toilet": 1}}}}
+    token = USER_TEXT.set("wandelen met de kinderen")
+    try:
+        found = readiness.assess(walk, _profile("wandelen"), {})["vragen"]
+    finally:
+        USER_TEXT.reset(token)
+    poi = [q for q in found if q["id"] in {"speeltuin", "toilet"}]
+    assert poi and all(o.get("label") for q in poi for o in q["opties"].values())

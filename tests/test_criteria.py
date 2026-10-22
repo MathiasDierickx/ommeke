@@ -18,7 +18,7 @@ def test_parse_normaliseert_gewichten_en_vult_defaults():
 
 
 def test_parse_weigert_onbekende_metriek_dubbel_id_en_hard_zonder_drempel():
-    assert "onbekende metriek" in _raises(criteria.parse, [{"metriek": "bos"}])
+    assert "onbekende metriek" in _raises(criteria.parse, [{"metriek": "onbekend"}])
     assert "dubbel" in _raises(criteria.parse, [{"metriek": "stil"}, {"metriek": "stil"}])
     assert "drempel" in _raises(criteria.parse, [{"metriek": "kassei", "hard": True}])
     assert "niet-lege lijst" in _raises(criteria.parse, [])
@@ -70,7 +70,7 @@ def test_from_goal_en_chat_schema():
     assert criteria.from_goal("toeren") == []
     validate_arguments({"start": "Wetteren", "target_km": 10, "criteria": [{"metriek": "stil", "gewicht": 2}]}, PLAN_ROUTE_SCHEMA)
     try:
-        validate_arguments({"start": "Wetteren", "criteria": [{"metriek": "bos"}]}, PLAN_ROUTE_SCHEMA)
+        validate_arguments({"start": "Wetteren", "criteria": [{"metriek": "onbekend"}]}, PLAN_ROUTE_SCHEMA)
     except ValueError:
         pass
     else:

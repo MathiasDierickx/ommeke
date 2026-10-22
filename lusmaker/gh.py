@@ -262,7 +262,8 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
                   heat_activity: str | None = None,
                   activity: str | None = None,
                   prefer_paved: bool = False,
-                  prefer_cycleways: bool = False) -> dict:
+                  prefer_cycleways: bool = False,
+                  criteria: list[dict] | None = None) -> dict:
     """Bouw het gedeelde voorkeurenmodel voor gewone en round-triproutes.
 
     ``activity`` kiest het request-time fragment uit ``activities``. Zonder
@@ -303,6 +304,14 @@ def _custom_model(avoid_polygons=None, priority_factor: float = 0.30,
         custom["priority"].append(
             {"if": "in_onverhard", "multiply_by": "0.55"}
         )
+    if criteria:
+        from .criteria_routing import priority_rules
+        for rule in priority_rules(criteria, profile=profile):
+            previous = next((r for r in custom["priority"] if r.get("if") == rule["if"]), None)
+            if previous:
+                previous["multiply_by"] = str(min(float(previous["multiply_by"]), float(rule["multiply_by"])))
+            else:
+                custom["priority"].append(rule)
     if avoid_polygons:
         features = []
         for k, item in enumerate(avoid_polygons):
@@ -369,6 +378,14 @@ def _path_result(data: dict, details: bool = False) -> dict:
         "descend_m": round(p.get("descend", 0.0), 1),
         "coords": coords,
     }
+    from . import terrain
+    if terrain.available():
+        profile = terrain.ascent(coords)
+        out["coords"] = profile["coords"]
+        if profile["ascend_m"] is not None:
+            out["ascend_srtm_m"] = out["ascend_m"]
+            out["ascend_m"] = round(profile["ascend_m"], 1)
+            out["descend_m"] = round(profile["descend_m"] or 0.0, 1)
     if "instructions" in p:
         out["instructions"] = p["instructions"]
     if details:
@@ -388,6 +405,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
           activity: str | None = None,
           prefer_paved: bool = False,
           prefer_cycleways: bool = False,
+          criteria: list[dict] | None = None,
           area_evs: set[str] | frozenset[str] | None = None,
           post_fn=_post) -> dict:
     """Route langs waypoints [(lat, lon), ...].
@@ -452,6 +470,7 @@ def route(points_latlon, avoid_polygons=None, priority_factor: float = 0.30,
         avoid_busy, profile=profile, area_evs=area_evs,
         heat_activity=heat_activity, activity=activity,
         prefer_cycleways=prefer_cycleways, prefer_paved=prefer_paved,
+        criteria=criteria,
     )
 
     data = post_fn("/route", body)
@@ -496,6 +515,7 @@ def round_trip(point, distance_m: float, seed: int,
                activity: str | None = None,
                prefer_paved: bool = False,
                prefer_cycleways: bool = False,
+               criteria: list[dict] | None = None,
                area_evs: set[str] | frozenset[str] | None = None,
                post_fn=_post) -> dict:
     """Maak via GraphHopper een rondrit vanaf één ``(lat, lon)``-punt."""
@@ -516,8 +536,40 @@ def round_trip(point, distance_m: float, seed: int,
             avoid_busy, profile=profile, area_evs=area_evs,
             heat_activity=heat_activity, activity=activity,
             prefer_cycleways=prefer_cycleways, prefer_paved=prefer_paved,
+            criteria=criteria,
         ),
     }
     if details:
         body["details"] = ["surface", "road_class"]
     return _path_result(post_fn("/route", body), details)
+
+
+def bench_router(n: int = 10, *, route_fn=route, round_trip_fn=round_trip,
+                 circle_round_trip_fn=circle_round_trip) -> dict:
+    """Meet vaste representatieve GraphHopper-calls en rapporteer percentielen."""
+    if n <= 0:
+        raise ValueError("n moet positief zijn")
+    min_lat, min_lon, max_lat, max_lon = config.current_region().bbox
+    point = ((min_lat + max_lat) / 2, (min_lon + max_lon) / 2)
+    other = (point[0] + 0.005, point[1] + 0.005)
+    calls = {
+        "route": lambda: route_fn([point, other], activity="toerfiets"),
+        "round_trip": lambda: round_trip_fn(point, 12000, 17, activity="toerfiets"),
+        "circle_round_trip": lambda: circle_round_trip_fn(point, 12000, 17, activity="toerfiets"),
+    }
+    report = {}
+    for call_type, call in calls.items():
+        samples = []
+        for _ in range(n):
+            started = time.perf_counter()
+            call()
+            samples.append((time.perf_counter() - started) * 1000)
+        samples.sort()
+
+        def percentile(value):
+            index = (len(samples) - 1) * value
+            low, high = math.floor(index), math.ceil(index)
+            return round(samples[low] + (samples[high] - samples[low]) * (index - low), 1)
+
+        report[call_type] = {"n": n, "p50_ms": percentile(0.50), "p95_ms": percentile(0.95)}
+    return report

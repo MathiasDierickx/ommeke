@@ -13,6 +13,9 @@ from functools import lru_cache
 from typing import Any
 
 from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA, UPDATE_PROFILE_SCHEMA
+from .conversation_context import USER_TEXT
+
+_USER_TEXT = USER_TEXT  # compat: bestaande callers lezen dezelfde ContextVar
 
 from . import draft, funnel, intent_hints, intents, tenant, quotas, requests, telemetry, progress
 
@@ -415,9 +418,9 @@ Beslisregels die altijd voorgaan:
 - Bij een genoemd bestaand draft-id mag je geen nieuwe route aanmaken. Ontbreekt de revisie, roep eerst route_details aan met dat draft-id; gebruik daarna de teruggegeven revision bij adjust_route.
 - Een expliciet antwoord op een voorkeurenvraag moet met update_profile worden opgeslagen, ook als nog geen draft-id bekend is. Alleen tekstueel bevestigen is niet genoeg.
 Criteria op maat: zodra de gebruiker wensen noemt die verder gaan dan afstand en activiteit
-(rustig, veel bos of paden, geen kasseien, weinig oversteken, fietspaden, hoogtemeters, bekende
+(rustig, veel bos of paden, schaduw/bos = bos, 's avonds/in het donker = verlicht, geen kasseien, weinig oversteken, fietspaden, hoogtemeters, bekende
 wegen, met kinderen = speeltuin en toilet onderweg, zitbank voor een pauze), vertaal je elke wens naar één criterium in `criteria` met een meetbare `metriek`, een
-`label` in de woorden van de gebruiker, `richting` (hoog = meer is beter, laag = minder) en een
+`label` in de woorden van de gebruiker, kinderwagen/rolstoel/buggy = trappen laag hard met drempel 0, `richting` (hoog = meer is beter, laag = minder) en een
 `gewicht` dat de nadruk van de gebruiker volgt. Een "zeker niet"/"nooit" wordt hard=true met
 een drempel. Verzin geen metrieken buiten de lijst; wat niet meetbaar is, zeg je eerlijk.
 Het resultaat bevat `waarom`: regels met ok=true/false per criterium. Noem de regels met
@@ -429,9 +432,6 @@ Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een u
 # executor leest het voor de deterministische intent_hints. Een contextvar
 # houdt de bestaande ``execute(name, arguments, *, request_id)``-signatuur
 # (en de subklassen/fakes die erop leunen) ongewijzigd.
-_USER_TEXT: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "lusmaker_chat_user_text", default=None
-)
 # Gesprek van de lopende beurt, zodat een nieuwe route eraan gekoppeld wordt.
 _CONVERSATION_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "lusmaker_chat_conversation_id", default=None
@@ -491,7 +491,7 @@ class RouteToolExecutor:
             values = {key: value for key, value in arguments.items() if key in allowed}
             # Backstop voor zwakkere modellen: vul uitsluitend ontbrekende of
             # null-voorkeuren aan uit het gebruikersbericht ("vlak", "mtb", ...).
-            text = user_text if user_text is not None else _USER_TEXT.get()
+            text = user_text if user_text is not None else USER_TEXT.get()
             if text:
                 values = {
                     key: value for key, value in intent_hints.apply(values, text).items()
@@ -623,11 +623,11 @@ class BedrockRouteAgent:
 
     def _reply(self, history: list[dict[str, Any]], request_id: str,
                usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:
-        token = _USER_TEXT.set(_latest_user_text(history))
+        token = USER_TEXT.set(_latest_user_text(history))
         try:
             return self._reply_inner(history, request_id, usage, state)
         finally:
-            _USER_TEXT.reset(token)
+            USER_TEXT.reset(token)
 
     def _reply_inner(self, history: list[dict[str, Any]], request_id: str,
                      usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:

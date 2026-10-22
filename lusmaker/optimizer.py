@@ -14,6 +14,7 @@ from .errors import DraftError
 
 FLAT = "vlak"
 CIRCLE_SEED_BASE = 100
+CIRCLE_MAX_SPUR_M = 400.0
 _LEGACY_HM = "__legacy_hm__"
 _LOAD_HEAT = object()
 
@@ -122,7 +123,18 @@ def _candidate_surface_components(
         "steenweg": _route_share(routes, "road_class", analysis.BIG_ROADS),
         "fietspad": _route_share(routes, "road_class", analysis.CYCLEWAY_CLASSES),
         "stil": _route_share(routes, "road_class", analysis.QUIET_CLASSES),
+        "trappen": _route_share(routes, "road_class", {"steps"}),
     }
+    from . import omgeving
+    environment = omgeving.load()
+    if environment is not None:
+        for metric in ("bos", "verlicht"):
+            points = [point for routed in routes
+                      for point in geo.resample([(p[0], p[1]) for p in routed.get("coords", [])], 60.0)]
+            result[metric] = sum(geo.cell(*point) in environment[metric] for point in points) / max(len(points), 1)
+    else:
+        result.pop("bos", None)
+        result.pop("verlicht", None)
     if popular_cells is _LOAD_HEAT or busy_cells is _LOAD_HEAT:
         evidence = route_evidence.route_stats([r.get("coords", []) for r in routes], profile)
         if evidence is not None:
@@ -414,6 +426,8 @@ def _score_components(candidate: dict, budget_km: float) -> dict:
         "kort": min(1.0, max(0.0, 1.0 - extra_km / max(budget_km, 0.001))),
         **{key: min(1.0, max(0.0, surface.get(key, 0.0)))
            for key in ("kassei", "onverhard", "beton", "steenweg", "fietspad", "stil", "knooppunt")},
+        **{key: min(1.0, max(0.0, surface[key]))
+           for key in ("bos", "verlicht", "trappen") if key in surface},
     }
 
 
@@ -599,6 +613,8 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         if candidate is None:
             continue
         coords = [(point[0], point[1]) for point in candidate.get("coords", [])]
+        if seed >= CIRCLE_SEED_BASE and geo.self_retrace_m([coords]) > CIRCLE_MAX_SPUR_M:
+            continue  # cirkel met een spoor heen en terug naar een tussenpunt (Wetteren: 4,5 km)
         if len(coords) < 2 or current_m + candidate["distance_m"] > budget_m:
             continue
         overlap_m = max(

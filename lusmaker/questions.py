@@ -119,8 +119,13 @@ class Row:
         return relevance * (measured / threshold)
 
 
+_LABELS = {"graag": "Graag", "belangrijk": "Ja, belangrijk", "vermijd": "Liever niet",
+           "ok": "Maakt me niet uit", "zoek": "Ja, klimmen!", "vlak": "Liever vlak",
+           "onverhard": "Graag onverhard", "verhard": "Liever verhard"}
+
+
 def _patch(key: str, value: str, **adjust) -> dict:
-    option = {"patch": {"voorkeuren": {key: value}}}
+    option = {"label": _LABELS[value], "patch": {"voorkeuren": {key: value}}}
     if adjust:
         option["adjust_route"] = adjust
     return option

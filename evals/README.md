@@ -1,5 +1,26 @@
 # MCP-evaluaties
 
+## Routebenchmark
+
+`route_benchmark.json` bevat vaste routevragen uit heel Vlaanderen en toetst de
+werkelijke lokale route-engine, inclusief afstand, sluiting, hergebruik van
+wegen, spreiding, criteriauitleg en looptijd. De cases beslaan alle
+activiteiten; de dataset wordt offline op structuur en dekking gecontroleerd.
+
+Start GraphHopper volgens de projectsetup en voer daarna vanuit de repo-root uit:
+
+```bash
+.venv/bin/lus benchmark
+.venv/bin/lus benchmark --only bredene,kemmel --json /tmp/routes.json --md /tmp/routes.md
+.venv/bin/lus benchmark --opruimen
+```
+
+`--opruimen` verwijdert de drafts die deze benchmarkrun heeft aangemaakt.
+De benchmark vangt fouten per route op zodat een onbereikbare plaats of
+routeringsfout de overige cases niet overslaat. Hij is bedoeld als handmatige
+engine-feedbackloop; de gewone testsuite gebruikt alleen nep-planners en doet
+geen netwerkcalls.
+
 `route_intents.json` is de vaste, netwerkloze acceptatieset voor de vertaling
 van Nederlandse prompts naar Lusmaker-toolcalls. Laat Claude of ChatGPT per
 case één object opnemen met deze vorm:

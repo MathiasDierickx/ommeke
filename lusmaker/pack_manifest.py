@@ -9,7 +9,7 @@ from .osm import EXTRACT_FORMAT_VERSION
 PACK_FORMAT_VERSION = 2
 # Verhoog bij elke wijziging van routingprofielen, custom models of GraphHopper-config
 # die bestaande packs onbruikbaar maakt; oudere packs zonder veld blijven geldig.
-PROFILE_CONFIG_VERSION = 1
+PROFILE_CONFIG_VERSION = 2
 
 
 def _source_data_date(region, extract_source):
@@ -54,7 +54,7 @@ def metadata(region):
         'built_at': datetime.now(UTC).isoformat(),
         'extract_format_version': extract.get('format_version'),
         'source_cache_modified_at': datetime.fromtimestamp(source.stat().st_mtime, UTC).isoformat() if source.exists() else None,
-        'features': {'landmarks': bool(extract.get('landmarks')), 'waterways': bool(extract.get('waterways')), 'areas': sorted(set(area_ids))},
+        'features': {'landmarks': bool(extract.get('landmarks')), 'waterways': bool(extract.get('waterways')), 'terreinmodel': (region.root / 'terrain' / 'dtm20.npy').is_file(), 'omgeving': (region.cache / 'omgeving_cells.json').is_file(), 'areas': sorted(set(area_ids))},
         'model_sha256': hashes,
         'contains_personal_heat': personal,
     }
@@ -70,7 +70,7 @@ def validate(manifest):
     if manifest.get('gh_image') and manifest['gh_image'] != config.GRAPH_HOPPER_IMAGE:
         raise ValueError('GraphHopper-versie in het pack komt niet overeen')
     profile = manifest.get('profile_config_version')
-    if profile is not None and profile != PROFILE_CONFIG_VERSION:
+    if profile != PROFILE_CONFIG_VERSION:
         raise ValueError('incompatibele profielconfiguratie in het pack; reviewer moet het pack opnieuw bouwen '
                          '(zie docs/OPERATIONS.md, Pack herbouwen)')
     return {'legacy': version == 1, 'features': manifest.get('features'), 'built_at': manifest.get('built_at'),
@@ -98,6 +98,8 @@ def describe(manifest):
             'waterlopen': features.get('waterways'),
             'landmarks': features.get('landmarks'),
             'gebieden': features.get('areas'),
+            'omgeving': features.get('omgeving'),
+            'terreinmodel': features.get('terreinmodel'),
             'persoonlijke_heat': manifest.get('contains_personal_heat'),
         },
     }

@@ -3,9 +3,9 @@
 Deze stack deployt Lusmaker als webapp én authenticated remote MCP-app. De
 statische React/Next.js-interface draait op Vercel. De AWS-compute bestaat uit
 één Lambda-container met de Lusmaker ASGI/API/MCP-server via de AWS Lambda
-Web Adapter. Standaard draait GraphHopper op localhost; met de opt-in
-`gh_service_enabled` draait hij altijd warm op EC2 achter CloudFront. GraphHopper en routegegevens zijn vooraf
-in het image gebouwd; een request downloadt of importeert nooit kaartdata.
+Web Adapter. GraphHopper en routegegevens zitten vooraf in het image; een
+request downloadt of importeert nooit kaartdata. Lambda blijft scale-to-zero,
+zonder EC2 of provisioned concurrency.
 
 ## Architectuur
 
@@ -43,25 +43,16 @@ Terraform maakt aan:
 - in de bootstrap-stack: een private Terraform-statebucket en een branch-
   gebonden GitHub OIDC-deployrol.
 
-Zonder `gh_service_enabled` maakt de stack geen CloudFront of EC2 aan.
-De opt-in router gebruikt de bestaande default VPC, zonder Lambda-VPC of NAT.
-Er zijn geen API Gateway, EFS, ECS/Fargate of provisioned Lambda instances.
-Vercel levert de CDN/HTTPS-laag voor de frontend; CloudFront bedient uitsluitend
-de optionele router. De
-Function URL vermijdt de API Gateway-timeout voor lange route- en modelcalls.
+Vercel levert de frontend. De Function URL vermijdt de API Gateway-timeout
+voor lange route- en modelcalls.
 
 ## Wat “scale to zero” hier betekent
 
-Met `gh_service_enabled=false` draait er geen compute als niemand Lusmaker
-gebruikt. Met `true` blijft uitsluitend de EC2-router draaien. `max_concurrency` kan
-als kosten- en capaciteitsplafond worden ingesteld; het warmt of reserveert
-geen Lambda-instances. AWS-accounts met de minimale concurrencyquota van 10
-kunnen geen reserved concurrency instellen, omdat AWS minstens 10 executions
-accountbreed ongereserveerd houdt. In dat geval blijft de accountquota de cap.
-Een cold start kopieert de read-only GraphHopper-cache naar Lambda `/tmp`, start
-GraphHopper op de achtergrond. De API opent meteen; routeraanvragen wachten
-op de health-check. Met een externe URL worden de kopie en JVM overgeslagen. `AWS_LWA_ASYNC_INIT` laat die
-opstart binnen de Lambda-timeout doorlopen.
+Als er geen requests zijn, draait er geen Lambda-compute. `max_concurrency` is
+een optionele invocation-cap en reserveert geen Lambda-instances. Een cold
+start kopieert de read-only GraphHopper-cache naar Lambda `/tmp` en start
+GraphHopper op de achtergrond; routeraanvragen wachten op de health-check.
+`AWS_LWA_ASYNC_INIT` laat die opstart binnen de Lambda-timeout doorlopen.
 
 AWS wordt niet letterlijk kosteloos wanneer de app idle is. ECR bewaart het
 containerimage, S3 bewaart Terraform-state, regiopack en gebruikersdata,
@@ -83,10 +74,14 @@ uncompressed, maximaal 10 GB `/tmp` en een Lambda-timeout van 15 minuten. Maak
 een kleinere regiopack wanneer graph plus runtime daar niet binnen passen. Zie
 de [AWS Lambda quota's](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)
 en de [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter).
-De stack start bewust met 3.008 MB geheugen en een 2 GB Java-heap, zodat ook
-accounts met de lage initiële memoryquota kunnen deployen. Verhoog
-`lambda_memory_mb` en `java_opts` samen als AWS een hogere quota heeft
-goedgekeurd.
+De stack start bewust met 3.008 MB geheugen en een 1,5 GB Java-heap. Na een LM-
+packbuild vergelijk je met `lus bench-router --n 10` de p50/p95 van route,
+round-trip en circle-round-trip vóór en na de wijziging. Controleer daarnaast de
+CloudWatch piek van `LambdaInsights`/Max Memory Used en de Lambda REPORT
+`Max Memory Used`-regel over representatieve lange routes. Verhoog
+`lambda_memory_mb` alleen als de gemeten piek daar ruimte voor vraagt; stem
+`java_opts` (`-Xmx`) daarbij binnen het resterende geheugen af en herhaal de
+meting. Terraform blijft ongewijzigd tot deze cijfers beschikbaar zijn.
 
 ## Vereisten
 
@@ -434,6 +429,8 @@ nadat de applicatiestack weg is en je de Terraform-state niet meer nodig hebt.
 
 ## Altijd-warme GraphHopper (issue #19)
 
+Uitgeschakeld sinds 19 oktober 2026: Ommeke blijft serverless (zie 0002, herziening).
+
 Besluit: [0002 — warme GraphHopper](decisions/0002-warme-graphhopper.md).
 `gh_service_enabled=false` is de Terraform-standaard: alle nieuwe resources
 én lookups hebben count 0 en de Lambda-omgeving blijft gelijk. De deployment
@@ -534,3 +531,17 @@ de opt-in resources, inclusief het graphvolume, worden verwijderd. CloudFront
 uitschakelen/verwijderen kan tijd kosten. De bronpack in S3 blijft bestaan.
 Een image-digestrollback verandert de routerkeuze niet: de schakelaar bepaalt
 het pad, en de EC2-router gebruikt het huidige gevalideerde S3-pack.
+
+## Landmarks in het regiopack (#19)
+
+Een regiopack bouwt GraphHopper 11-LM voor `quiet` en `trail`; de Lambda-image
+bevat de voorbereide graph. CH blijft uit omdat requests custom models gebruiken.
+`gh_service_enabled` blijft `false`. De packconfigversie zorgt dat packs zonder
+LM-data opnieuw gebouwd worden.
+
+Vergelijk vóór en na de LM-packbuild dezelfde calls met
+`.venv/bin/lus bench-router --n 10`. Het commando geeft p50/p95 voor route,
+round-trip en circle-round-trip. Noteer ook de packbuildduur en meet na deployment
+de CloudWatch `Max Memory Used`/Lambda REPORT-piek voor lange routes. Pas
+`lambda_memory_mb` pas na die meting aan; stem zo nodig `java_opts` (`-Xmx`,
+standaard 1536 MB) af met ruimte voor Python, native buffers en GH buiten de heap.

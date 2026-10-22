@@ -144,6 +144,7 @@ def create_pack(
         raise ValueError("Dit pack bevat persoonlijke heat-data. Gebruik uitsluitend voor privégebruik --include-personal-heat; hosted packs moeten alleen open data bevatten.")
     with tarfile.open(destination, "w:gz") as archive:
         _tar_add_path(archive, region.cache, "cache")
+        _tar_add_path(archive, region.root / "terrain", "terrain")
         for tile in sorted(region.data.glob("*.hgt")):
             archive.add(tile, arcname=f"data/{tile.name}")
         _tar_add_path(archive, region.gh_dir / "graph-cache", "gh/graph-cache")
@@ -266,13 +267,14 @@ def _registered(slug: str, home: Path) -> config.Region | None:
 
 
 def _default_build(region: config.Region, pbf_url: str) -> dict:
-    from . import climbs, data, gh_config, heat, osm
+    from . import climbs, data, gh_config, heat, omgeving, osm
 
     tvl_areas: list[str] = []
     with config.use_region(region.slug):
         setup_result = data.setup(pbf_url=pbf_url)
         extract = osm.build_extract(force=True)
         osm.build_gazetteer(extract, force=True)
+        environment = omgeving.build()
         config.ensure_dirs()
         config.CLIMBS_JSON.write_text(
             json.dumps({"climbs": {}, "failed": []}), encoding="utf-8"
@@ -295,6 +297,7 @@ def _default_build(region: config.Region, pbf_url: str) -> dict:
         "plaatsen": len(extract["places"]),
         "auto_klimmen": len(detected["auto"]),
         "tvl_areas": tvl_areas,
+        "omgeving": environment,
         "gh_files": gh_files,
     }
 
