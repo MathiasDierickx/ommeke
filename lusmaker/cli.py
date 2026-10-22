@@ -448,6 +448,39 @@ def cmd_criteria_metrics(_args):
     }
 
 
+def cmd_benchmark(args):
+    from . import benchmark, draft
+
+    cases = benchmark.load_cases(args.cases)
+    if args.only:
+        selected = set(args.only.split(","))
+        unknown = selected - {case["id"] for case in cases}
+        if unknown:
+            raise ValueError("onbekende benchmark-cases: " + ", ".join(sorted(unknown)))
+        cases = [case for case in cases if case["id"] in selected]
+    report = benchmark.run(cases)
+    if args.opruimen:
+        for row in report["cases"]:
+            draft_id = row.get("metingen", {}).get("draft")
+            if draft_id:
+                cmd_draft_delete(argparse.Namespace(id=draft_id))
+    if args.json:
+        Path(args.json).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.md:
+        Path(args.md).write_text(benchmark.markdown(report), encoding="utf-8")
+    return report
+
+
+def add_benchmark_parser(sub):
+    parser = sub.add_parser("benchmark", help="benchmark lokale routemotor op vaste routevragen")
+    parser.add_argument("--cases", default="evals/route_benchmark.json")
+    parser.add_argument("--only", help="komma-gescheiden case-id's")
+    parser.add_argument("--json", help="schrijf volledig JSON-rapport naar bestand")
+    parser.add_argument("--md", help="schrijf Markdown-tabel naar bestand")
+    parser.add_argument("--opruimen", action="store_true", help="verwijder aangemaakte benchmark-drafts")
+    parser.set_defaults(func=cmd_benchmark)
+
+
 def cmd_criteria_check(args):
     from . import criteria
 
@@ -591,6 +624,7 @@ def _region_arg(parser):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="lus", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
+    add_benchmark_parser(sub)
     check = sub.add_parser("check", help="controleer componenten offline, zonder runtimewijzigingen")
     check.add_argument("check_args", nargs=argparse.REMAINDER)
     def run_checks(args):
