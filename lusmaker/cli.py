@@ -454,6 +454,14 @@ def cmd_criteria_check(args):
     return {"criteria": criteria.parse(parse_criteria(args.criteria))}
 
 
+def cmd_criteria_rules(args):
+    from . import criteria, criteria_routing
+
+    spec = criteria.parse(parse_criteria(args.criteria))
+    profile = activities.graph_profile(args.activiteit)
+    return {"priority": criteria_routing.priority_rules(spec, profile=profile)}
+
+
 def cmd_criteria_explain(args):
     from . import criteria, draft
 
@@ -667,6 +675,10 @@ def main(argv=None):
     s = rsub.add_parser("check", help="valideer en normaliseer een criterialijst")
     s.add_argument("criteria", help="JSON-lijst of .json-bestand")
     s.set_defaults(func=cmd_criteria_check)
+    s = rsub.add_parser("rules", help="toon GraphHopper-prioriteiten voor criteria")
+    s.add_argument("criteria", help="JSON-lijst of .json-bestand")
+    s.add_argument("--activiteit", choices=activities.ACCEPTED, default=activities.DEFAULT)
+    s.set_defaults(func=cmd_criteria_rules)
     s = rsub.add_parser("explain", help="'waarom deze route' voor een gerouteerde draft")
     _region_arg(s)
     s.add_argument("id")
