@@ -1,24 +1,14 @@
 export type RouteQuestion = { id?: string; vraag: string; reden?: string; opties: Record<string, unknown> };
 
-const OPTION_LABELS: Record<string, Record<string, string>> = {
-  kasseien: { graag: "Graag kasseien", vermijd: "Liever geen kasseien" },
-  heuvels: { zoek: "Graag heuvels", vlak: "Liever vlak" },
-  ondergrond: { verhard: "Liever verhard", onverhard: "Graag onverhard" },
-  fietspaden: { belangrijk: "Liefst op fietspaden" },
-  oversteken: { vermijd: "Liever weinig oversteken" },
-  stil: { belangrijk: "Liefst rustige wegen" },
-  knooppunten: { graag: "Graag via knooppunten" },
-};
-
-// Vangnet zolang niet elke optie een `label` van de engine heeft (nieuwe vragen zoals speeltuin en toilet).
+// Vangnet voor oudere routes waarvan de opties nog geen `label` van de engine hebben.
 const GENERIC: Record<string, string> = { graag: "Graag", belangrijk: "Ja, belangrijk", vermijd: "Liever niet", zoek: "Graag", ja: "Ja", nee: "Nee" };
 
 export function optionLabel(question: RouteQuestion, option: string): string {
-  // De engine geeft soms een leesbaar label mee (startplaats, plek_afstand); dat wint altijd.
+  // Het label van de engine wint altijd.
   const value = question.opties[option] as { label?: unknown } | undefined;
   if (typeof value?.label === "string" && value.label) return value.label;
   if (option === "ok") return "Maakt me niet uit";
-  const label = (question.id ? OPTION_LABELS[question.id]?.[option] : undefined) ?? GENERIC[option];
+  const label = GENERIC[option];
   if (label) return label;
   const text = option.replaceAll("_", " ");
   return text.charAt(0).toUpperCase() + text.slice(1);

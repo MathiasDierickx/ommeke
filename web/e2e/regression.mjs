@@ -288,8 +288,8 @@ test("routepagina: toetsenbord, focus en namen", async ({ page, url, vp }) => {
 
 test("routeconcept met vragen afmaken vanaf routepagina", async ({ page, url }) => {
   const questions = [
-    { id: "heuvels", vraag: "Hoeveel heuvels wil je?", reden: "Je voorkeur is nog onbekend.", opties: { zoek: {}, ok: {}, vlak: {} } },
-    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: {}, ok: {}, onverhard: {} } },
+    { id: "heuvels", vraag: "Hoeveel heuvels wil je?", reden: "Je voorkeur is nog onbekend.", opties: { zoek: { label: "Graag heuvels" }, ok: {}, vlak: { label: "Liever vlak" } } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: { label: "Liever verhard" }, ok: {}, onverhard: { label: "Graag onverhard" } } },
   ];
   const state = await installBackend(page, { handlers: {
     "GET /api/routes/r1": ({ state: s }) => json(200, { route: s.route }),
@@ -694,9 +694,9 @@ test("chat: open vragen als knoppen beantwoorden", async ({ page, url }) => {
   const conversation = { id: "c1", title: "Racefiets vanaf Kluisbos" };
   const oldMessage = { id: "old", conversation_id: "c1", role: "assistant", content: "Welke plek?\n0. **Kluisbos (Buizingen)** – lat 50.73 lon 4.26\n1. _Kluisbos_", created_at: "2026-10-06", route_ids: ["r1"] };
   const questions = [
-    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: {}, ok: {}, onverhard: {} } },
-    { id: "heuvels", vraag: "Zoek je heuvels?", opties: { zoek: {}, ok: {}, vlak: {} } },
-    { id: "fietspaden", vraag: "Wil je fietspaden?", opties: { belangrijk: {}, ok: {} } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: { label: "Liever verhard" }, ok: {}, onverhard: { label: "Graag onverhard" } } },
+    { id: "heuvels", vraag: "Zoek je heuvels?", opties: { zoek: { label: "Graag heuvels" }, ok: {}, vlak: { label: "Liever vlak" } } },
+    { id: "fietspaden", vraag: "Wil je fietspaden?", opties: { belangrijk: { label: "Liefst op fietspaden" }, ok: {} } },
   ];
   let release;
   const refreshed = new Promise(resolve => { release = resolve; });
@@ -763,7 +763,7 @@ test("snelle planner: startplaats kiezen vóór vervolgvragen", async ({ page, u
       if (body.antwoorden.startplaats) {
         assert.deepEqual(body.antwoorden, { startplaats: "0" });
         return sse([["result", { status: "needs_input", draft: "d1", vragen: [
-          { id: "heuvels", vraag: "Zoek je heuvels?", opties: { zoek: {}, ok: {}, vlak: {} } },
+          { id: "heuvels", vraag: "Zoek je heuvels?", opties: { zoek: { label: "Graag heuvels" }, ok: {}, vlak: { label: "Liever vlak" } } },
         ] }]]);
       }
       assert.deepEqual(body.antwoorden, { heuvels: "zoek" });
@@ -810,8 +810,8 @@ test("routepagina: startplaats met leesbare kandidaatknoppen", async ({ page, ur
 
 test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async ({ page, url }) => {
   const vragen = [
-    { id: "ondergrond", vraag: "6,0 km van je verkenningsroute is onverhard. Blijf je liever op verharde wegen?", opties: { verhard: {}, ok: {}, onverhard: {} } },
-    { id: "heuvels", vraag: "Het is hier heuvelachtig. Zoek je de heuvels op?", opties: { zoek: {}, ok: {}, vlak: {} } },
+    { id: "ondergrond", vraag: "6,0 km van je verkenningsroute is onverhard. Blijf je liever op verharde wegen?", opties: { verhard: { label: "Liever verhard" }, ok: {}, onverhard: { label: "Graag onverhard" } } },
+    { id: "heuvels", vraag: "Het is hier heuvelachtig. Zoek je de heuvels op?", opties: { zoek: { label: "Graag heuvels" }, ok: {}, vlak: { label: "Liever vlak" } } },
   ];
   const state = await installBackend(page, {
     handlers: {
@@ -843,8 +843,8 @@ test("snelle planner: situationele vragen samen beantwoorden en doorgaan", async
 
 test("snelle planner: fietspad- en oversteekvragen krijgen leesbare knoppen", async ({ page, url }) => {
   const vragen = [
-    { id: "fietspaden", vraag: "Slechts 5% van je verkenningsroute is fietspad. Wil je zoveel mogelijk op fietspaden rijden?", opties: { belangrijk: {}, ok: {} } },
-    { id: "oversteken", vraag: "Je verkenningsroute steekt 4 keer een drukke weg over. Wil je oversteken vermijden?", opties: { vermijd: {}, ok: {} } },
+    { id: "fietspaden", vraag: "Slechts 5% van je verkenningsroute is fietspad. Wil je zoveel mogelijk op fietspaden rijden?", opties: { belangrijk: { label: "Liefst op fietspaden" }, ok: {} } },
+    { id: "oversteken", vraag: "Je verkenningsroute steekt 4 keer een drukke weg over. Wil je oversteken vermijden?", opties: { vermijd: { label: "Liever weinig oversteken" }, ok: {} } },
   ];
   const state = await installBackend(page, {
     handlers: {
@@ -998,6 +998,91 @@ test("offline: geopende route blijft beschikbaar en toont een badge", async ({ p
   } finally { await context.close(); }
 });
 
+test("startscherm: eigen notities gaan via het gesprek, niet via de snelplanner", async ({ page, url }) => {
+  const conversation = { id: "c7", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
+  const state = await installBackend(page, { handlers: {
+    "POST /api/conversations": () => json(200, { conversation }),
+    "GET /api/conversations/c7/messages": () => json(200, { conversation, messages: [] }),
+    "POST /api/conversations/c7/messages/stream": ({ body }) => {
+      assert.equal(body.content, "Een wandeling van 6 km vanuit Markt, Wetteren (activiteit: wandelen). rustig, langs het water, met de kinderen");
+      return sse([["result", { message: { id: "a1", conversation_id: "c7", role: "assistant", content: "Ik stel je drie vragen.", created_at: "2026-10-19T19:00:01Z" }, route_ids: [] }]]);
+    },
+  } });
+  await openHome(page, url);
+  await page.getByLabel("Startplaats").fill("Markt, Wetteren");
+  await page.getByLabel("Wat telt vandaag?").fill("rustig, langs het water, met de kinderen");
+  await page.getByRole("button", { name: "Maak mijn route" }).click();
+  await page.getByText("Ik stel je drie vragen.").waitFor();
+  assert.equal(state.calls.filter(c => c.key === "POST /api/routes/stream").length, 0, "met notities geen snelplanner-call");
+  expectNoStrays(state, "notities");
+});
+
+test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de tekst", async ({ page, url }) => {
+  const conversation = { id: "c8", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
+  const state = await installBackend(page, { handlers: {
+    "POST /api/conversations": () => json(200, { conversation }),
+    "GET /api/conversations/c8/messages": () => json(200, { conversation, messages: [] }),
+    "POST /api/conversations/c8/messages/stream": ({ body }) => {
+      assert.equal(body.content, "Pas mijn route “Berendries-lus” (r1) aan: liever zonder de steenweg");
+      return sse([["result", { message: { id: "a2", conversation_id: "c8", role: "assistant", content: "Ik pas de route aan.", created_at: "2026-10-19T19:00:01Z" }, route_ids: ["r1"] }]]);
+    },
+  } });
+  await openRoute(page, url);
+  await page.getByLabel("Zeg wat je anders wil").fill("liever zonder de steenweg");
+  await page.getByRole("button", { name: "Verstuur" }).click();
+  await page.getByText("Ik pas de route aan.").waitFor();
+  expectNoStrays(state, "zeg wat je anders wil");
+});
+
+test("Maak 'm maar na één antwoord stuurt dat antwoord met klaar: true", async ({ page, url }) => {
+  const questions = [
+    { id: "heuvels", vraag: "Hoeveel heuvels wil je?", opties: { zoek: { label: "Graag heuvels" }, ok: {}, vlak: { label: "Liever vlak" } } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: { label: "Liever verhard" }, ok: {}, onverhard: { label: "Graag onverhard" } } },
+  ];
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: s.route }),
+    "POST /api/routes/r1/answers/stream": ({ body, state: s }) => {
+      assert.deepEqual(body.antwoorden, { heuvels: "zoek" });
+      assert.equal(body.klaar, true);
+      s.route = { ...s.route, ready: true, vragen: [], total_km: 30, revision: s.route.revision + 1 };
+      return sse([["result", { status: "ready", draft: "r1" }]]);
+    },
+  } });
+  state.route = { ...state.route, ready: false, total_km: null, elevation_gain_m: null, download_url: null, constraints: { doel_km: 30, waarschuwingen: [] }, vragen: questions };
+  await openRoute(page, url);
+  await page.getByRole("button", { name: "Graag heuvels" }).click();
+  await page.getByText("Vraag 2 van 2").waitFor();
+  await page.getByRole("button", { name: "Maak ’m maar" }).click();
+  await page.getByRole("button", { name: "Neem mee" }).waitFor();
+  assert.equal(state.calls.filter(c => c.key.endsWith("answers/stream")).length, 1);
+  expectNoStrays(state, "maak 'm maar");
+});
+
+test("chat met lange routebibliotheek: de pagina zelf scrolt nooit", async ({ page, url }) => {
+  const conversation = { id: "c9", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes": ({ state: s }) => json(200, { routes: Array.from({ length: 40 }, (_, i) => ({ ...s.route, id: `r${i + 1}`, name: `Lus ${i + 1}` })), next_cursor: null }),
+    "POST /api/conversations": () => json(200, { conversation }),
+    "GET /api/conversations/c9/messages": () => json(200, { conversation, messages: [] }),
+    "POST /api/conversations/c9/messages/stream": () => sse([["result", { message: { id: "a3", conversation_id: "c9", role: "assistant", content: "Hier is je route.", created_at: "2026-10-19T19:00:01Z" }, route_ids: [] }]]),
+  } });
+  await openHome(page, url);
+  await page.getByLabel("Bericht aan Lus").fill("Wandeling van 7 km vanaf de Markt in Wetteren");
+  await page.getByLabel("Bericht aan Lus").press("Enter");
+  await page.getByText("Hier is je route.").waitFor();
+  const page_ = await page.evaluate(() => ({ extra: document.documentElement.scrollHeight - innerHeight, top: document.documentElement.scrollTop }));
+  assert.deepEqual(page_, { extra: 0, top: 0 }, "verborgen tekst in de zijbalk maakt de pagina hoger dan het scherm");
+  expectNoStrays(state, "lange bibliotheek");
+});
+
+test("kwaliteitschips tonen geen nulwaarden", async ({ page, url }) => {
+  const state = await installBackend(page, { handlers: { "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, waarom: [], kwaliteit: { kassei_m: 95, populair_pct: 0, bos_pct: 52, gecureerd_pct: 0.3 } } }) } });
+  await openRoute(page, url);
+  const chips = page.getByLabel("Routekwaliteit");
+  assert.deepEqual(await chips.locator("span").allInnerTexts(), ["95 m kassei", "52% bos of schaduw"]);
+  expectNoStrays(state, "kwaliteitschips");
+});
+
 // --- Runner ---------------------------------------------------------------
 
 const only = process.env.E2E_ONLY;
@@ -1038,63 +1123,3 @@ try {
 }
 console.log(`\n${failures ? `${failures} test(s) mislukt` : "alle tests geslaagd"} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
 process.exit(failures ? 1 : 0);
-
-test("startscherm: eigen notities gaan via het gesprek, niet via de snelplanner", async ({ page, url }) => {
-  const conversation = { id: "c7", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
-  const state = await installBackend(page, { handlers: {
-    "POST /api/conversations": () => json(200, { conversation }),
-    "GET /api/conversations/c7/messages": () => json(200, { conversation, messages: [] }),
-    "POST /api/conversations/c7/messages/stream": ({ body }) => {
-      assert.equal(body.content, "Een wandeling van 6 km vanuit Markt, Wetteren (activiteit: wandelen). rustig, langs het water, met de kinderen");
-      return sse([["result", { message: { id: "a1", conversation_id: "c7", role: "assistant", content: "Ik stel je drie vragen.", created_at: "2026-10-19T19:00:01Z" }, route_ids: [] }]]);
-    },
-  } });
-  await openHome(page, url);
-  await page.getByLabel("Startplaats").fill("Markt, Wetteren");
-  await page.getByLabel("Wat telt vandaag?").fill("rustig, langs het water, met de kinderen");
-  await page.getByRole("button", { name: "Maak mijn route" }).click();
-  await page.getByText("Ik stel je drie vragen.").waitFor();
-  assert.equal(state.calls.filter(c => c.key === "POST /api/routes/stream").length, 0, "met notities geen snelplanner-call");
-  expectNoStrays(state, "notities");
-});
-
-test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de tekst", async ({ page, url }) => {
-  const conversation = { id: "c8", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
-  const state = await installBackend(page, { handlers: {
-    "POST /api/conversations": () => json(200, { conversation }),
-    "GET /api/conversations/c8/messages": () => json(200, { conversation, messages: [] }),
-    "POST /api/conversations/c8/messages/stream": ({ body }) => {
-      assert.equal(body.content, "Pas mijn route “Berendries-lus” (r1) aan: liever zonder de steenweg");
-      return sse([["result", { message: { id: "a2", conversation_id: "c8", role: "assistant", content: "Ik pas de route aan.", created_at: "2026-10-19T19:00:01Z" }, route_ids: ["r1"] }]]);
-    },
-  } });
-  await openRoute(page, url);
-  await page.getByLabel("Zeg wat je anders wil").fill("liever zonder de steenweg");
-  await page.getByRole("button", { name: "Verstuur" }).click();
-  await page.getByText("Ik pas de route aan.").waitFor();
-  expectNoStrays(state, "zeg wat je anders wil");
-});
-
-test("Maak 'm maar na één antwoord stuurt dat antwoord met klaar: true", async ({ page, url }) => {
-  const questions = [
-    { id: "heuvels", vraag: "Hoeveel heuvels wil je?", opties: { zoek: {}, ok: {}, vlak: {} } },
-    { id: "ondergrond", vraag: "Welke ondergrond?", opties: { verhard: {}, ok: {}, onverhard: {} } },
-  ];
-  const state = await installBackend(page, { handlers: {
-    "GET /api/routes/r1": ({ state: s }) => json(200, { route: s.route }),
-    "POST /api/routes/r1/answers/stream": ({ body, state: s }) => {
-      assert.deepEqual(body.antwoorden, { heuvels: "zoek" });
-      assert.equal(body.klaar, true);
-      s.route = { ...s.route, ready: true, vragen: [], total_km: 30, revision: s.route.revision + 1 };
-      return sse([["result", { status: "ready", draft: "r1" }]]);
-    },
-  } });
-  state.route = { ...state.route, ready: false, total_km: null, elevation_gain_m: null, download_url: null, constraints: { doel_km: 30, waarschuwingen: [] }, vragen: questions };
-  await openRoute(page, url);
-  await page.getByRole("button", { name: "Graag heuvels" }).click();
-  await page.getByText("Vraag 2 van 2").waitFor();
-  await page.getByRole("button", { name: "Maak ’m maar" }).click();
-  await page.getByRole("button", { name: "Neem mee" }).waitFor();
-  assert.equal(state.calls.filter(c => c.key.endsWith("answers/stream")).length, 1);
-  expectNoStrays(state, "maak 'm maar");
-});

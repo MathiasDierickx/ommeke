@@ -85,14 +85,16 @@ export function ElevationSparkline({ values }: { values?: RouteGeometry["elevati
 
 export function QualityChips({ route }: { route: Route | SharedRoute }) {
   const quality = "computed" in route ? route.computed?.kwaliteit ?? route.kwaliteit : route.kwaliteit;
+  // Een 0-waarde zegt niets over de route en vult alleen de rij.
+  const chip = (value: number | null | undefined, text: (rounded: number) => string) => (value != null && Math.round(value) > 0 ? text(Math.round(value)) : null);
   const chips = [
-    quality?.kassei_m != null ? `${Math.round(quality.kassei_m)} m kassei` : null,
-    quality?.offroad_pct != null ? `${Math.round(quality.offroad_pct)}% offroad` : null,
-    quality?.populair_pct != null ? `${Math.round(quality.populair_pct)}% populair` : null,
-    quality?.bos_pct != null ? `${Math.round(quality.bos_pct)}% bos of schaduw` : null,
-    quality?.verlicht_pct != null ? `${Math.round(quality.verlicht_pct)}% verlicht` : null,
-    quality?.trappen_m ? `${Math.round(quality.trappen_m)} m trappen` : null,
-    quality?.gecureerd_pct != null ? `${Math.round(quality.gecureerd_pct)}% knooppuntroutes` : null,
+    chip(quality?.kassei_m, (v) => `${v} m kassei`),
+    chip(quality?.offroad_pct, (v) => `${v}% offroad`),
+    chip(quality?.populair_pct, (v) => `${v}% populair`),
+    chip(quality?.bos_pct, (v) => `${v}% bos of schaduw`),
+    chip(quality?.verlicht_pct, (v) => `${v}% verlicht`),
+    chip(quality?.trappen_m, (v) => `${v} m trappen`),
+    chip(quality?.gecureerd_pct, (v) => `${v}% knooppuntroutes`),
   ].filter((value): value is string => Boolean(value));
   if (!chips.length) return null;
   return <div className="quality-chips" aria-label="Routekwaliteit">{chips.map((chip) => <span key={chip}>{chip}</span>)}</div>;

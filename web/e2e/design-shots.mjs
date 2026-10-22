@@ -40,9 +40,9 @@ const conversations = [{ id: "c1", title: "Wandeling langs de Leie", preview: "6
 const concept = { ...route, id: "r3", name: "Wandeling vanuit Wetteren", start: "Markt, Wetteren", ready: false, total_km: null, elevation_gain_m: null, download_url: null, waarom: [], voorstellen: [],
   constraints: { doel_km: 8, waarschuwingen: [] }, geometry: { verkenning: true, points: points.filter((_, i) => i % 3 === 0), climbs: [], pois: [], elevation: null, start: { lat: points[0][0], lon: points[0][1], label: "Markt" } },
   vragen: [
-    { id: "oversteken", vraag: "Wil je drukke oversteken vermijden?", reden: "Je verkenning steekt 7 keer een drukke weg over.", opties: { vermijd: {}, ok: {} } },
-    { id: "ondergrond", vraag: "Welke ondergrond?", reden: "41 % van de verkenning is pad of onverhard.", opties: { verhard: {}, ok: {}, onverhard: {} } },
-    { id: "heuvels", vraag: "Zoek je de heuvels op?", opties: { zoek: {}, ok: {}, vlak: {} } },
+    { id: "oversteken", vraag: "Wil je drukke oversteken vermijden?", reden: "Je verkenning steekt 7 keer een drukke weg over.", opties: { vermijd: { label: "Liever weinig oversteken" }, ok: {} } },
+    { id: "ondergrond", vraag: "Welke ondergrond?", reden: "41 % van de verkenning is pad of onverhard.", opties: { verhard: { label: "Liever verhard" }, ok: {}, onverhard: { label: "Graag onverhard" } } },
+    { id: "heuvels", vraag: "Zoek je de heuvels op?", opties: { zoek: { label: "Graag heuvels" }, ok: {}, vlak: { label: "Liever vlak" } } },
   ] };
 const routes = [route, { ...route, id: "r2", name: "Racefietsrit Vlaamse Ardennen · 60 km", activity: "koersfiets", total_km: 61.2, elevation_gain_m: 640 }];
 const reply = (body) => ({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify(body) });

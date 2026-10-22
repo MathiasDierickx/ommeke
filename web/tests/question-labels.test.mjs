@@ -29,7 +29,7 @@ test('knoptekst gebruikt het label van de engine voor elke vraag', () => {
   const q = { id: 'plek_afstand', vraag: 'Donkmeer ligt ver.', opties: { ruimer: { label: 'Naar Donkmeer, ~39 km' }, zonder: { label: '14 km zonder Donkmeer' } } };
   assert.equal(optionLabel(q, 'ruimer'), 'Naar Donkmeer, ~39 km');
   assert.equal(optionLabel(q, 'zonder'), '14 km zonder Donkmeer');
-  assert.equal(optionLabel({ id: 'knooppunten', vraag: 'x', opties: { graag: {}, ok: {} } }, 'graag'), 'Graag via knooppunten');
+  assert.equal(optionLabel({ id: 'knooppunten', vraag: 'x', opties: { graag: {}, ok: {} } }, 'graag'), 'Graag', 'zonder engine-label een generieke knop');
   assert.equal(optionLabel({ id: 'knooppunten', vraag: 'x', opties: { graag: {}, ok: {} } }, 'ok'), 'Maakt me niet uit');
   assert.equal(optionLabel({ id: 'speeltuin', vraag: 'Een speeltuin onderweg?', opties: { belangrijk: {}, ok: {} } }, 'belangrijk'), 'Ja, belangrijk', 'onbekende vraag-id krijgt toch een leesbare knop');
   assert.equal(optionLabel({ id: 'toilet', vraag: 'x', opties: { belangrijk: { label: 'Liefst met een toilet' } } }, 'belangrijk'), 'Liefst met een toilet');
