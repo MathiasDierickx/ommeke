@@ -378,6 +378,14 @@ def _path_result(data: dict, details: bool = False) -> dict:
         "descend_m": round(p.get("descend", 0.0), 1),
         "coords": coords,
     }
+    from . import terrain
+    if terrain.available():
+        profile = terrain.ascent(coords)
+        out["coords"] = profile["coords"]
+        if profile["ascend_m"] is not None:
+            out["ascend_srtm_m"] = out["ascend_m"]
+            out["ascend_m"] = round(profile["ascend_m"], 1)
+            out["descend_m"] = round(profile["descend_m"] or 0.0, 1)
     if "instructions" in p:
         out["instructions"] = p["instructions"]
     if details:

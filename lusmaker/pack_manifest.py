@@ -54,7 +54,7 @@ def metadata(region):
         'built_at': datetime.now(UTC).isoformat(),
         'extract_format_version': extract.get('format_version'),
         'source_cache_modified_at': datetime.fromtimestamp(source.stat().st_mtime, UTC).isoformat() if source.exists() else None,
-        'features': {'landmarks': bool(extract.get('landmarks')), 'waterways': bool(extract.get('waterways')), 'omgeving': (region.cache / 'omgeving_cells.json').is_file(), 'areas': sorted(set(area_ids))},
+        'features': {'landmarks': bool(extract.get('landmarks')), 'waterways': bool(extract.get('waterways')), 'terreinmodel': (region.root / 'terrain' / 'dtm20.npy').is_file(), 'omgeving': (region.cache / 'omgeving_cells.json').is_file(), 'areas': sorted(set(area_ids))},
         'model_sha256': hashes,
         'contains_personal_heat': personal,
     }
@@ -99,6 +99,7 @@ def describe(manifest):
             'landmarks': features.get('landmarks'),
             'gebieden': features.get('areas'),
             'omgeving': features.get('omgeving'),
+            'terreinmodel': features.get('terreinmodel'),
             'persoonlijke_heat': manifest.get('contains_personal_heat'),
         },
     }

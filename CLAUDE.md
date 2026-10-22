@@ -48,6 +48,7 @@ webapp of taalmodel kunt itereren (GraphHopper lokaal:
 |---|---|
 | Metrieken en criteria valideren (offline) | `lus criteria metrics`, `lus criteria check '<json>'` |
 | Routemotor benchmarken (lokale GraphHopper) | `lus benchmark [--only bredene,kemmel] [--json /tmp/benchmark.json] [--md /tmp/benchmark.md] [--opruimen]` |
+| Vlaams DTM beheren / hoogte inspecteren | `lus terrain fetch --dest DIR`, `lus terrain build --src DIR [--out DIR] [--cell 20]`, `lus terrain info`, `lus terrain sample LAT LON`, `lus terrain ascent <draft-id>` |
 | Verkenning + vragen | `lus plan-route --start ... --target-km N --profiel-naam standaard --check-readiness [--criteria '<json>']` |
 | Een vraag beantwoorden (wordt ook criterium) | `lus draft answer <id> oversteken=vermijd stil=belangrijk`; "maak 'm maar" zonder antwoorden = `lus adjust-route <id>` |
 | Vraagkandidaten en formulering inspecteren | `lus draft questions <id> [--composer regels|bedrock] [--wens "<tekst>"]` |

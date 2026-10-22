@@ -5,6 +5,12 @@ op, bewaart de bronfeatures en bouwt een lokaal datapack. Ze importeert geen
 Strava-, Komoot-, Wikiloc- of RouteYou-collecties en neemt geen persoonlijke
 of onherleidbare seeds over. Zie de aparte [RouteYou-verkenning](ROUTEYOU-INTEGRATIE.md).
 
+Voor hoogtemeters gebruikt Vlaanderen het **Digitaal Hoogtemodel Vlaanderen II,
+DTM raster 5 m** (product 938). De licentie is *Modellicentie voor gratis
+hergebruik*; bronvermelding: **Bron: Digitaal Vlaanderen (DHMV II)**. De pack-
+workflow bestelt de 43 Lambert 72-tegels en bouwt daaruit een nodata-bewust
+20 m-grid (`terrain/dtm20.npy`) dat met het regiopack wordt uitgerold.
+
 ## Downloaden en opnieuw bouwen
 
 Vanaf de repository, met de bestaande venv en zonder nieuwe dependencies:

@@ -39,7 +39,7 @@ def test_manifest_records_source_date_and_profile_versions_and_validates():
     summary = pack_manifest.describe(manifest)
     assert summary['brondata_datum'] == manifest['source_data_date']
     assert summary['features']['persoonlijke_heat'] is False
-    assert set(summary['features']) == {'waterlopen', 'landmarks', 'gebieden', 'omgeving', 'persoonlijke_heat'}
+    assert set(summary['features']) == {'waterlopen', 'landmarks', 'gebieden', 'omgeving', 'terreinmodel', 'persoonlijke_heat'}
 
 
 def test_old_manifests_without_lm_profile_version_are_rejected():

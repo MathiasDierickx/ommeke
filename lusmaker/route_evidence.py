@@ -164,6 +164,7 @@ class Evidence:
         traffic_known = totals["not_car_free"] + totals["car_free"]
         return {
             "bron": "Toerisme Vlaanderen / provinciale toeristische organisaties",
+            "hoogtemodel_bron": "Bron: Digitaal Vlaanderen (DHMV II)",
             "activiteit": mode, "matching": "afstand_en_richting", "tolerantie_m": MATCH_RADIUS_M,
             "lengte_m": round(totals["total"]),
             "gecureerd_pct": round(100 * totals["curated"] / total, 1),

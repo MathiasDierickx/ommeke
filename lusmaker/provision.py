@@ -144,6 +144,7 @@ def create_pack(
         raise ValueError("Dit pack bevat persoonlijke heat-data. Gebruik uitsluitend voor privégebruik --include-personal-heat; hosted packs moeten alleen open data bevatten.")
     with tarfile.open(destination, "w:gz") as archive:
         _tar_add_path(archive, region.cache, "cache")
+        _tar_add_path(archive, region.root / "terrain", "terrain")
         for tile in sorted(region.data.glob("*.hgt")):
             archive.add(tile, arcname=f"data/{tile.name}")
         _tar_add_path(archive, region.gh_dir / "graph-cache", "gh/graph-cache")
