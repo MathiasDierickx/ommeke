@@ -641,6 +641,13 @@ def main(argv=None):
         raise SystemExit(0)
     check.set_defaults(func=run_checks)
 
+    bench = sub.add_parser("bench-router", help="meet GraphHopper-routerlatentie")
+    bench.add_argument("--n", type=int, default=10, help="aantal calls per type")
+    def bench_router_command(args):
+        from .gh import bench_router
+        return bench_router(args.n)
+    bench.set_defaults(func=bench_router_command)
+
     from .local_chat import command as chat_command
     chat = sub.add_parser("chat", help="voer een vrije routeprompt lokaal uit met de hosted routeagent")
     chat.add_argument("prompt")
