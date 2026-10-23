@@ -206,3 +206,29 @@ def test_candidate_label_names_the_two_nearest_places_within_three_km():
               ("Gent", "city", 51.05, 3.72)]
     assert g._nearby_place_names(places, 51.040, 3.9785) == ["Donk", "Overmere"]
     assert g._nearby_place_names(places, 51.05, 3.80) == ["Gent"]  # niets binnen 3 km: dichtste
+
+
+def test_street_place_query_prefers_the_match_nearest_the_named_municipality():
+    # Live (route 7f461c): "Markt, Wetteren" startte op de Markt van Lede.
+    gazetteer = {
+        "places": [("Wetteren", "town", 51.0050, 3.8830), ("Lede", "town", 50.9660, 3.9860)],
+        "streets": {"markt": [(51.0040, 3.8840, "Markt"), (50.9665, 3.9850, "Markt")]},
+        "landmarks": [("Markt", "place:square", 50.9663, 3.9855)],
+    }
+    best = geocode.geocode("Markt, Wetteren", gazetteer=gazetteer)[0]
+    assert (best["lat"], best["lon"]) == (51.0040, 3.8840)
+    assert best["label"] == "Markt, Wetteren"
+    only_landmark = dict(gazetteer, streets={}, landmarks=[("Markt", "place:square", 51.0045, 3.8835)])
+    assert geocode.geocode("Markt, Wetteren", gazetteer=only_landmark)[0]["label"] == "Markt, Wetteren"
+
+
+def test_street_and_municipality_without_comma_stay_in_that_municipality():
+    gazetteer = {
+        "places": [("Wetteren", "town", 51.0050, 3.8830), ("Lede", "town", 50.9660, 3.9860)],
+        "streets": {"markt": [(51.0040, 3.8840, "Markt"), (50.9665, 3.9850, "Markt")]},
+        "landmarks": [],
+    }
+    for query in ("Markt Wetteren", "Markt in Wetteren", "de Markt te Wetteren"):
+        best = geocode.geocode(query, gazetteer=gazetteer)[0]
+        assert best["label"] == "Markt, Wetteren", query
+        assert (best["lat"], best["lon"]) == (51.0040, 3.8840), query

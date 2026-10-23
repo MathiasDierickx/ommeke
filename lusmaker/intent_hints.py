@@ -34,6 +34,9 @@ _FLAT = r"\b(vlak|vlakke|zonder heuvels|geen heuvels|geen hellingen|zonder klimm
 _HILLY = r"\b(heuvelachtig\w*|heuvelrit\w*|bergop|veel klimmen|zoveel mogelijk (hoogtemeters|klimmen))\b"
 _NO_COBBLES = r"\b(geen|zonder|vermijd\w*|liever niet over|niet over) kasseien\b"
 _STROLLER = r"\b(kinderwagen\w*|buggy)\b"
+_TOWARD = r"\b(naar|tot bij)\b"
+_DISTANCE = r"\d+([.,]\d+)?\s*(km|kilometer)\b"
+_LINE_RIDE = r"\b(eindig\w*|enkel\w*|trein\w* terug|terug met de trein|lijnrit|rit in lijn)\b"
 
 
 def hints(text: str) -> dict:
@@ -64,4 +67,10 @@ def apply(values: dict, text: str) -> dict:
         # gok van het model (dat koos live 'wandelen'); andere voorkeuren vullen alleen aan.
         if result.get(key) is None or key == "activiteit":
             result[key] = value
+    # "Naar X" met een afstand is een lus rond X (beslisregel in de chatprompt die
+    # gpt-oss live negeerde); alleen een expliciete lijnrit houdt eind=X.
+    folded = _fold(text or "")
+    if (result.get("eind") and not result.get("rond_plaats") and re.search(_TOWARD, folded)
+            and re.search(_DISTANCE, folded) and not re.search(_LINE_RIDE, folded)):
+        result["rond_plaats"], result["eind"] = result["eind"], None
     return result

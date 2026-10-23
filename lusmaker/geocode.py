@@ -184,7 +184,23 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
         place_hits = _match_places(gaz["places"], parts[0])
         if place_hits:
             return place_hits[:limit]
-        return landmark_hits[:limit]
+        if landmark_hits:
+            return landmark_hits[:limit]
+        # "Markt Wetteren" / "de Markt in Wetteren": lees als "Markt, Wetteren", anders
+        # valt de vraag naar Google, dat de Markt van een buurgemeente kon teruggeven.
+        words = parts[0].split()
+        known = {_normalise(name) for name, *_ in gaz["places"]}
+        for cut in range(len(words) - 1, 0, -1):
+            place, street = " ".join(words[cut:]), words[:cut]
+            if _normalise(place) not in known:
+                continue
+            if street[-1].casefold() in {"in", "te"}:
+                street = street[:-1]
+            if street and street[0].casefold() in {"de", "het"}:
+                street = street[1:]
+            if street:
+                return geocode(f"{' '.join(street)}, {place}", limit=limit, gazetteer=gaz)
+        return []
 
     # "straat, plaats"
     place_hits = _match_places(gaz["places"], parts[-1])
@@ -204,18 +220,24 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
         for hit in landmark_hits
         if geo.haversine(hit["lat"], hit["lon"], p0["lat"], p0["lon"]) < 8000
     ]
+    pts = gaz["streets"].get(street_q.lower(), [])
+    near = [(la, lo, nm) for la, lo, nm in pts if geo.haversine(la, lo, p0["lat"], p0["lon"]) < 6000]
+    streets = [{"label": f"{c['name']}, {p0['label']}", "type": "street",
+                "lat": c["lat"], "lon": c["lon"]} for c in _cluster(near)]
     if nearby_landmarks:
-        return nearby_landmarks[:limit]
+        # "Markt, Wetteren": de Markt van buurgemeente Lede mag niet winnen van die
+        # in Wetteren zelf, dus herkenningspunten en straten samen op afstand sorteren.
+        for hit in nearby_landmarks:
+            if _normalise(p0["label"]) not in _normalise(hit["label"]):
+                hit["label"] = f"{hit['label']}, {p0['label']}"
+        merged = nearby_landmarks + streets
+        merged.sort(key=lambda hit: geo.haversine(hit["lat"], hit["lon"], p0["lat"], p0["lon"]))
+        return merged[:limit]
     nearby_places = [hit for hit in _match_places(gaz["places"], parts[0])
                      if geo.haversine(hit["lat"], hit["lon"], p0["lat"], p0["lon"]) < 8000]
     if nearby_places:
         return nearby_places[:limit]
-    pts = gaz["streets"].get(street_q.lower(), [])
-    near = [(la, lo, nm) for la, lo, nm in pts if geo.haversine(la, lo, p0["lat"], p0["lon"]) < 6000]
-    out = []
-    for c in _cluster(near):
-        out.append({"label": f"{c['name']}, {p0['label']}", "type": "street",
-                    "lat": c["lat"], "lon": c["lon"]})
+    out = streets
     if not out:
         out = [dict(p0, note=f"straat '{street_q}' niet gevonden, plaats zelf gebruikt")]
     return out[:limit]

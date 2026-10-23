@@ -733,7 +733,7 @@ def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=
         persist_fn(d)  # adjust_route herlaadt de draft; anders gaat de nieuwe naam verloren
 
 
-_AUTO_KM_SUFFIX = re.compile(r" · [\d.,]+ km$")
+_AUTO_KM_SUFFIX = re.compile(r"\s*(?:[·~(–-]\s*)*~?[\d.,]+\s*km\)?$")
 
 
 def _refresh_auto_name(d: dict, actual_km: float) -> None:
