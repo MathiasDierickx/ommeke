@@ -1361,6 +1361,8 @@ def apply_answers(
         estimate = readiness.place_round_trip_km(d)
         if estimate:
             request["target_km"] = estimate
+            # De schatting is ruw (±20 %); zonder bredere marge waarschuwt een gewone lus onterecht.
+            request["tolerance_km"] = max(request.get("tolerance_km", 2.5), round(0.2 * estimate, 1))
             if not request.get("max_km_explicit", False):
                 request["max_km"] = round(estimate + request.get("tolerance_km", 2.5), 1)
     if choice:
