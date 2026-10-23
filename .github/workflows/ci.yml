@@ -76,6 +76,9 @@ jobs:
   web:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Chromium + systeemdeps zitten al in het image (apt-install kostte 7 min); houd de tag gelijk aan web/package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble
     defaults:
       run:
         working-directory: web
@@ -97,9 +100,6 @@ jobs:
 
       - name: Test frontendgedrag offline
         run: npm run test:unit
-
-      - name: Installeer Chromium voor browsertests
-        run: npx playwright install --with-deps chromium
 
       - name: Draai offline browserregressie (390 en 1280 px)
         run: npm run test:e2e
