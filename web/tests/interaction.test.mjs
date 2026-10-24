@@ -61,3 +61,12 @@ test('startplaatsopties tonen kandidaatlabels in beide vraagweergaven', () => {
   assert.equal(optionLabel(question, '0'), 'Kluisbos (Kluisbergen)');
   assert.equal(optionLabel(question, '1'), 'Kluisbos (Halle)');
 });
+
+test('routeconflict herkend als HTTP 409 en als SSE-foutcode', async () => {
+  const { isRouteConflict } = await import('../lib/interaction.ts');
+  assert.equal(isRouteConflict({ status: 409 }), true);
+  assert.equal(isRouteConflict({ code: 'route_conflict' }), true);
+  assert.equal(isRouteConflict({ status: 400, code: 'route_failed' }), false);
+  assert.equal(isRouteConflict(new Error('x')), false);
+  assert.equal(isRouteConflict(null), false);
+});

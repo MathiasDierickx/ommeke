@@ -1169,6 +1169,23 @@ test("tijdens het beantwoorden schrijft de chat niet tegelijk aan dezelfde route
   expectNoStrays(state, "geen dubbele schrijver");
 });
 
+test("routeconflict midden in de stream: nieuwste versie en een duidelijke melding", async ({ page, url }) => {
+  const conversation = { id: "c13", title: "Korte wandeling", updated_at: "2026-10-19T19:00:00Z" };
+  const vragen = [{ id: "stil", vraag: "Wil je het rustig houden?", opties: { belangrijk: { label: "Ja, belangrijk" }, ok: {} } }];
+  const messages = [{ id: "a1", conversation_id: "c13", role: "assistant", content: "Nog één korte vraag.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" }];
+  let conflicted = false;
+  const state = await installBackend(page, { handlers: {
+    "GET /api/conversations/c13/messages": () => json(200, { conversation, messages }),
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: conflicted ? { ...s.route, revision: 7 } : { ...s.route, ready: false, geometry: null, total_km: null, vragen } }),
+    "POST /api/routes/r1/answers/stream": () => { conflicted = true; return sse([["error", { error: "De draft is gewijzigd.", code: "route_conflict", http_status: 409 }]]); },
+  } });
+  await page.goto(`${url}/chats/c13/`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Maak ’m maar" }).click();
+  await page.getByText("De route is intussen bijgewerkt. Je ziet nu de nieuwste versie").first().waitFor();
+  assert.equal(state.calls.filter(c => c.key === "GET /api/routes/r1").length >= 2, true, "nieuwste versie opnieuw geladen");
+  expectNoStrays(state, "routeconflict");
+});
+
 // --- Runner ---------------------------------------------------------------
 
 const only = process.env.E2E_ONLY;

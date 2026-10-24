@@ -45,6 +45,13 @@ export function isOutOfCoverage(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { code?: unknown }).code === OUT_OF_COVERAGE;
 }
 
+/** Iemand anders schreef de route intussen: HTTP 409, of midden in een stream de code `route_conflict`. */
+export function isRouteConflict(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const { status, code } = error as { status?: unknown; code?: unknown };
+  return status === 409 || code === "route_conflict";
+}
+
 export function mergeById<T extends { id: string }>(current: T[], next: T[]): T[] {
   return [...new Map([...current, ...next].map(item => [item.id, item])).values()];
 }

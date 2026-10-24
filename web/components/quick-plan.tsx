@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { RouteProgress } from "./route-progress";
 import { StreamFailure, type ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
-import { isOutOfCoverage } from "@/lib/interaction";
+import { isOutOfCoverage, isRouteConflict } from "@/lib/interaction";
 import type { RouteQuestion } from "@/lib/question-labels";
 import { RouteQuestions } from "./route-questions";
 
@@ -142,6 +142,8 @@ export function QuickPlan({ token, onRoute, onConversation, onPrompt, onBusyChan
       pending.current = null;
       finish(next);
     } catch (e) {
+      // Intussen elders bijgewerkt: open de nieuwste versie in plaats van verouderde vragen te tonen.
+      if (isRouteConflict(e)) { onRoute(result.draft); return; }
       setCanRestart(e instanceof StreamFailure);
       throw e;
     }

@@ -14,9 +14,9 @@ import { RouteProgress } from "./route-progress";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
 import { routeTitle } from "@/lib/route-library";
-import { chatReply, mergeById, orphanState, pendingPrompt, unansweredPrompt, type PendingPrompt } from "@/lib/interaction";
+import { chatReply, isRouteConflict, mergeById, orphanState, pendingPrompt, unansweredPrompt, type PendingPrompt } from "@/lib/interaction";
 import { Sidebar } from "@/components/sidebar";
-import { ApiError, apiRequest, authenticatedBlob } from "@/lib/api";
+import { apiRequest, authenticatedBlob } from "@/lib/api";
 import { currentSession, signOut, storedSession } from "@/lib/cognito";
 import { clearOffline, registerOfflineWorker, storeRoute } from "@/lib/offline-routes";
 import { safeFilename, saveBlob } from "@/lib/save-file";
@@ -429,7 +429,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       setSelectedRoute(data.route);
       setRoutes((current) => current.map((item) => item.id === data.route.id ? { ...item, ...data.route } : item));
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 409) {
+      if (isRouteConflict(cause)) {
         setError("De route is intussen gewijzigd. Je ziet nu de nieuwste versie; probeer je aanpassing opnieuw.");
         await loadRoute(selectedRoute.id, session.accessToken).catch(() => undefined);
         return;
@@ -456,9 +456,12 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       }, onProgress);
       await refresh();
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 409) {
+      if (isRouteConflict(cause)) {
+        const message = "De route is intussen bijgewerkt. Je ziet nu de nieuwste versie.";
         await refresh().catch(() => undefined);
-        throw new Error("De route is intussen bijgewerkt. Je ziet nu de nieuwste versie; kies opnieuw.");
+        // Bovenaan tonen: de vraagkaart verdwijnt als de nieuwste versie al klaar is.
+        setError(message);
+        throw new Error(message);
       }
       throw cause;
     } finally { setRouteWriting(false); }
