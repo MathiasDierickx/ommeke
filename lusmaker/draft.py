@@ -67,10 +67,14 @@ def require_revision(d: dict, expected_revision: int | None) -> None:
 def save(d: dict, expected_revision: int | None = None) -> None:
     """Schrijf een draft atomisch en verhoog zijn monotone revisie."""
     validate_draft_id(d.get("id"))
+    # Een kopie die vóór een nieuwere bewaring geladen werd, mag die niet stil overschrijven.
+    loaded_revision = int(d["revision"]) if expected_revision is None and "revision" in d else None
     if aws_state.enabled():
         relative = f"drafts/{d['id']}.json"
         current, etag = aws_state.get_json(relative)
         current_revision = int((current or {}).get("revision", 0))
+        if current is not None and expected_revision is None:
+            expected_revision = loaded_revision
         if expected_revision is not None and current_revision != expected_revision:
             require_revision(
                 {"id": d["id"], "revision": current_revision}, expected_revision
@@ -99,6 +103,8 @@ def save(d: dict, expected_revision: int | None = None) -> None:
         if path.exists():
             with open(path, encoding="utf-8") as handle:
                 current_revision = int(json.load(handle).get("revision", 0))
+            if expected_revision is None:
+                expected_revision = loaded_revision
         if expected_revision is not None and current_revision != expected_revision:
             require_revision(
                 {"id": d["id"], "revision": current_revision}, expected_revision

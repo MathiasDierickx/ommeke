@@ -49,6 +49,28 @@ def test_save_is_atomic_increments_revision_and_rejects_stale_writer():
                 raise AssertionError("verouderde writer werd niet afgewezen")
 
 
+def test_save_without_expected_revision_rejects_a_copy_loaded_before_a_newer_save():
+    # Productie: een klare route (3d3a60) viel terug naar concept doordat een trage request
+    # zijn eerder geladen kopie bewaarde over de klare versie heen.
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with _isolated_home(Path(temp_dir)):
+            d = draft.new(start={"lat": 50.0, "lon": 4.0, "label": "Start"}, name="lostupdate", loop=True, end=None)
+            slow = draft.load(d["id"])
+            fast = draft.load(d["id"])
+            fast["computed"] = {"total_km": 7.2}
+            draft.save(fast)
+            slow["computed"] = None
+            try:
+                draft.save(slow)
+            except draft.DraftError as exc:
+                assert "laad de draft opnieuw" in str(exc)
+            else:
+                raise AssertionError("verouderde kopie overschreef de nieuwere draft")
+            assert draft.load(d["id"])["computed"] == {"total_km": 7.2}
+            draft.save(fast)  # wie de laatste versie heeft, blijft gewoon bewaren
+            assert draft.load(d["id"])["revision"] == fast["revision"]
+
+
 def test_find_by_request_id_returns_original_draft():
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
@@ -66,3 +88,13 @@ def test_find_by_request_id_returns_original_draft():
 
     assert found["id"] == d["id"]
     assert missing is None
+
+
+def test_revision_conflict_from_save_reaches_the_web_as_409_route_conflict():
+    import json
+    from lusmaker import aws_api
+    for message in ("draft 'abc' is gewijzigd: verwachte revisie 3, huidige revisie 4; laad de draft opnieuw",
+                    "draft 'abc' is gelijktijdig gewijzigd; laad de draft opnieuw"):
+        response = aws_api._draft_error(draft.DraftError(message))
+        assert response.status_code == 409 and json.loads(response.body)["code"] == "route_conflict"
+    assert aws_api._draft_error(draft.DraftError("geen lus gevonden")).status_code == 400

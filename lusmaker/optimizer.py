@@ -704,8 +704,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
         try:
             router(d, climb_db)
         except (DraftError, gh.GhError):
-            d.clear()
-            d.update(copy.deepcopy(before))
+            _restore(d, before)
             continue
         actual_m = d["computed"]["total_km"] * 1000.0
         if actual_m <= budget_m:
@@ -726,8 +725,7 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
                 return result
             if error < best_error:
                 best, best_error = (copy.deepcopy(d), result), error
-        d.clear()
-        d.update(copy.deepcopy(before))
+        _restore(d, before)
 
     if best is not None:
         # A short first batch is not success: search the bounded extra seeds
@@ -736,10 +734,18 @@ def _fill_with_round_trip(d: dict, climb_db: dict, budget_m: float,
             extra = exhausted("geen variant binnen de gewenste afstand")
             if extra.get("filled") and abs(d["computed"]["total_km"] * 1000 - target_total_m) < best_error:
                 return extra
-        d.clear()
-        d.update(best[0])
+        _restore(d, best[0])
         return best[1]
     return exhausted("round_trip-kandidaten overschrijden budget na integratie")
+
+
+def _restore(d: dict, snapshot: dict) -> None:
+    """Zet een proefversie terug, maar houd de revisie die een tussentijdse bewaring al gaf."""
+    revision = d.get("revision")
+    d.clear()
+    d.update(copy.deepcopy(snapshot))
+    if revision is not None:
+        d["revision"] = revision
 
 
 def optimize(d: dict, climb_db: dict, max_km: float, objective=None,
