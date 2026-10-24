@@ -7,6 +7,7 @@ from copy import deepcopy
 from lusmaker import tenant
 from lusmaker.aws_chat import (
     ADJUST_ROUTE_SCHEMA,
+    ANSWER_QUESTIONS_SCHEMA,
     PLAN_ROUTE_SCHEMA,
     SYSTEM_PROMPT,
     BedrockRouteAgent,
@@ -177,6 +178,53 @@ def test_bedrock_agent_executes_whitelisted_tool_and_accumulates_usage():
     assert tool_result["content"][0]["json"]["draft"] == "abc123"
 
 
+def test_bedrock_agent_executes_answer_questions_and_exposes_open_question_context():
+    class AnswerModel:
+        def __init__(self):
+            self.calls = []
+        def converse(self, **kwargs):
+            self.calls.append(deepcopy(kwargs))
+            if len(self.calls) == 1:
+                return {"output": {"message": {"content": [{"toolUse": {
+                    "toolUseId": "answer-1", "name": "answer_questions",
+                    "input": {"draft_id": "draft-1", "antwoorden": {"oversteken": "vermijd"}},
+                }}]}}, "stopReason": "tool_use", "usage": {}}
+            return {"output": {"message": {"content": [{"text": "Ik pas dat toe."}]}}, "stopReason": "end_turn", "usage": {}}
+    class AnswerTools:
+        def __init__(self): self.calls = []
+        def execute(self, name, arguments, *, request_id):
+            self.calls.append((name, arguments, request_id))
+            return {"status": "needs_input", "draft": "draft-1", "vragen": [
+                {"id": "kasseien", "opties": {"graag": {"label": "Graag"}, "ok": {"label": "Oké"}, "vermijd": {"label": "Vermijd"}}}
+            ]}
+    model, tools = AnswerModel(), AnswerTools()
+    result = BedrockRouteAgent(client=model, tool_executor=tools).reply(
+        [{"role": "user", "content": "vermijden ja"}], request_id="answers-test")
+    assert tools.calls == [("answer_questions", {"draft_id": "draft-1", "antwoorden": {"oversteken": "vermijd"}}, "answers-test")]
+    assert result["route_ids"] == ["draft-1"]
+    context = model.calls[1]["messages"][-1]["content"][0]["toolResult"]["content"][0]["json"]
+    assert context["vragen"][0]["id"] == "kasseien"
+    assert set(context["vragen"][0]["opties"]) == {"graag", "ok", "vermijd"}
+    assert "draft_id" in ANSWER_QUESTIONS_SCHEMA["properties"]
+
+
+def test_answer_questions_executor_calls_motor():
+    from lusmaker.aws_chat import RouteToolExecutor
+    from lusmaker import intents
+    calls = []
+    original = intents.apply_answers
+    intents.apply_answers = lambda draft_id, antwoorden, *, klaar=False: calls.append(
+        (draft_id, antwoorden, klaar)
+    ) or {"status": "ready", "draft": draft_id}
+    executor = RouteToolExecutor()
+    result = executor.execute("answer_questions", {
+        "draft_id": "draft-1", "antwoorden": {"oversteken": "vermijd"}, "klaar": True,
+    }, request_id="answers-test")
+    assert calls == [("draft-1", {"oversteken": "vermijd"}, True)]
+    assert result == {"status": "ready", "draft": "draft-1"}
+    intents.apply_answers = original
+
+
 def test_route_tool_contract_exposes_landmark_anchor_instruction():
     assert PLAN_ROUTE_SCHEMA["properties"]["rond_plaats"]["minLength"] == 1
     assert ADJUST_ROUTE_SCHEMA["properties"]["rond_plaats"]["minLength"] == 1
@@ -207,6 +255,9 @@ def test_needs_input_prompt_refers_to_buttons_without_raw_answer_instructions():
     assert "geen indexnummers en geen coördinaten" in SYSTEM_PROMPT
     assert "vraag nooit om sleutel = waarde te typen" in SYSTEM_PROMPT
     assert "Vrije tekstantwoorden" in SYSTEM_PROMPT
+    assert "answer_questions" in SYSTEM_PROMPT
+    assert "geen voorkeurenvragen als tekst" in SYSTEM_PROMPT
+    assert "klaar: true" in SYSTEM_PROMPT
 
 
 def test_web_chat_removes_internal_files_from_the_model_context():
