@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, Menu, X } from "lucide-react";
+import { LoaderCircle, Map as MapIcon, Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -66,6 +66,11 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   // Antwoorden uit het startscherm worden verstuurd zodra dit gesprek geladen is.
   const [autoSend, setAutoSend] = useState<{ conversationId: string; content: string } | null>(null);
   const [loadedConversation, setLoadedConversation] = useState<string>();
+  // Mobiel toont één paneel tegelijk; vanaf tabletbreedte staan chat en kaart naast elkaar.
+  const [mobilePane, setMobilePane] = useState<"chat" | "route">(view.kind === "route" ? "route" : "chat");
+  const [startMode, setStartMode] = useState<"kies" | "vertel">("kies");
+  useEffect(() => { try { if (localStorage.getItem("ommeke-startmodus") === "vertel") setStartMode("vertel"); } catch { /* opslag is optioneel */ } }, []);
+  const chooseStartMode = (mode: "kies" | "vertel") => { setStartMode(mode); try { localStorage.setItem("ommeke-startmodus", mode); } catch { /* opslag is optioneel */ } };
 
   useEffect(() => {
     if (authStarted.current) return;
@@ -179,6 +184,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setSelectedRoute(null);
     setError(undefined);
     setOrphan(null);
+    setMobilePane("chat");
     const loadMessages = () => apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${encodeURIComponent(view.id)}/messages`, session.accessToken);
     let poll: number | undefined;
     const inspectOrphan = async (current: ChatMessage[]) => {
@@ -220,11 +226,21 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     if (!session || view.kind !== "route") return;
     let active = true;
     setConversationId(undefined);
+    setMessages([]);
     setSelectedRoute(null);
     setLoadingRoute(true);
     setError(undefined);
+    setMobilePane("route");
     loadRoute(view.id, session.accessToken)
-      .then(() => undefined)
+      .then(async (route) => {
+        // Het gesprek van deze route staat ernaast, zodat je er meteen over verder praat.
+        if (!active || !route.conversation_id) return;
+        const data = await apiRequest<{ conversation: Conversation; messages: ChatMessage[] }>(`/api/conversations/${encodeURIComponent(route.conversation_id)}/messages`, session.accessToken);
+        if (!active) return;
+        setConversationId(route.conversation_id);
+        setMessages(data.messages);
+        setLoadedConversation(route.conversation_id);
+      })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Route laden mislukt."); })
       .finally(() => { if (active) setLoadingRoute(false); });
     return () => { active = false; routeLoadVersion.current++; };
@@ -240,8 +256,27 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     setError(undefined);
   }, [view]);
 
+  // In een gesprek toont het routepaneel de laatst gemaakte route.
+  const latestRouteId = useMemo(() => messages.filter(message => message.role === "assistant").flatMap(message => message.route_ids ?? []).at(-1), [messages]);
+  useEffect(() => {
+    if (!session || view.kind !== "conversation" || !latestRouteId) return;
+    setLoadingRoute(true);
+    loadRoute(latestRouteId, session.accessToken)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : "Route laden mislukt."))
+      .finally(() => setLoadingRoute(false));
+  }, [session, view.kind, latestRouteId, loadRoute]);
+  const showRoute = (id: string) => {
+    setMobilePane("route");
+    if (!session || selectedRoute?.id === id) return;
+    setLoadingRoute(true);
+    loadRoute(id, session.accessToken)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : "Route laden mislukt."))
+      .finally(() => setLoadingRoute(false));
+  };
+
   // Alleen meescrollen als er een gesprek loopt; een leeg startscherm begint bovenaan.
-  useEffect(() => { if (messages.length || busy) messageEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
+  // Scroll alleen de berichtenlijst zelf: scrollIntoView verschuift ook de pagina als die ergens overloopt.
+  useEffect(() => { const list = messageEnd.current?.parentElement; if (list && (messages.length || busy)) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" }); }, [messages, busy]);
   const activeConversation = useMemo(() => conversations.find((item) => item.id === conversationId), [conversations, conversationId]);
   useEffect(() => {
     document.title = view.kind === "route" ? `${selectedRoute ? routeTitle(selectedRoute) : "Route"} — Lusmaker` : `${activeConversation?.title || "Nieuwe route"} — Lusmaker`;
@@ -258,7 +293,6 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       setConversations((current) => [data.conversation, ...current]);
       setConversationId(data.conversation.id);
       setMessages([]);
-      setSelectedRoute(null);
       setLeftOpen(false);
       window.history.replaceState({}, "", `/chats/${encodeURIComponent(data.conversation.id)}`);
       return data.conversation.id;
@@ -270,8 +304,10 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   const sendPrompt = async (starter?: string) => {
     if (!session || busy || quickBusy || sendLock.current) return;
-    const content = (starter || prompt).trim();
-    if (!content) return;
+    const typed = (starter || prompt).trim();
+    if (!typed) return;
+    // shortcut: een route zonder gesprek krijgt naam en id in de tekst; upgrade als de engine een route aan een nieuw gesprek kan koppelen.
+    const content = !conversationId && selectedRoute ? `Pas mijn route “${selectedRoute.name}” (${selectedRoute.id}) aan: ${typed}` : typed;
     sendLock.current = true;
     setBusy(true);
     setProgress(null);
@@ -311,7 +347,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       await loadWorkspace(session.accessToken).catch(() => setError("Je antwoord is opgeslagen. De bibliotheek kon nog niet worden vernieuwd."));
       setAnswerComplete(true);
     } catch (cause) {
-      setPrompt(content);
+      setPrompt(typed);
       setMessages(current => current.filter(message => message.id !== optimistic.id));
       setError(cause instanceof Error && cause.name !== "TimeoutError" ? cause.message : "Dit duurt langer dan verwacht. Herlaad het gesprek; dezelfde vraag opnieuw verzenden maakt geen dubbele route.");
     }
@@ -444,16 +480,10 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       await loadRoute(selectedRoute.id, session.accessToken);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Delen stoppen mislukt."); throw cause; }
   };
-  // Vrije tekst over een route: naar het gesprek van die route, of een nieuw gesprek met de route erin.
-  // shortcut: zonder conversation_id op de route start dit een nieuw gesprek met de routenaam in de tekst; upgrade zodra de engine conversation_id meegeeft.
+  // Vrije tekst over de open route gaat naar het gesprek ernaast.
   const askAboutRoute = async (text: string) => {
-    if (!session || !selectedRoute) return;
-    const conversation = selectedRoute.conversation_id;
-    const content = conversation ? text : `Pas mijn route “${selectedRoute.name}” (${selectedRoute.id}) aan: ${text}`;
-    const id = conversation ?? (await newConversation());
-    if (!id) return;
-    try { sessionStorage.setItem(`ommeke-answer:${id}`, content); } catch { /* opslag is optioneel */ }
-    router.push(`/chats/${encodeURIComponent(id)}`);
+    setMobilePane("chat");
+    await sendPrompt(text);
   };
   const sendFeedback = async (category: string, comment: string) => {
     if (!session || !selectedRoute) return;
@@ -491,31 +521,31 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     finally { moreRoutesLock.current = false; setLoadingMoreRoutes(false); }
   };
   const sidebar = <Sidebar loading={!workspaceLoaded} loadingMoreRoutes={loadingMoreRoutes} hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
-  if (view.kind === "route") {
-    return (
-      <main className={`route-shell ${leftOpen ? "left-open" : ""}`}>
-        <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
-        {sidebar}
-        {error ? <div className="route-error error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
-        <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onAsk={askAboutRoute} onBack={() => router.push("/?new=1")} onMenu={() => setLeftOpen(true)} />
-      </main>
-    );
-  }
+  const routePane = selectedRoute || loadingRoute
+    ? <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onAsk={askAboutRoute} onBack={() => setMobilePane("chat")} onMenu={() => setLeftOpen(true)} inChat={Boolean(selectedRoute && messages.some(message => message.route_ids?.includes(selectedRoute.id)))} />
+    : <div className="route-placeholder"><MapIcon aria-hidden="true" /><p>Je route verschijnt hier zodra Lus ze gemaakt heeft.</p></div>;
+  const starting = !messages.length && !busy && !selectedRoute && !loadingRoute;
 
   return (
-    <main className={`workspace ${leftOpen ? "left-open" : ""}`}>
+    <main className={`workspace ${leftOpen ? "left-open" : ""} ${mobilePane === "route" ? "show-route" : "show-chat"}`}>
       <button className="mobile-scrim" onClick={() => setLeftOpen(false)} aria-label="Sluit navigatie" />
       {sidebar}
-      <section className="chat-panel">
+      {error ? <div className="error-banner workspace-error" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
+      <section className="chat-panel" aria-label="Gesprek">
         <header className="chat-head">
           <button className="icon-button mobile-menu" onClick={() => setLeftOpen(true)} aria-label="Open navigatie"><Menu /></button>
-          <div><h1>{activeConversation?.title || "Nieuwe route"}</h1></div>
+          <div><h1>{activeConversation?.title || (selectedRoute ? routeTitle(selectedRoute) : "Nieuwe route")}</h1></div>
+          {selectedRoute ? <button className="chat-to-map" onClick={() => setMobilePane("route")}><MapIcon aria-hidden="true" /> Kaart</button> : null}
         </header>
-        {error ? <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError(undefined)} aria-label="Sluit foutmelding"><X /></button></div> : null}
         <div className="messages">
-          {!messages.length && !busy && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} onPrompt={text => void sendPrompt(text)} /> : null}
-          {!messages.length && !busy && !quickBusy && !quickHasResult ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
-          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} onAnswers={answerChatRoute} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={openRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {starting && !quickBusy && !quickHasResult ? <div className="start-mode" role="group" aria-label="Hoe wil je beginnen?">
+            <button aria-pressed={startMode === "kies"} onClick={() => chooseStartMode("kies")}>Kies zelf</button>
+            <button aria-pressed={startMode === "vertel"} onClick={() => { chooseStartMode("vertel"); document.querySelector<HTMLTextAreaElement>(".composer textarea")?.focus(); }}>Vertel het</button>
+          </div> : null}
+          {starting && startMode === "kies" && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} onPrompt={text => void sendPrompt(text)} /> : null}
+          {starting && startMode === "vertel" ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
+          {!messages.length && !busy && selectedRoute ? <p className="route-chat-hint">Zeg hieronder wat je anders wil aan deze route: korter, langs het water, zonder die steenweg…</p> : null}
+          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} onAnswers={answerChatRoute} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={showRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
           {orphan && !busy ? <div className="orphan-notice" role="status">
             {orphan.state === "running"
               ? <p>Je laatste vraag wordt nog verwerkt. Het antwoord verschijnt hier vanzelf; je hoeft niets opnieuw te versturen.</p>
@@ -524,8 +554,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
           {busy || answerComplete ? <RouteProgress event={progress} complete={answerComplete} /> : null}
           <div ref={messageEnd} />
         </div>
-        <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy || quickBusy} />
+        <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy || quickBusy} placeholder={selectedRoute ? "Wat wil je anders?" : undefined} />
       </section>
+      <section className="route-pane" aria-label="Route">{routePane}</section>
     </main>
   );
 }

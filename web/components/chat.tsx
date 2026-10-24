@@ -19,7 +19,7 @@ const STARTERS = [
 export function EmptyChat({ onStarter }: { onStarter: (prompt: string) => void }) {
   return (
     <section className="empty-chat" aria-labelledby="empty-chat-title">
-      <h2 id="empty-chat-title">Of vertel het gewoon</h2>
+      <h2 id="empty-chat-title">Vertel wat je zoekt</h2>
       <p>Typ hieronder in je eigen woorden wat je zoekt: waar je start, hoe lang, en wat de tocht goed maakt (rustig, langs water, met de kinderen, een café halverwege…). Hoe meer je vertelt, hoe gerichter Lus vraagt.</p>
       <div className="starter-list">
         {STARTERS.map((starter) => <button key={starter} onClick={() => onStarter(starter)}><span>{starter}</span><ArrowUp /></button>)}
@@ -53,7 +53,7 @@ export function Message({ message, onRoute, onOption, routes = [], questionRoute
   );
 }
 
-export function Composer({ value, onChange, onSubmit, busy }: { value: string; onChange: (value: string) => void; onSubmit: () => void; busy: boolean }) {
+export function Composer({ value, onChange, onSubmit, busy, placeholder = "Vraag een route of pas iets aan…" }: { value: string; onChange: (value: string) => void; onSubmit: () => void; busy: boolean; placeholder?: string }) {
   const submit = (event: FormEvent) => { event.preventDefault(); onSubmit(); };
   return (
     <form className="composer" onSubmit={submit}>
@@ -61,7 +61,7 @@ export function Composer({ value, onChange, onSubmit, busy }: { value: string; o
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); onSubmit(); } }}
-        placeholder="Vraag een route of pas iets aan…"
+        placeholder={placeholder}
         rows={1}
         maxLength={4000}
         disabled={busy}

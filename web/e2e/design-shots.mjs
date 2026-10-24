@@ -48,7 +48,7 @@ const routes = [route, { ...route, id: "r2", name: "Racefietsrit Vlaamse Ardenne
 const reply = (body) => ({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify(body) });
 
 const browser = await chromium.launch();
-for (const vp of [{ name: "mobiel", width: 390, height: 844, mobile: true }, { name: "desktop", width: 1280, height: 800, mobile: false }]) {
+for (const vp of [{ name: "mobiel", width: 390, height: 844, mobile: true }, { name: "tablet", width: 820, height: 1180, mobile: true }, { name: "desktop", width: 1280, height: 800, mobile: false }]) {
   const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height }, isMobile: vp.mobile, hasTouch: vp.mobile, deviceScaleFactor: 2 });
   await page.addInitScript(v => localStorage.setItem("lusmaker.auth", JSON.stringify(v)), session);
   await page.route(`${API}/**`, async r => {

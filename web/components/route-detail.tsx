@@ -118,7 +118,10 @@ export function RouteDetail({
   mapSlot,
   onBack,
   onMenu,
+  inChat = false,
 }: {
+  /** Vragen en voorstellen staan al in het gesprek ernaast; toon ze niet dubbel. */
+  inChat?: boolean;
   onAsk?: (text: string) => Promise<void>;
   mapSlot?: React.ReactNode;
   route: Route | null;
@@ -192,7 +195,7 @@ export function RouteDetail({
       <header className="route-topbar">
         <button className="icon-button route-menu" onClick={onMenu} aria-label="Open navigatie"><Menu /></button>
         <div className="route-topbar-title"><Logo /><span><strong>{route ? routeTitle(route) : "Route laden…"}</strong></span></div>
-        <button className="route-back" onClick={onBack}><ArrowLeft /> Gesprekken</button>
+        <button className="route-back" onClick={onBack}><ArrowLeft /> Chat</button>
       </header>
       {route ? (
         <aside className={`route-sheet${peek ? " route-sheet-peek" : ""}`} aria-label="Routedetails">
@@ -209,7 +212,7 @@ export function RouteDetail({
             <span className="activity-tag">{activityKind(route.activity) === "voet" ? <Footprints /> : <Bike />}{activityLabel(route.activity)}</span>
           </div>
           <p className="route-origin">Vertrek vanuit {route.start || route.geometry?.start?.label || "je gekozen startpunt"}</p>
-          {!route.ready && route.vragen?.length ? <RouteQuestions route={route} onAnswers={onAnswers} onFreeText={onAsk ? text => void onAsk(text) : undefined} onBusyChange={setAdjusting} disabled={adjusting} submitLabel="Maak mijn route met deze keuzes" /> : !route.ready ? <section className="route-pending" aria-labelledby="route-pending-title">
+          {!route.ready && route.vragen?.length && inChat ? <p className="route-chat-hint">Nog een paar vragen: beantwoord ze in het gesprek, dan maakt Lus je route.</p> : !route.ready && route.vragen?.length ? <RouteQuestions route={route} onAnswers={onAnswers} onFreeText={onAsk ? text => void onAsk(text) : undefined} onBusyChange={setAdjusting} disabled={adjusting} submitLabel="Maak mijn route met deze keuzes" /> : !route.ready ? <section className="route-pending" aria-labelledby="route-pending-title">
             <h3 id="route-pending-title">Deze route is nog niet berekend</h3>
             <p>Er zijn geen open vragen. Je route wordt berekend met de opgeslagen afstand.</p>
             <button className="button button-primary" disabled={adjusting || !route.constraints?.doel_km} onClick={() => void adjust({ target_km: route.constraints?.doel_km ?? undefined })}>{adjusting ? "Route wordt berekend…" : "Route berekenen"}</button>
@@ -224,7 +227,7 @@ export function RouteDetail({
               <div className="steer-chips">
                 <button disabled={adjusting || route.total_km == null || route.total_km <= 1} onClick={() => void adjust({ target_km: Math.max(1, Math.round((route.total_km || 0) - distanceStep)) })}>Korter <small>−{distanceStep} km</small></button>
                 <button disabled={adjusting || route.total_km == null} onClick={() => void adjust({ target_km: Math.round((route.total_km || 0) + distanceStep) })}>Langer <small>+{distanceStep} km</small></button>
-                {route.voorstellen?.map(proposal => <button key={proposal.titel} title={proposal.uitleg} disabled={adjusting} onClick={() => void adjust(proposal.adjust_route)}>{proposal.titel}</button>)}
+                {inChat ? null : route.voorstellen?.map(proposal => <button key={proposal.titel} title={proposal.uitleg} disabled={adjusting} onClick={() => void adjust(proposal.adjust_route)}>{proposal.titel}</button>)}
               </div>
               {adjusting ? <RouteProgress event={{ stage: "adjusting", message: "Route aanpassen…" }} /> : null}
             </section>

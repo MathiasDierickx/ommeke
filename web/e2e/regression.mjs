@@ -1017,7 +1017,7 @@ test("startscherm: eigen notities gaan via het gesprek, niet via de snelplanner"
   expectNoStrays(state, "notities");
 });
 
-test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de tekst", async ({ page, url }) => {
+test("routepagina: praten over de route opent een gesprek met de route in de tekst", async ({ page, url, vp }) => {
   const conversation = { id: "c8", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
   const state = await installBackend(page, { handlers: {
     "POST /api/conversations": () => json(200, { conversation }),
@@ -1028,8 +1028,14 @@ test("routepagina: 'Zeg wat je anders wil' opent een gesprek met de route in de 
     },
   } });
   await openRoute(page, url);
-  await page.getByLabel("Zeg wat je anders wil").fill("liever zonder de steenweg");
-  await page.getByRole("button", { name: "Verstuur" }).click();
+  // Mobiel: het veld onder de route; vanaf tablet: de chat die naast de kaart staat.
+  if (vp.mobile) {
+    await page.getByLabel("Zeg wat je anders wil").fill("liever zonder de steenweg");
+    await page.getByRole("button", { name: "Verstuur", exact: true }).click();
+  } else {
+    await page.getByLabel("Bericht aan Lus").fill("liever zonder de steenweg");
+    await page.getByLabel("Bericht aan Lus").press("Enter");
+  }
   await page.getByText("Ik pas de route aan.").waitFor();
   expectNoStrays(state, "zeg wat je anders wil");
 });
@@ -1081,6 +1087,42 @@ test("kwaliteitschips tonen geen nulwaarden", async ({ page, url }) => {
   const chips = page.getByLabel("Routekwaliteit");
   assert.deepEqual(await chips.locator("span").allInnerTexts(), ["95 m kassei", "52% bos of schaduw"]);
   expectNoStrays(state, "kwaliteitschips");
+});
+
+test("startscherm: kiezen tussen keuzeknoppen en vrije tekst", async ({ page, url }) => {
+  const state = await installBackend(page);
+  await openHome(page, url);
+  await page.getByRole("button", { name: "Vertel het" }).click();
+  await page.getByRole("heading", { name: "Vertel wat je zoekt" }).waitFor();
+  assert.equal(await page.getByRole("heading", { name: /^Waar wil je/ }).count(), 0, "keuzeknoppen verborgen in tekstmodus");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { name: "Vertel wat je zoekt" }).waitFor();
+  await page.getByRole("button", { name: "Kies zelf" }).click();
+  await page.getByRole("heading", { name: /^Waar wil je/ }).waitFor();
+  expectNoStrays(state, "startmodus");
+});
+
+test("gesprek met route: kaart staat naast de chat, op mobiel één tik verder", async ({ page, url, vp }) => {
+  const conversation = { id: "c10", title: "Lus naar de Berendries", updated_at: "2026-10-19T19:00:00Z" };
+  const messages = [
+    { id: "u1", conversation_id: "c10", role: "user", content: "30 km naar de Berendries", created_at: "2026-10-19T19:00:00Z" },
+    { id: "a1", conversation_id: "c10", role: "assistant", content: "Hier is je lus.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" },
+  ];
+  const state = await installBackend(page, { handlers: { "GET /api/conversations/c10/messages": () => json(200, { conversation, messages }) } });
+  await page.goto(`${url}/chats/c10/`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Hier is je lus.").waitFor();
+  const heading = page.getByLabel("Route").getByRole("heading", { level: 2, name: "Berendries-lus" });
+  if (vp.mobile) {
+    assert.equal(await heading.isVisible(), false, "mobiel: eerst de chat");
+    await page.getByRole("button", { name: "Kaart", exact: true }).click();
+    await heading.waitFor();
+    await page.getByRole("button", { name: "Chat", exact: true }).click();
+    await page.getByText("Hier is je lus.").waitFor();
+  } else {
+    await heading.waitFor();
+    assert.ok(await page.getByText("Hier is je lus.").isVisible(), "chat en route tegelijk zichtbaar");
+  }
+  expectNoStrays(state, "gesprek met route");
 });
 
 // --- Runner ---------------------------------------------------------------
