@@ -561,3 +561,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px
 }
 @media (prefers-reduced-motion: reduce) { .choice-chip span { transition: none; } }
 .route-lineal { padding: .2rem .5rem; border-radius: 999px; background: var(--paper-deep); font-size: .62rem; font-weight: 750; }
+.link-button { padding: 0; border: 0; color: var(--green); background: none; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.route-pane .route-chat-hint .link-button { display: none; }
+@media (max-width: 760px) { .route-pane .route-chat-hint .link-button { display: inline; } }

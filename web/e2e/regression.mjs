@@ -1125,6 +1125,29 @@ test("gesprek met route: kaart staat naast de chat, op mobiel één tik verder",
   expectNoStrays(state, "gesprek met route");
 });
 
+test("open vragen staan onderaan de chat, ook na latere berichten", async ({ page, url }) => {
+  const conversation = { id: "c11", title: "Korte wandeling", updated_at: "2026-10-19T19:00:00Z" };
+  const vragen = [{ id: "stil", vraag: "Wil je het rustig houden?", opties: { belangrijk: { label: "Ja, belangrijk" }, ok: {} } }];
+  const messages = [
+    { id: "u1", conversation_id: "c11", role: "user", content: "2 km vanuit Gent", created_at: "2026-10-19T19:00:00Z" },
+    { id: "a1", conversation_id: "c11", role: "assistant", content: "Nog één korte vraag.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" },
+    { id: "u2", conversation_id: "c11", role: "user", content: "rustig ja", created_at: "2026-10-19T19:00:02Z" },
+    { id: "a2", conversation_id: "c11", role: "assistant", content: "Beantwoord de vraag hieronder.", created_at: "2026-10-19T19:00:03Z" },
+  ];
+  const state = await installBackend(page, { handlers: {
+    "GET /api/conversations/c11/messages": () => json(200, { conversation, messages }),
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, ready: false, geometry: null, total_km: null, vragen } }),
+  } });
+  await page.goto(`${url}/chats/c11/`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Beantwoord de vraag hieronder.").waitFor();
+  const card = page.locator(".messages .question-card");
+  await card.waitFor();
+  assert.equal(await card.count(), 1, "één vraagkaart");
+  const after = await page.evaluate(() => { const card = document.querySelector(".messages .question-card"); const last = [...document.querySelectorAll(".messages .message")].at(-1); return Boolean(last && card && last.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING); });
+  assert.ok(after, "de vraagkaart staat na het laatste bericht");
+  expectNoStrays(state, "vragen onderaan");
+});
+
 // --- Runner ---------------------------------------------------------------
 
 const only = process.env.E2E_ONLY;

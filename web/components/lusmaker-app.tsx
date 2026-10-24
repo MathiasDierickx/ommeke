@@ -9,6 +9,7 @@ import { AuthPanel } from "@/components/auth-panel";
 import { Logo } from "@/components/brand";
 import { Composer, EmptyChat, Message } from "@/components/chat";
 import { RouteDetail } from "@/components/route-detail";
+import { RouteQuestions } from "@/components/route-questions";
 import { RouteProgress } from "./route-progress";
 import type { ProgressEvent } from "@/lib/event-stream";
 import { apiStream } from "@/lib/api";
@@ -521,8 +522,10 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
     finally { moreRoutesLock.current = false; setLoadingMoreRoutes(false); }
   };
   const sidebar = <Sidebar loading={!workspaceLoaded} loadingMoreRoutes={loadingMoreRoutes} hasMoreRoutes={!!routeCursor} onMoreRoutes={() => void loadMoreRoutes()} conversations={conversations} routes={routes} selectedConversation={view.kind === "conversation" ? view.id : undefined} selectedRoute={view.kind === "route" ? view.id : undefined} onConversation={openConversation} onRoute={(route) => openRoute(route.id)} onNew={openNewChat} onClose={() => setLeftOpen(false)} session={session} onLogout={handleLogout} />;
+  // Open vragen staan onderaan het gesprek, waar je typt, niet bij het bericht dat ze ooit stelde.
+  const questionsInChat = Boolean(messages.length && selectedRoute && !selectedRoute.ready && selectedRoute.vragen?.length);
   const routePane = selectedRoute || loadingRoute
-    ? <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onAsk={askAboutRoute} onBack={() => setMobilePane("chat")} onMenu={() => setLeftOpen(true)} inChat={Boolean(selectedRoute && messages.some(message => message.route_ids?.includes(selectedRoute.id)))} />
+    ? <RouteDetail route={selectedRoute} loading={loadingRoute} onDownload={kind => void downloadRoute("gpx", kind)} onDownloadFit={kind => void downloadRoute("fit", kind)} onReturn={returnRoute} onRename={renameRoute} onDelete={deleteRoute} onAdjust={adjustRoute} onAnswers={answerRoute} onLoadClimbs={loadNearbyClimbs} onShare={shareRoute} onUnshare={unshareRoute} onFeedback={sendFeedback} onAsk={askAboutRoute} onBack={() => setMobilePane("chat")} onMenu={() => setLeftOpen(true)} inChat={questionsInChat || Boolean(selectedRoute && messages.some(message => message.route_ids?.includes(selectedRoute.id)))} />
     : <div className="route-placeholder"><MapIcon aria-hidden="true" /><p>Je route verschijnt hier zodra Lus ze gemaakt heeft.</p></div>;
   const starting = !messages.length && !busy && !selectedRoute && !loadingRoute;
 
@@ -534,7 +537,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       <section className="chat-panel" aria-label="Gesprek">
         <header className="chat-head">
           <button className="icon-button mobile-menu" onClick={() => setLeftOpen(true)} aria-label="Open navigatie"><Menu /></button>
-          <div><h1>{activeConversation?.title || (selectedRoute ? routeTitle(selectedRoute) : "Nieuwe route")}</h1></div>
+          <div><h1>{activeConversation?.title || (selectedRoute ? routeTitle(selectedRoute) : loadingRoute ? "Route laden…" : "Nieuwe route")}</h1></div>
           {selectedRoute ? <button className="chat-to-map" onClick={() => setMobilePane("route")}><MapIcon aria-hidden="true" /> Kaart</button> : null}
         </header>
         <div className="messages">
@@ -545,7 +548,8 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
           {starting && startMode === "kies" && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} onPrompt={text => void sendPrompt(text)} /> : null}
           {starting && startMode === "vertel" ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {!messages.length && !busy && selectedRoute ? <p className="route-chat-hint">Zeg hieronder wat je anders wil aan deze route: korter, langs het water, zonder die steenweg…</p> : null}
-          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} onAnswers={answerChatRoute} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={showRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={showRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {questionsInChat && selectedRoute ? <RouteQuestions key={`${selectedRoute.id}-${selectedRoute.revision}`} route={selectedRoute} disabled={busy || quickBusy} onFreeText={(value) => void sendPrompt(value)} onAnswers={(answers, onProgress, klaar) => answerChatRoute(selectedRoute.id, answers, onProgress, klaar)} /> : null}
           {orphan && !busy ? <div className="orphan-notice" role="status">
             {orphan.state === "running"
               ? <p>Je laatste vraag wordt nog verwerkt. Het antwoord verschijnt hier vanzelf; je hoeft niets opnieuw te versturen.</p>
