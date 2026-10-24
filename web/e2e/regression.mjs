@@ -1148,6 +1148,27 @@ test("open vragen staan onderaan de chat, ook na latere berichten", async ({ pag
   expectNoStrays(state, "vragen onderaan");
 });
 
+test("tijdens het beantwoorden schrijft de chat niet tegelijk aan dezelfde route", async ({ page, url }) => {
+  const conversation = { id: "c12", title: "Korte wandeling", updated_at: "2026-10-19T19:00:00Z" };
+  const vragen = [{ id: "stil", vraag: "Wil je het rustig houden?", opties: { belangrijk: { label: "Ja, belangrijk" }, ok: {} } }];
+  const messages = [
+    { id: "u1", conversation_id: "c12", role: "user", content: "2 km vanuit Gent", created_at: "2026-10-19T19:00:00Z" },
+    { id: "a1", conversation_id: "c12", role: "assistant", content: "Nog één korte vraag.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" },
+  ];
+  let release;
+  const state = await installBackend(page, { handlers: {
+    "GET /api/conversations/c12/messages": () => json(200, { conversation, messages }),
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, ready: false, geometry: null, total_km: null, vragen } }),
+    "POST /api/routes/r1/answers/stream": async () => { await new Promise(resolve => { release = resolve; }); return sse([["result", { ok: true }]]); },
+  } });
+  await page.goto(`${url}/chats/c12/`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Maak ’m maar" }).click();
+  await page.waitForFunction(() => document.querySelector(".composer textarea")?.disabled === true);
+  release();
+  await page.waitForFunction(() => document.querySelector(".composer textarea")?.disabled === false);
+  expectNoStrays(state, "geen dubbele schrijver");
+});
+
 // --- Runner ---------------------------------------------------------------
 
 const only = process.env.E2E_ONLY;

@@ -67,6 +67,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   // Antwoorden uit het startscherm worden verstuurd zodra dit gesprek geladen is.
   const [autoSend, setAutoSend] = useState<{ conversationId: string; content: string } | null>(null);
   const [loadedConversation, setLoadedConversation] = useState<string>();
+  // Eén schrijver per route tegelijk: een antwoord of aanpassing loopt, dan wacht de chat (en omgekeerd).
+  const [routeWriting, setRouteWriting] = useState(false);
+  const BUSY_MESSAGE = "Even wachten: Lus is nog bezig met je vorige vraag.";
   // Mobiel toont één paneel tegelijk; vanaf tabletbreedte staan chat en kaart naast elkaar.
   const [mobilePane, setMobilePane] = useState<"chat" | "route">(view.kind === "route" ? "route" : "chat");
   const [startMode, setStartMode] = useState<"kies" | "vertel">("kies");
@@ -304,7 +307,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   };
 
   const sendPrompt = async (starter?: string) => {
-    if (!session || busy || quickBusy || sendLock.current) return;
+    if (!session || busy || quickBusy || routeWriting || sendLock.current) return;
     const typed = (starter || prompt).trim();
     if (!typed) return;
     // shortcut: een route zonder gesprek krijgt naam en id in de tekst; upgrade als de engine een route aan een nieuw gesprek kan koppelen.
@@ -411,7 +414,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   const pendingAdjust = useRef<{ signature: string; id: string } | null>(null);
   const adjustRoute = async (adjustment: RouteAdjustment) => {
     if (!session || !selectedRoute) return;
+    if (busy) { setError(BUSY_MESSAGE); return; }
     setError(undefined);
+    setRouteWriting(true);
     const body = { ...adjustment, expected_revision: selectedRoute.revision };
     const signature = JSON.stringify([selectedRoute.id, body]);
     if (pendingAdjust.current?.signature !== signature) pendingAdjust.current = { signature, id: crypto.randomUUID() };
@@ -430,20 +435,33 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
         return;
       }
       setError(cause instanceof Error ? cause.message : "Route aanpassen mislukt.");
-    }
+    } finally { setRouteWriting(false); }
   };
 
   const answerChatRoute = async (routeId: string, answers: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar = false) => {
     if (!session) return;
+    if (busy) throw new Error(BUSY_MESSAGE);
     setError(undefined);
-    await apiStream(`/api/routes/${encodeURIComponent(routeId)}/answers/stream`, session.accessToken, {
-      antwoorden: answers,
-      request_id: crypto.randomUUID(),
-      ...(klaar ? { klaar: true } : {}),
-    }, onProgress);
-    const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, session.accessToken);
-    setRoutes(current => mergeById(current, [data.route]));
-    setSelectedRoute(current => current?.id === routeId ? data.route : current);
+    setRouteWriting(true);
+    const refresh = async () => {
+      const data = await apiRequest<{ route: Route }>(`/api/routes/${encodeURIComponent(routeId)}`, session.accessToken);
+      setRoutes(current => mergeById(current, [data.route]));
+      setSelectedRoute(current => current?.id === routeId ? data.route : current);
+    };
+    try {
+      await apiStream(`/api/routes/${encodeURIComponent(routeId)}/answers/stream`, session.accessToken, {
+        antwoorden: answers,
+        request_id: crypto.randomUUID(),
+        ...(klaar ? { klaar: true } : {}),
+      }, onProgress);
+      await refresh();
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 409) {
+        await refresh().catch(() => undefined);
+        throw new Error("De route is intussen bijgewerkt. Je ziet nu de nieuwste versie; kies opnieuw.");
+      }
+      throw cause;
+    } finally { setRouteWriting(false); }
   };
 
   const answerRoute = async (answers: Record<string, string>, onProgress: (event: ProgressEvent) => void, klaar = false) => {
@@ -548,7 +566,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
           {starting && startMode === "kies" && session ? <QuickPlan onResultChange={hasResult => { setQuickHasResult(hasResult); if (hasResult) void loadWorkspace(session.accessToken).catch(() => setError("Je route is klaar. De bibliotheek kon nog niet worden vernieuwd.")); }} onBusyChange={setQuickBusy} token={session.accessToken} onRoute={openRoute} onConversation={openConversation} onPrompt={text => void sendPrompt(text)} /> : null}
           {starting && startMode === "vertel" ? <EmptyChat onStarter={(value) => void sendPrompt(value)} /> : null}
           {!messages.length && !busy && selectedRoute ? <p className="route-chat-hint">Zeg hieronder wat je anders wil aan deze route: korter, langs het water, zonder die steenweg…</p> : null}
-          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={showRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
+          {messages.map((message, index) => <Message token={session?.accessToken} onProposalApplied={proposalApplied} busy={busy || quickBusy || routeWriting} questionRouteIds={message.route_ids?.filter(id => !messages.slice(index + 1).some(next => next.role === "assistant" && next.route_ids?.includes(id)))} key={message.id} message={message} onRoute={showRoute} routes={routes} onOption={(value) => void sendPrompt(value)} />)}
           {questionsInChat && selectedRoute ? <RouteQuestions key={`${selectedRoute.id}-${selectedRoute.revision}`} route={selectedRoute} disabled={busy || quickBusy} onFreeText={(value) => void sendPrompt(value)} onAnswers={(answers, onProgress, klaar) => answerChatRoute(selectedRoute.id, answers, onProgress, klaar)} /> : null}
           {orphan && !busy ? <div className="orphan-notice" role="status">
             {orphan.state === "running"
@@ -558,7 +576,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
           {busy || answerComplete ? <RouteProgress event={progress} complete={answerComplete} /> : null}
           <div ref={messageEnd} />
         </div>
-        <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy || quickBusy} placeholder={selectedRoute ? "Wat wil je anders?" : undefined} />
+        <Composer value={prompt} onChange={setPrompt} onSubmit={() => void sendPrompt()} busy={busy || quickBusy || routeWriting} placeholder={selectedRoute ? "Wat wil je anders?" : undefined} />
       </section>
       <section className="route-pane" aria-label="Route">{routePane}</section>
     </main>
