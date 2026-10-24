@@ -5,7 +5,7 @@ from pathlib import Path
 
 from lusmaker import aws_api, aws_chat, cli, mcp_server, quick_plan
 from lusmaker.chat_contracts import (
-    ADJUST_ROUTE_SCHEMA, PLAN_ROUTE_SCHEMA, REROUTE_SCHEMA,
+    ADJUST_ROUTE_SCHEMA, ANSWER_QUESTIONS_SCHEMA, PLAN_ROUTE_SCHEMA, REROUTE_SCHEMA,
 )
 
 DOC = Path(__file__).resolve().parents[1] / "docs" / "CONTRACTS.md"
@@ -79,6 +79,7 @@ def _targets(operation):
     chat = {
         "plan_route": schema(PLAN_ROUTE_SCHEMA),
         "adjust_route": schema(ADJUST_ROUTE_SCHEMA),
+        "apply_answers": schema(ANSWER_QUESTIONS_SCHEMA),
         "reroute_from": schema(REROUTE_SCHEMA),
         "update_profile": schema(_chat_tool_schema("update_profile")),
     }

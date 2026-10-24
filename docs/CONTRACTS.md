@@ -108,16 +108,16 @@ Bewuste verschillen:
 Antwoorden op situationele vragen (`needs_input`) toepassen zonder taalmodel en
 opnieuw routeren. Enkel beschikbaar via de web-API
 (`POST /api/routes/{draft_id}/answers` en `.../answers/stream`) en de motor
-(`intents.apply_answers`). Chat doet hetzelfde via `update_profile` plus
-`adjust_route`; startplaatskeuzes gaan in chat en MCP via
+(`intents.apply_answers`). Chat biedt dezelfde operatie aan als `answer_questions`;
+startplaatskeuzes gaan in chat en MCP via
 `adjust_route(startplaats=...)`. De CLI biedt apply_answers niet aan.
 
 | Parameter | CLI | MCP | Chat | Web | Default en opmerking |
 |---|---|---|---|---|---|
-| draft_id | — | — | — | `draft_id` | Padparameter. |
-| klaar | `--klaar` | — | — | `klaar` | Optioneel, `true` = "maak 'm maar" na al gegeven antwoorden: pas ze toe en routeer zonder nieuwe vragen. |
-| antwoorden | — | — | — | `antwoorden` | Verplicht object; leeg `{}` = "maak 'm maar": routeer met wat bekend is zonder nieuwe vragen. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `stil` (belangrijk, ok), `knooppunten` (graag, ok), `plek_afstand` (ruimer, zonder: bij een rond-plek die te ver ligt voor de doelafstand; ruimer zet de doelafstand op de schatting, zonder laat de plek vallen), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. Elk antwoord wordt ook een criterium (`criteria.ANSWER_CRITERIA`); `ok` verwijdert het. CLI: `lus draft answer <id> sleutel=waarde`. |
-| request_id | — | — | — | `request_id` | Verplicht in de web-API (receipt, scope `answers`). |
+| draft_id | — | — | `draft_id` | `draft_id` | Padparameter. |
+| klaar | `--klaar` | — | `klaar` | `klaar` | Optioneel, `true` = "maak 'm maar" na al gegeven antwoorden: pas ze toe en routeer zonder nieuwe vragen. |
+| antwoorden | — | — | `antwoorden` | `antwoorden` | Verplicht object; leeg `{}` = "maak 'm maar": routeer met wat bekend is zonder nieuwe vragen. Sleutels `startplaats` (opgeslagen optiesleutel 0–3), `fietspaden` (belangrijk, ok), `oversteken` (vermijd, ok), `stil` (belangrijk, ok), `knooppunten` (graag, ok), `plek_afstand` (ruimer, zonder: bij een rond-plek die te ver ligt voor de doelafstand; ruimer zet de doelafstand op de schatting, zonder laat de plek vallen), `kasseien` (graag, ok, vermijd), `heuvels` (zoek, ok, vlak), `ondergrond` (verhard, ok, onverhard). Antwoorden gelden voor deze rit, niet voor het profiel. Elk antwoord wordt ook een criterium (`criteria.ANSWER_CRITERIA`); `ok` verwijdert het. CLI: `lus draft answer <id> sleutel=waarde`. |
+| request_id | — | — | impliciet per toolaanroep | `request_id` | Verplicht in de web-API (receipt, scope `answers`); chat roept dezelfde motoroperatie aan. |
 
 De motor kent ook `expected_revision`; de web-endpoint geeft die niet door.
 

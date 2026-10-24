@@ -145,6 +145,16 @@ ADJUST_ROUTE_SCHEMA = {
     },
 }
 
+ANSWER_QUESTIONS_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["draft_id", "antwoorden"],
+    "properties": {
+        "draft_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "antwoorden": {"type": "object", "additionalProperties": {"type": "string"}},
+        "klaar": {"type": "boolean"},
+    },
+}
+
 
 
 def validate_arguments(value, schema, path='arguments'):
