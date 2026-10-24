@@ -342,7 +342,9 @@ def test_far_place_asks_first_and_both_answers_resolve_it():
     wider = copy.deepcopy(d)
     intents.apply_answers("p1", {"plek_afstand": "ruimer"}, load_fn=lambda _i: wider, save_fn=lambda _d: None,
                           adjust_fn=lambda _i, **_k: {"status": "ready"})
-    assert wider["route_request"]["target_km"] == 22 and wider["route_request"]["max_km"] == 24.5
+    # De schatting is ruw (±20 %): de tolerantie schaalt mee, anders waarschuwt 33,4 km op ~38 km onterecht.
+    assert wider["route_request"]["target_km"] == 22 and wider["route_request"]["tolerance_km"] == 4.4
+    assert wider["route_request"]["max_km"] == 26.4
     assert "plek_afstand" not in wider["route_request"]["expliciete_voorkeuren"]
     assert readiness._place_distance_question(wider) is None
 
