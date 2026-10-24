@@ -8,7 +8,7 @@ AWS-toegang. Geen bypass voor handmatige starts.
 **Frontend (Vercel).** `web/vercel.json` zet `ignoreCommand` op
 `node scripts/vercel-ignore.mjs`. Voor een productiebuild vraagt het script de
 check-runs `test`, `terraform` en `web` van exact `VERCEL_GIT_COMMIT_SHA` op bij
-GitHub (publiek, zonder token), wacht tot ~9 minuten op lopende CI en bouwt
+GitHub (publiek, zonder token), wacht tot ~15 minuten op lopende CI en bouwt
 alleen bij drie keer `success`. Mislukte of geannuleerde CI, rate limit,
 netwerkfout of time-out slaan de build over (Vercel toont die als geannuleerd).
 Preview-builds blijven ongemoeid. Is CI achteraf groen geworden: kies in Vercel

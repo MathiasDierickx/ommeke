@@ -8,7 +8,7 @@ export const REPOSITORY = 'MathiasDierickx/ommeke';
 // heten "checks / test" enz. en tellen dus niet mee.
 export const REQUIRED_CHECKS = ['test', 'terraform', 'web'];
 export const POLL_INTERVAL_MS = 20_000;
-export const MAX_WAIT_MS = 9 * 60_000;
+export const MAX_WAIT_MS = 15 * 60_000;
 
 // Beoordeel de check-runs van een commit: 'success' | 'failure' | 'pending'.
 export function evaluateCheckRuns(checkRuns, required = REQUIRED_CHECKS) {
