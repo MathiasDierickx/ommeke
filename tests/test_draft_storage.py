@@ -88,3 +88,13 @@ def test_find_by_request_id_returns_original_draft():
 
     assert found["id"] == d["id"]
     assert missing is None
+
+
+def test_revision_conflict_from_save_reaches_the_web_as_409_route_conflict():
+    import json
+    from lusmaker import aws_api
+    for message in ("draft 'abc' is gewijzigd: verwachte revisie 3, huidige revisie 4; laad de draft opnieuw",
+                    "draft 'abc' is gelijktijdig gewijzigd; laad de draft opnieuw"):
+        response = aws_api._draft_error(draft.DraftError(message))
+        assert response.status_code == 409 and json.loads(response.body)["code"] == "route_conflict"
+    assert aws_api._draft_error(draft.DraftError("geen lus gevonden")).status_code == 400

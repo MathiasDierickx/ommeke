@@ -214,7 +214,7 @@ er misging.
 | `buiten_gebied` | 422 | Start, anker of via-punt ligt buiten de gemeten dekking van de pack. Payload bevat `error`, `code`, `dekking` en optioneel `punt`. | Alle interfaces: CLI/chat/web als payload, MCP als JSON-tekst in de toolfout. |
 | `quota_exceeded` | 429 | Daglimiet voor chat, routes, tokens, feedback of regio's bereikt. Header `Retry-After` in seconden. | Web (route_plan, route_adjust, answers, reroute, chat); in MCP/CLI enkel wanneer quota's aan staan. |
 | `request_conflict` | 409 | Dezelfde `request_id` is al gebruikt voor een andere opdracht, of het eerdere verzoek is nog bezig of onderbroken. | Web: plan, adjust, answers, reroute, chat. |
-| `route_conflict` | 409 | `expected_revision` komt niet overeen met de huidige draft (of de draft is gewijzigd). | Web: adjust, reroute en `PATCH /api/routes/{draft_id}`. |
+| `route_conflict` | 409 | `expected_revision` komt niet overeen met de huidige draft, of een andere request bewaarde de draft sinds deze hem laadde. Bij `/stream` komt dit als SSE-event `error` met `code: route_conflict` en `http_status: 409`. | Web: plan, adjust, answers, reroute en `PATCH /api/routes/{draft_id}`. |
 | `route_not_found` | 404 | Onbekende `draft_id`. | Web. |
 | `route_failed` | 400 | De router of optimizer kon geen passende route maken (bv. te lang voor het harde maximum, geen lus). De draft blijft bestaan. | Web: plan, adjust, answers, reroute. |
 | `chat_failed` | 422 | De chatagent kon het bericht niet afronden. | Web. |
