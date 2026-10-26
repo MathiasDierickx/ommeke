@@ -263,12 +263,13 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
   // In een gesprek toont het routepaneel de laatst gemaakte route.
   const latestRouteId = useMemo(() => messages.filter(message => message.role === "assistant").flatMap(message => message.route_ids ?? []).at(-1), [messages]);
   useEffect(() => {
-    if (!session || view.kind !== "conversation" || !latestRouteId) return;
+    // Een nieuw gesprek blijft view "new" (de URL wisselt via replaceState), maar heeft wel een conversationId.
+    if (!session || !latestRouteId || !(view.kind === "conversation" || (view.kind === "new" && conversationId))) return;
     setLoadingRoute(true);
     loadRoute(latestRouteId, session.accessToken)
       .catch((cause) => setError(cause instanceof Error ? cause.message : "Route laden mislukt."))
       .finally(() => setLoadingRoute(false));
-  }, [session, view.kind, latestRouteId, loadRoute]);
+  }, [session, view.kind, conversationId, latestRouteId, loadRoute]);
   const showRoute = (id: string) => {
     setMobilePane("route");
     if (!session || selectedRoute?.id === id) return;

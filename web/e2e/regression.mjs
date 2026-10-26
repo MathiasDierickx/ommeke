@@ -1081,6 +1081,23 @@ test("chat met lange routebibliotheek: de pagina zelf scrolt nooit", async ({ pa
   expectNoStrays(state, "lange bibliotheek");
 });
 
+test("nieuw gesprek: de gemaakte route verschijnt meteen naast de chat", async ({ page, url, vp }) => {
+  const conversation = { id: "c11", title: "Nieuw", updated_at: "2026-10-19T19:00:00Z" };
+  const reply = { id: "a11", conversation_id: "c11", role: "assistant", content: "Hier is je lus.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" };
+  const state = await installBackend(page, { handlers: {
+    "POST /api/conversations": () => json(200, { conversation }),
+    "GET /api/conversations/c11/messages": () => json(200, { conversation, messages: [] }),
+    "POST /api/conversations/c11/messages/stream": () => sse([["result", { message: reply, route_ids: ["r1"] }]]),
+  } });
+  await openHome(page, url);
+  await page.getByLabel("Bericht aan Lus").fill("30 km naar de Berendries");
+  await page.getByLabel("Bericht aan Lus").press("Enter");
+  await page.getByText("Hier is je lus.").waitFor();
+  if (vp.name.startsWith("mobiel")) await page.getByRole("button", { name: "Kaart", exact: true }).waitFor();
+  else await page.getByLabel("Route").getByRole("heading", { level: 2, name: "Berendries-lus" }).waitFor();
+  expectNoStrays(state, "nieuw gesprek met route");
+});
+
 test("kwaliteitschips tonen geen nulwaarden", async ({ page, url }) => {
   const state = await installBackend(page, { handlers: { "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, waarom: [], kwaliteit: { kassei_m: 95, populair_pct: 0, bos_pct: 52, gecureerd_pct: 0.3 } } }) } });
   await openRoute(page, url);
