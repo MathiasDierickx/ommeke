@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA, UPDATE_PROFILE_SCHEMA
+from .chat_contracts import PLAN_ROUTE_SCHEMA, ADJUST_ROUTE_SCHEMA, ANSWER_QUESTIONS_SCHEMA, UPDATE_PROFILE_SCHEMA
 from .conversation_context import USER_TEXT
 
 _USER_TEXT = USER_TEXT  # compat: bestaande callers lezen dezelfde ContextVar
@@ -322,6 +322,7 @@ TOOL_CONFIG = {
                 "inputSchema": {"json": ADJUST_ROUTE_SCHEMA},
             }
         },
+        {"toolSpec": {"name": "answer_questions", "description": "Beantwoord open routevragen voor deze draft en hervat de route.", "inputSchema": {"json": ANSWER_QUESTIONS_SCHEMA}}},
         {
             "toolSpec": {
                 "name": "list_routes",
@@ -356,7 +357,7 @@ Kies de activiteit die bij de vraag past (wandelen, trail, wegloop, stadsfiets, 
 Stel kasseien, beton_vermijden, strict of doel=hoogtemeters nooit op eigen initiatief in: alleen als de gebruiker ze noemt. Onbekend laat je weg; de tool stelt zo nodig gerichte vragen.
 Bij een wijziging haal je met route_details eerst de actuele revision op als die ontbreekt.
 Bij een vrij tekstantwoord op startplaats: gebruik de kandidaatlabels en geef de gekozen optiesleutel door via adjust_route(startplaats=...). Verzin geen coördinaten.
-Gebruik update_profile voor expliciete antwoorden op voorkeurenvragen, daarna adjust_route.
+Gebruik answer_questions voor antwoorden op open vragen bij de bestaande route; gebruik update_profile alleen voor expliciete profielwijzigingen buiten zo’n open routevraag.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
 Als de gebruiker vraagt om rond/langs een specifieke plek (park, plas, domein) te lopen/rijden,
@@ -372,7 +373,7 @@ tekens. Gebruik plaats, karakter en eventueel afstand; kopieer niet de volledige
 Als een tool status needs_input teruggeeft, herhaal de vragen niet: de app toont ze als kaarten met knoppen. Schrijf één korte zin, bv. "Nog drie korte vragen." of "Nog één korte vraag."
 Schrijf de antwoordopties dan NIET uit als tekst (geen "Voorstel 1/2", geen opsomming van de keuzes): de knoppen tonen ze al.
 Noem geen indexnummers en geen coördinaten; vraag nooit om sleutel = waarde te typen.
-De knoppen tonen de kandidaatlabels en voorkeuren. Vrije tekstantwoorden blijf je via de bestaande tools verwerken.
+De knoppen tonen de kandidaatlabels en voorkeuren. Vrije tekstantwoorden op een open routevraag (zoals “vermijden ja”, “maakt niet uit” of “graag”) verwerk je met answer_questions: gebruik de vraag-id en best passende optiewaarde uit het needs_input-resultaat. Gebruik hiervoor nooit update_profile. “Maak ’m maar” of “maakt niet uit, maak de route” verwerk je met answer_questions en klaar: true; antwoorden mag leeg zijn. Stel zelf geen voorkeurenvragen als tekst, ook geen ja/nee-vragen; gestructureerde vragen komen alleen uit de route-tool.
 Als een route klaar is, vat afstand, hoogtemeters en belangrijke voorkeuren compact samen en
 verwijs naar "Download GPX/FIT" op de routekaart.
 Noem nooit bestandspaden of toolnamen/-syntaxis in je antwoord. Verzin geen posities van interface-elementen. Hou antwoorden praktisch en kort.
@@ -416,7 +417,7 @@ Beslisregels die altijd voorgaan:
 - Een harde bovengrens ("maximaal", "max", "niet meer dan") moet als max_km worden doorgegeven. Alleen target_km of tolerance_km begrenst de afstand NIET hard.
 - Een heuvelachtige rit, klimroute of zoveel mogelijk hoogtemeters betekent doel=hoogtemeters, ook zonder expliciet genoemde klimmen.
 - Bij een genoemd bestaand draft-id mag je geen nieuwe route aanmaken. Ontbreekt de revisie, roep eerst route_details aan met dat draft-id; gebruik daarna de teruggegeven revision bij adjust_route.
-- Een expliciet antwoord op een voorkeurenvraag moet met update_profile worden opgeslagen, ook als nog geen draft-id bekend is. Alleen tekstueel bevestigen is niet genoeg.
+- Een expliciete profielwijziging buiten een open routevraag gaat met update_profile. Een antwoord op een open routevraag bij een bestaande route gaat altijd met answer_questions.
 Criteria op maat: zodra de gebruiker wensen noemt die verder gaan dan afstand en activiteit
 (rustig, veel bos of paden, schaduw/bos = bos, 's avonds/in het donker = verlicht, geen kasseien, weinig oversteken, fietspaden, hoogtemeters, bekende
 wegen, met kinderen = speeltuin en toilet onderweg, zitbank voor een pauze), vertaal je elke wens naar één criterium in `criteria` met een meetbare `metriek`, een
@@ -535,6 +536,20 @@ class RouteToolExecutor:
             return intents.adjust_route(
                 **values, check_readiness=True, request_id=f"adjust-{digest}"
             )
+        if name == "answer_questions":
+            values = {
+                "draft_id": arguments["draft_id"],
+                "antwoorden": arguments["antwoorden"],
+                "klaar": arguments.get("klaar", False),
+            }
+            digest = hashlib.sha256(
+                f"{request_id}:{json.dumps(values, sort_keys=True, ensure_ascii=False)}".encode()
+            ).hexdigest()[:40]
+            from . import requests
+            # Zoals de vraagkaarten: een herhaalde toolaanroep hervat het receipt.
+            return requests.once("answers", f"chat-{digest}", values, lambda: intents.apply_answers(
+                values["draft_id"], values["antwoorden"], klaar=values["klaar"]
+            ))
         if name == "list_routes":
             return {"drafts": draft.list_all()[:50]}
         if name == "route_details":
