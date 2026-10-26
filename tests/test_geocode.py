@@ -232,3 +232,16 @@ def test_street_and_municipality_without_comma_stay_in_that_municipality():
         best = geocode.geocode(query, gazetteer=gazetteer)[0]
         assert best["label"] == "Markt, Wetteren", query
         assert (best["lat"], best["lon"]) == (51.0040, 3.8840), query
+
+
+def test_same_street_name_in_two_municipalities_asks_which_one():
+    # "Berendries" ligt in Michelbeke én bij Halle; zonder vraag won een willekeurige cluster.
+    gazetteer = {
+        "places": [("Michelbeke", "village", 50.8333, 3.7766), ("Halle", "town", 50.7333, 4.2333)],
+        "streets": {"berendries": [(50.8333, 3.7766, "Berendries"), (50.7340, 4.2340, "Berendries")]},
+        "landmarks": [],
+    }
+
+    best, _rest = geocode.resolve("Berendries", gazetteer=gazetteer, google_resolver=None)
+
+    assert sorted(c["label"] for c in best["candidates"]) == ["Berendries, Halle (Halle)", "Berendries, Michelbeke (Michelbeke)"]
