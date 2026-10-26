@@ -208,6 +208,54 @@ def test_bedrock_agent_executes_answer_questions_and_exposes_open_question_conte
     assert "draft_id" in ANSWER_QUESTIONS_SCHEMA["properties"]
 
 
+def test_active_route_context_is_prepended_to_the_latest_user_message():
+    class Model:
+        def __init__(self): self.calls = []
+        def converse(self, **kwargs):
+            self.calls.append(deepcopy(kwargs))
+            return {"output": {"message": {"content": [{"text": "Oké."}]}}, "stopReason": "end_turn", "usage": {}}
+    class NoTools:
+        def execute(self, *a, **k): raise AssertionError("geen tool verwacht")
+    looked_up = []
+    def context(draft_id):
+        looked_up.append(draft_id)
+        return {"draft_id": draft_id, "revision": 3, "status": "wacht op antwoorden",
+                "open_vragen": [{"id": "startplaats", "vraag": "Welke Markt Wetteren bedoel je?",
+                                 "opties": {"0": "Markt, Wetteren (Wetteren)", "1": "Markt, Lede (Lede)"}}]}
+    model = Model()
+    history = [
+        {"role": "user", "content": "Wandeling van 4 km vanaf Markt Wetteren"},
+        {"role": "assistant", "content": "Nog één korte vraag.", "route_ids": ["oud-1", "draft-9"]},
+        {"role": "user", "content": "de Markt in het centrum van Wetteren zelf"},
+    ]
+    BedrockRouteAgent(client=model, tool_executor=NoTools(), context_fn=context).reply(history, request_id="ctx-test")
+    assert looked_up == ["draft-9"]
+    sent = model.calls[0]["messages"]
+    assert sent[-1]["role"] == "user"
+    text = sent[-1]["content"][0]["text"]
+    assert text.startswith("[Actieve route ") and '"draft_id": "draft-9"' in text and '"startplaats"' in text
+    assert text.endswith("de Markt in het centrum van Wetteren zelf")
+    # Zonder eerdere route komt er geen blok.
+    model2 = Model()
+    BedrockRouteAgent(client=model2, tool_executor=NoTools(), context_fn=context).reply(
+        [{"role": "user", "content": "Lus van 30 km"}], request_id="ctx-test-2")
+    assert model2.calls[0]["messages"][-1]["content"][0]["text"] == "Lus van 30 km"
+    assert "[Actieve route" in SYSTEM_PROMPT and 'answer_questions met antwoorden {"startplaats"' in SYSTEM_PROMPT
+
+
+def test_route_context_reads_open_questions_from_the_draft():
+    from lusmaker import aws_chat, draft
+    original = draft.load
+    draft.load = lambda _id: {"id": "d1", "revision": 4, "name": "Wandeling", "computed": None,
+                              "open_vragen": [{"id": "startplaats", "vraag": "Welke?", "opties": {"0": {"label": "A"}, "1": {"label": "B"}}}]}
+    try:
+        context = aws_chat._route_context("d1")
+    finally:
+        draft.load = original
+    assert context == {"draft_id": "d1", "revision": 4, "naam": "Wandeling", "status": "wacht op antwoorden",
+                       "open_vragen": [{"id": "startplaats", "vraag": "Welke?", "opties": {"0": "A", "1": "B"}}]}
+
+
 def test_answer_questions_executor_calls_motor():
     from lusmaker.aws_chat import RouteToolExecutor
     from lusmaker import intents

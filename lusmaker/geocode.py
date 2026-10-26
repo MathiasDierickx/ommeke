@@ -222,6 +222,10 @@ def geocode(query: str, limit: int = 5, gazetteer=None) -> list[dict]:
     ]
     pts = gaz["streets"].get(street_q.lower(), [])
     near = [(la, lo, nm) for la, lo, nm in pts if geo.haversine(la, lo, p0["lat"], p0["lon"]) < 6000]
+    # "Markt, Wetteren": ligt er een Markt binnen 3 km van Wetteren, dan is die van Lede geen kandidaat.
+    close = [(la, lo, nm) for la, lo, nm in near if geo.haversine(la, lo, p0["lat"], p0["lon"]) < 3000]
+    if close:
+        near = close
     streets = [{"label": f"{c['name']}, {p0['label']}", "type": "street",
                 "lat": c["lat"], "lon": c["lon"]} for c in _cluster(near)]
     if nearby_landmarks:
