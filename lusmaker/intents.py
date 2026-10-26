@@ -704,8 +704,11 @@ def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn, overpass_
                 progress += geo.path_length(leg) / 1000
             d['stop_onderweg']['at_km'] = round(progress, 3)
         except (draft.DraftError, gh.GhError) as exc:
+            revision = d.get('revision')  # route_fn kan al bewaard hebben; houd die revisie
             d.clear()
             d.update(original)
+            if revision is not None:
+                d['revision'] = revision
             d['stop_warning'] = f"Geen geschikte stop ingepland: {exc}"
     if persist_fn:
         persist_fn(d)

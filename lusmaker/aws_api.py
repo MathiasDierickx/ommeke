@@ -32,6 +32,8 @@ def _draft_error(exc: "draft.DraftError") -> JSONResponse:
     message = str(exc)
     if "bestaat niet" in message:
         return _error(message, 404, "route_not_found")
+    if "laad de draft opnieuw" in message:  # revisieconflict uit draft.save
+        return _error(message, 409, "route_conflict")
     return _error(message, 400, "route_failed")
 
 
