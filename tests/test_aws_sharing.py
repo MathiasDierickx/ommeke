@@ -50,9 +50,13 @@ def test_public_route_payload_is_an_explicit_pii_free_allowlist():
             "legs": [],
         },
         "_geometry": [[[50.8, 3.7, 31], [50.81, 3.71, 44]]],
+        "stop_onderweg": {"kind": "speeltuin", "name": "speeltuin", "at_km": 3.2, "lat": 50.805, "lon": 3.705, "id": "tvl:1", "leg_index": 0},
     }
 
     payload = public_route_payload(item)
+
+    # De stop is een publieke plek, geen PII: de kaart mag er een marker voor tonen.
+    assert payload["geometry"]["stop"] == {"soort": "speeltuin", "naam": "speeltuin", "km": 3.2, "lat": 50.805, "lon": 3.705}
 
     assert set(payload) == {
         "name",

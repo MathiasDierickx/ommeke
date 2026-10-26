@@ -70,7 +70,7 @@ def along_route(track, places, *, radius_m=150, limit=100):
     return sorted(result,key=lambda p:(p['at_km'],p['id']))[:limit]
 
 
-def for_draft(d, *, gazetteer=None, source_pois=None, limit=100):
+def for_draft(d, *, gazetteer=None, source_pois=None, limit=100, radius_m=150):
     from . import geocode, draft, tvl_places
     injected = gazetteer is not None
     try:
@@ -85,11 +85,11 @@ def for_draft(d, *, gazetteer=None, source_pois=None, limit=100):
             except (RuntimeError, OSError):
                 gazetteer = {}
         if source_pois is None:
-            source_pois = [] if injected else tvl_places.along_route(d.get('_geometry', []), limit=limit)
+            source_pois = [] if injected else tvl_places.along_route(d.get('_geometry', []), radius_m=radius_m, limit=limit)
         # Onderbroken legs niet verbinden met een fictief pad.
         osm, distance = [], 0
         for leg in d.get('_geometry', []):
-            for item in along_route(leg, gazetteer.get('nearby_places', []), limit=limit):
+            for item in along_route(leg, gazetteer.get('nearby_places', []), radius_m=radius_m, limit=limit):
                 osm.append({**item, 'at_km': round(item['at_km']+distance/1000, 3)})
             distance += geo.path_length(leg)
         result = list(source_pois)

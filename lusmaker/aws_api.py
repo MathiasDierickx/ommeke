@@ -232,10 +232,13 @@ def _route_geometry(item: dict[str, Any], *, max_points: int = 1500) -> dict[str
                 break
     start = item.get("start") or {}
     from .route_pois import for_draft
+    stop = item.get("stop_onderweg")
     return {
         "pois": for_draft(item),
         "points": points,
         "climbs": markers,
+        "stop": ({"soort": stop["kind"], "naam": stop["name"], "km": stop["at_km"],
+                  "lat": round(stop["lat"], 5), "lon": round(stop["lon"], 5)} if stop else None),
         "elevation": _elevation_profile(legs),
         "start": (
             {"lat": start.get("lat"), "lon": start.get("lon"), "label": start.get("label")}
