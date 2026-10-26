@@ -631,17 +631,43 @@ def _needs_input(
     }
 
 
+_POI_STOP_KINDS = {'zitbank': {'zitbank', 'picknickbank'}}  # criteriummetriek -> POI-soorten in de bronpack
+
+
+def _poi_criterion_stop(d, request, pois):
+    """Een speeltuin-/toilet-/bankjeswens wordt een stop halfweg als de route er nog geen passeert."""
+    total = (d.get('computed') or {}).get('total_km')
+    if not isinstance(total, (int, float)):
+        return None
+    for criterion in request.get('criteria') or []:
+        kind = criterion.get('metriek')
+        if kind not in ('speeltuin', 'toilet', 'zitbank') or criterion.get('richting') != 'hoog':
+            continue
+        if any(p['kind'] in _POI_STOP_KINDS.get(kind, {kind}) and p.get('offset_m', 0) <= 150 for p in pois):
+            continue
+        # shortcut: één afgeleide stop per route, de eerste wens wint; upgrade als twee wensen samen moeten.
+        return {'soort': kind, 'rond_km': round(total / 2, 1), 'afgeleid': True}
+    return None
+
+
 def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn, overpass_fetch=None):
     from .route_pois import project
     from . import geo, gh
+    if d.get('stop_onderweg'):
+        return
+    pois = None
     wanted = request.get('stop_onderweg')
-    if not wanted or d.get('stop_onderweg'):
+    if not wanted:
+        pois = pois_fn(d)
+        wanted = _poi_criterion_stop(d, request, pois)
+    if not wanted:
         return
     kind = wanted['soort']
-    label = {'cafe': 'café', 'bakker': 'bakker', 'water': 'waterpunt', 'toilet': 'toilet', 'fietsenmaker': 'fietsenmaker'}.get(kind, kind)
+    kinds = _POI_STOP_KINDS.get(kind, {kind})
+    label = {'cafe': 'café', 'bakker': 'bakker', 'water': 'waterpunt', 'toilet': 'toilet', 'fietsenmaker': 'fietsenmaker', 'zitbank': 'bankje'}.get(kind, kind)
     around_km = wanted['rond_km']
     window = max(3.0, around_km * .4)
-    candidates = [p for p in pois_fn(d) if p['kind'] == kind and p.get('offset_m', 0) <= 1000
+    candidates = [p for p in (pois_fn(d) if pois is None else pois) if p['kind'] in kinds and p.get('offset_m', 0) <= 1000
                   and abs(p['at_km'] - around_km) <= window]
     if not candidates and kind == 'cafe':
         try:
@@ -675,7 +701,7 @@ def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn, overpass_
             candidates = []
     d.pop('stop_warning', None)
     if not candidates:
-        d['stop_warning'] = f"Ik vond geen {label} binnen 1 km van de route rond km {around_km:g}."
+        d['stop_warning'] = f"Ik vond geen {label} binnen 1 km van de route" + ('.' if wanted.get('afgeleid') else f" rond km {around_km:g}.")
     else:
         chosen = min(candidates, key=lambda p: (abs(p['at_km'] - wanted['rond_km']), p.get('offset_m', 0), p['id']))
         original = copy.deepcopy(d)
@@ -714,7 +740,7 @@ def _plan_stop(d, climb_db, request, *, route_fn, pois_fn, persist_fn, overpass_
 def _execute_request(d, climb_db, request, *, route_fn, optimize_fn, persist_fn=None, pois_fn=None, climb_adjustment=False, overpass_fetch=None):
     _route_for_request(d, climb_db, request, route_fn=route_fn, optimize_fn=optimize_fn, climb_adjustment=climb_adjustment)
     from .route_pois import for_draft
-    _plan_stop(d, climb_db, request, route_fn=route_fn, pois_fn=pois_fn or (lambda item: for_draft(item, limit=None)), persist_fn=persist_fn, overpass_fetch=overpass_fetch)
+    _plan_stop(d, climb_db, request, route_fn=route_fn, pois_fn=pois_fn or (lambda item: for_draft(item, limit=None, radius_m=1000)), persist_fn=persist_fn, overpass_fetch=overpass_fetch)
     actual = (d.get("computed") or {}).get("total_km")
     problem = None
     if not isinstance(actual, (int, float)) or not math.isfinite(actual) or actual < 0.1:

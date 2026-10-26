@@ -1036,7 +1036,7 @@ def test_apply_answers_maps_flat_and_unpaved_and_rejects_unknown_values():
             pass
 
 
-def _plan_with_stop(pois, *, reroute_km=1.4, stop=None, overpass_fetch=None):
+def _plan_with_stop(pois, *, reroute_km=1.4, stop=None, overpass_fetch=None, criteria=None):
     state = {'id':'stoptest', 'name':'Stoptest', 'start':{'label':'Test', 'lat':51,'lon':3}, 'loop':True, 'climbs':[], 'computed':None}
     calls = []
     def router(d, db):
@@ -1047,7 +1047,7 @@ def _plan_with_stop(pois, *, reroute_km=1.4, stop=None, overpass_fetch=None):
         d['computed'] = {'total_km':reroute_km if d.get('stop_onderweg') else 1.4, 'ascend_m':0, 'legs':[], 'kwaliteit':{}}
     with tempfile.TemporaryDirectory() as root:
         result = intents.plan_route('Test', doel='kort', target_km=1.4, tolerance_km=.2,
-            stop_onderweg=stop or {'soort':'cafe','rond_km':.6},
+            stop_onderweg=stop or ({'soort':'cafe','rond_km':.6} if criteria is None else None), criteria=criteria,
             create_fn=lambda **kw: {'id':state['id']}, load_fn=lambda _:state,
             save_fn=lambda _:None, route_fn=router, optimize_fn=lambda *a, **k:None,
             climbs_fn=lambda:{}, pois_fn=lambda _:pois,
@@ -1080,6 +1080,24 @@ def test_plan_route_warns_without_stop_and_rolls_back_outside_tolerance():
         assert result['km'] == 1.4
         assert any('stop' in w or 'café' in w for w in result['constraints']['waarschuwingen'])
         assert len(calls) == (2 if pois else 1)
+
+
+def test_playground_criterion_derives_a_stop_when_the_route_passes_none():
+    speeltuin = [{'metriek':'speeltuin','richting':'hoog','gewicht':1}]
+    pois = [{'id':'tvl:1','kind':'speeltuin','name':'speeltuin','lat':51,'lon':3.008,'at_km':.6,'offset_m':400}]
+    state, calls, result = _plan_with_stop(pois, criteria=speeltuin)
+    assert calls == [False, True]
+    assert result['stop_onderweg'] == {'soort':'speeltuin','naam':'speeltuin','km':result['stop_onderweg']['km']}
+    # De route passeert er al een: geen tweede routering.
+    state, calls, result = _plan_with_stop([{**pois[0], 'offset_m':0}], criteria=speeltuin)
+    assert calls == [False] and 'stop_onderweg' not in state
+    # Geen speeltuin in de buurt: waarschuwing, route blijft.
+    state, calls, result = _plan_with_stop([], criteria=speeltuin)
+    assert calls == [False] and 'speeltuin' in state['stop_warning']
+    # Een bankjeswens telt picknickbanken mee.
+    bank = [{'id':'tvl:2','kind':'picknickbank','name':'Picknick','lat':51,'lon':3.008,'at_km':.6,'offset_m':300}]
+    state, calls, result = _plan_with_stop(bank, criteria=[{'metriek':'zitbank','richting':'hoog','gewicht':1}])
+    assert state['stop_onderweg']['name'] == 'Picknick'
 
 
 def test_plan_stop_accepts_local_cafe_with_600m_offset():
