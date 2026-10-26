@@ -1153,7 +1153,9 @@ test("gesprek met route: kaart staat naast de chat, op mobiel één tik verder",
 test("open vragen staan onderaan de chat, ook na latere berichten", async ({ page, url }) => {
   const conversation = { id: "c11", title: "Korte wandeling", updated_at: "2026-10-19T19:00:00Z" };
   const vragen = [{ id: "stil", vraag: "Wil je het rustig houden?", opties: { belangrijk: { label: "Ja, belangrijk" }, ok: {} } }];
+  const filler = Array.from({ length: 8 }, (_, i) => ({ id: `f${i}`, conversation_id: "c11", role: i % 2 ? "assistant" : "user", content: "Eerder gesprek over een andere lus. ".repeat(6), created_at: "2026-10-19T18:00:00Z" }));
   const messages = [
+    ...filler,
     { id: "u1", conversation_id: "c11", role: "user", content: "2 km vanuit Gent", created_at: "2026-10-19T19:00:00Z" },
     { id: "a1", conversation_id: "c11", role: "assistant", content: "Nog één korte vraag.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" },
     { id: "u2", conversation_id: "c11", role: "user", content: "rustig ja", created_at: "2026-10-19T19:00:02Z" },
@@ -1170,6 +1172,8 @@ test("open vragen staan onderaan de chat, ook na latere berichten", async ({ pag
   assert.equal(await card.count(), 1, "één vraagkaart");
   const after = await page.evaluate(() => { const card = document.querySelector(".messages .question-card"); const last = [...document.querySelectorAll(".messages .message")].at(-1); return Boolean(last && card && last.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING); });
   assert.ok(after, "de vraagkaart staat na het laatste bericht");
+  // De kaart verschijnt pas na het laden van de route; de chat moet er dan naartoe scrollen.
+  await page.waitForFunction(() => { const card = document.querySelector(".messages .question-card")?.getBoundingClientRect(); const list = document.querySelector(".messages")?.getBoundingClientRect(); return card && list && card.top < list.bottom && card.bottom > list.top; }, null, { timeout: 5000 });
   expectNoStrays(state, "vragen onderaan");
 });
 

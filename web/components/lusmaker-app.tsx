@@ -281,7 +281,7 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
 
   // Alleen meescrollen als er een gesprek loopt; een leeg startscherm begint bovenaan.
   // Scroll alleen de berichtenlijst zelf: scrollIntoView verschuift ook de pagina als die ergens overloopt.
-  useEffect(() => { const list = messageEnd.current?.parentElement; if (list && (messages.length || busy)) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" }); }, [messages, busy]);
+  useEffect(() => { const list = messageEnd.current?.parentElement; if (list && (messages.length || busy)) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" }); }, [messages, busy, routeWriting, selectedRoute?.id, selectedRoute?.revision]);
   const activeConversation = useMemo(() => conversations.find((item) => item.id === conversationId), [conversations, conversationId]);
   useEffect(() => {
     document.title = view.kind === "route" ? `${selectedRoute ? routeTitle(selectedRoute) : "Route"} — Lusmaker` : `${activeConversation?.title || "Nieuwe route"} — Lusmaker`;
