@@ -267,15 +267,18 @@ def ambiguous_candidates(query: str, hits: list[dict], gazetteer=None) -> list[d
     if "," in query or len(hits) < 2:
         return []
     q = _normalise(query)
+    def name(hit):
+        # Een straat heet "Berendries, Michelbeke": de gemeente erachter maakt gelijke namen niet verschillend.
+        label = hit["label"].split(",")[0] if hit.get("type") == "street" else hit["label"]
+        return _normalise(label)
     def rank(hit):
-        name = _normalise(hit["label"])
-        return 0 if name == q else 1 if name.startswith(q) else 2
+        return 0 if name(hit) == q else 1 if name(hit).startswith(q) else 2
     best = hits[0]
     candidates = []
     for hit in hits:
         if rank(hit) != rank(best):
             continue
-        if difflib.SequenceMatcher(None, _normalise(best["label"]), _normalise(hit["label"])).ratio() < 0.9:
+        if difflib.SequenceMatcher(None, name(best), name(hit)).ratio() < 0.9:
             continue
         if any(geo.haversine(hit["lat"], hit["lon"], c["lat"], c["lon"]) <= 3000 for c in candidates):
             continue
