@@ -183,7 +183,9 @@ profielendpoint; de webapp past voorkeuren per rit toe via `apply_answers`.
 
 Er is geen `request_id` of `expected_revision`: een profielpatch is een
 last-write-wins samenvoeging met historiek (`bron` = cli, mcp of chat). Een
-gekoppelde verkenningsprobe wordt automatisch ongeldig.
+gekoppelde verkenningsprobe wordt automatisch ongeldig; een al afgewerkte route
+(met `computed`) blijft staan en routeert pas bij een volgende aanpassing met het
+nieuwe profiel.
 
 ## Exportselectie
 
