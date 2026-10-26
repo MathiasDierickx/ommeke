@@ -113,6 +113,8 @@ export type RouteGeometry = {
   climbs: { lat: number; lon: number; id: string }[];
   start: { lat: number; lon: number; label?: string } | null;
   elevation?: { km: number; ele: number }[] | null;
+  /** Stop die de route bewust aandoet: gevraagd (café) of afgeleid uit een wens (speeltuin). */
+  stop?: { soort: string; naam: string; km: number; lat: number; lon: number } | null;
   /** Verkenningsroute van een concept: gestippeld tekenen, nog geen echte route. */
   verkenning?: boolean;
 };

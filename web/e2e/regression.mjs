@@ -1089,6 +1089,14 @@ test("kwaliteitschips tonen geen nulwaarden", async ({ page, url }) => {
   expectNoStrays(state, "kwaliteitschips");
 });
 
+test("stop onderweg staat in de routedetails", async ({ page, url }) => {
+  const stop = { soort: "speeltuin", naam: "Speeltuin Kouterbos", km: 3.24, lat: 50.9, lon: 3.9 };
+  const state = await installBackend(page, { handlers: { "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, geometry: { points: [], climbs: [], start: null, stop } } }) } });
+  await openRoute(page, url);
+  await page.getByText("Stop onderweg: Speeltuin Kouterbos (speeltuin) · km 3,2").waitFor();
+  expectNoStrays(state, "stop onderweg");
+});
+
 test("startscherm: kiezen tussen keuzeknoppen en vrije tekst", async ({ page, url }) => {
   const state = await installBackend(page);
   await openHome(page, url);

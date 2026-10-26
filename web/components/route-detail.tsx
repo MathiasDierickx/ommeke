@@ -218,6 +218,7 @@ export function RouteDetail({
             <button className="button button-primary" disabled={adjusting || !route.constraints?.doel_km} onClick={() => void adjust({ target_km: route.constraints?.doel_km ?? undefined })}>{adjusting ? "Route wordt berekend…" : "Route berekenen"}</button>
           </section> : null}
           {route.ready ? <StatGrid route={route} /> : null}
+          {route.geometry?.stop ? <p className="route-stop">Stop onderweg: {route.geometry.stop.naam} ({route.geometry.stop.soort}) · km {route.geometry.stop.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })}</p> : null}
           <ElevationSparkline values={route.geometry?.elevation} />
           <WhyList reasons={route.waarom} />
           {!route.waarom?.length ? <QualityChips route={route} /> : null}

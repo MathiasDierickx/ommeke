@@ -191,6 +191,8 @@ svg { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
 .map-marker { width: 26px; height: 26px; border: 3px solid var(--white); border-radius: 50%; display: grid; place-items: center; color: white; background: var(--green); box-shadow: 0 5px 15px rgba(18, 36, 26, .3); font-size: 10px; font-weight: 800; }
 .map-marker-start { width: 28px; height: 28px; border: 6px solid var(--white); background: var(--lime); box-shadow: 0 0 0 3px var(--green), 0 5px 15px rgba(18, 36, 26, .3); }
 .map-marker-climb { background: var(--green-deep); }
+.map-marker-stop { width: 24px; height: 24px; border: 4px solid var(--white); background: #8d5a26; box-shadow: 0 3px 10px rgba(18, 36, 26, .3); }
+.route-stop { margin: .5rem 0 0; font-weight: 600; }
 .map-marker-end { width: 28px; height: 28px; border: 6px solid var(--white); background: var(--danger); box-shadow: 0 0 0 3px var(--green-deep), 0 5px 15px rgba(18, 36, 26, .3); }
 .route-topbar { position: absolute; z-index: 10; top: max(.65rem, env(safe-area-inset-top)); left: .65rem; right: .65rem; min-height: 3.75rem; padding: .35rem .45rem; border: 1px solid var(--line); border-radius: 1rem; display: flex; align-items: center; gap: .45rem; background: rgba(255, 254, 250, .93); box-shadow: 0 12px 36px rgba(19, 31, 24, .14); backdrop-filter: blur(14px); }
 .route-menu { color: var(--green); }

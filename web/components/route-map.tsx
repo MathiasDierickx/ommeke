@@ -66,6 +66,15 @@ export function RouteMap({ geometry, loading, muted = false, lineal = false, onP
           title: climb.id,
         }).addTo(map).bindTooltip(climb.id);
       });
+      const stop = geometry.stop;
+      if (stop) {
+        const title = `Stop: ${stop.naam} · km ${stop.km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })}`;
+        L.marker([stop.lat, stop.lon], {
+          icon: L.divIcon({ className: "map-marker-wrap", html: '<span class="map-marker map-marker-stop"></span>', iconSize: [24, 24], iconAnchor: [12, 12] }),
+          keyboard: true,
+          title,
+        }).addTo(map).bindTooltip(title);
+      }
       (geometry.pois || []).filter(p => poiKind !== "geen" && (poiKind === "alle" || p.kind === poiKind)).forEach(p => {
         const label = document.createElement("span");
         const details = [p.name, `${p.at_km.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} km`, p.opening_hours || "openingstijden onbekend"];
