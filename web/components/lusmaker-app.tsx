@@ -348,6 +348,9 @@ export function LusmakerApp({ view }: { view: WorkspaceView }) {
       const result = chatReply(await apiStream<unknown>(`/api/conversations/${id}/messages/stream`, session.accessToken, { content, request_id: pending.id }, setProgress));
       try { sessionStorage.removeItem(storageKey); } catch { /* opslag is optioneel */ }
       setMessages((current) => mergeById(current, [result.message]));
+      // Een antwoord over dezelfde route verandert latestRouteId niet; laad de nieuwe stand dus zelf.
+      const answeredRoute = result.route_ids.at(-1);
+      if (answeredRoute) void loadRoute(answeredRoute, session.accessToken).catch(() => undefined);
       setProgress({stage:"library",message:"Je antwoord is klaar. Ik werk je routebibliotheek bij."});
       await loadWorkspace(session.accessToken).catch(() => setError("Je antwoord is opgeslagen. De bibliotheek kon nog niet worden vernieuwd."));
       setAnswerComplete(true);

@@ -1098,6 +1098,44 @@ test("nieuw gesprek: de gemaakte route verschijnt meteen naast de chat", async (
   expectNoStrays(state, "nieuw gesprek met route");
 });
 
+test("routepagina met gesprek tekent de kaart", async ({ page, url }) => {
+  const conversation = { id: "c13", title: "Lus", updated_at: "2026-10-19T19:00:00Z" };
+  const messages = [{ id: "a1", conversation_id: "c13", role: "assistant", content: "Hier is je lus.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" }];
+  const state = await installBackend(page, { handlers: {
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, conversation_id: "c13", geometry: { points: [[50.95, 3.88], [50.96, 3.89]], climbs: [], start: null } } }),
+    "GET /api/conversations/c13/messages": () => json(200, { conversation, messages }),
+  } });
+  await openRoute(page, url);
+  await page.getByText("Hier is je lus.").waitFor({ state: "attached" }); // op mobiel staat de chat achter de kaart
+  await page.locator(".leaflet-map .leaflet-overlay-pane path").waitFor({ state: "attached" });
+  expectNoStrays(state, "kaart op routepagina");
+});
+
+test("chatantwoord over dezelfde route ververst vraagkaart en paneel", async ({ page, url }) => {
+  const conversation = { id: "c14", title: "Wandeling", updated_at: "2026-10-19T19:00:00Z" };
+  const first = [{ id: "plaats", vraag: "Welke Markt bedoel je?", opties: { a: { label: "Wetteren" }, b: { label: "Lede" } } }];
+  const next = [{ id: "stil", vraag: "Wil je het rustig houden?", opties: { belangrijk: { label: "Ja, belangrijk" }, ok: {} } }];
+  let messages = [
+    { id: "u1", conversation_id: "c14", role: "user", content: "4 km vanaf de Markt", created_at: "2026-10-19T19:00:00Z" },
+    { id: "a1", conversation_id: "c14", role: "assistant", content: "Nog één korte vraag.", route_ids: ["r1"], created_at: "2026-10-19T19:00:01Z" },
+  ];
+  const reply = { id: "a2", conversation_id: "c14", role: "assistant", content: "Nog drie korte vragen.", route_ids: ["r1"], created_at: "2026-10-19T19:00:03Z" };
+  let vragen = first;
+  const state = await installBackend(page, { handlers: {
+    "GET /api/conversations/c14/messages": () => json(200, { conversation, messages }),
+    "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, ready: false, geometry: null, total_km: null, vragen, revision: vragen === first ? 1 : 2 } }),
+    "POST /api/conversations/c14/messages/stream": () => { vragen = next; messages = [...messages, reply]; return sse([["result", { message: reply, route_ids: ["r1"] }]]); },
+  } });
+  await page.goto(`${url}/chats/c14/`, { waitUntil: "domcontentloaded" });
+  await page.getByText("Welke Markt bedoel je?").waitFor();
+  await page.getByLabel("Bericht aan Lus").fill("de eerste, in Wetteren zelf");
+  await page.getByLabel("Bericht aan Lus").press("Enter");
+  await page.getByText("Nog drie korte vragen.").waitFor();
+  await page.getByText("Wil je het rustig houden?").waitFor();
+  assert.equal(await page.getByText("Welke Markt bedoel je?").count(), 0, "oude vraagkaart is weg");
+  expectNoStrays(state, "zelfde route ververst");
+});
+
 test("kwaliteitschips tonen geen nulwaarden", async ({ page, url }) => {
   const state = await installBackend(page, { handlers: { "GET /api/routes/r1": ({ state: s }) => json(200, { route: { ...s.route, waarom: [], kwaliteit: { kassei_m: 95, populair_pct: 0, bos_pct: 52, gecureerd_pct: 0.3 } } }) } });
   await openRoute(page, url);

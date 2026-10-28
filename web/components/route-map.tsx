@@ -109,7 +109,7 @@ export function RouteMap({ geometry, loading, muted = false, lineal = false, onP
       disposed = true;
       cleanup();
     };
-  }, [geometry, poiKind, muted, lineal]);
+  }, [geometry, poiKind, muted, lineal, loading]); // loading: tijdens het laden staat de kaart-div er nog niet
 
   if (loading) return <div className="map-state"><LoaderCircle className="spin" /> Routekaart laden…</div>;
   if (!geometry?.points.length) return <div className="map-state"><MapIcon />{muted ? "De kaart volgt zodra je keuzes gemaakt zijn" : "Nog geen kaart voor deze route"}</div>;
