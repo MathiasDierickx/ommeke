@@ -245,3 +245,14 @@ def test_same_street_name_in_two_municipalities_asks_which_one():
     best, _rest = geocode.resolve("Berendries", gazetteer=gazetteer, google_resolver=None)
 
     assert sorted(c["label"] for c in best["candidates"]) == ["Berendries, Halle (Halle)", "Berendries, Michelbeke (Michelbeke)"]
+
+
+def test_named_municipality_drops_same_street_in_the_neighbouring_town():
+    # Productie: "Markt, Wetteren" vroeg "welke Markt?" met de Markt van Lede als tweede kandidaat.
+    gazetteer = {
+        "places": [("Wetteren", "town", 51.0050, 3.8830), ("Lede", "town", 50.9660, 3.9860)],
+        "streets": {"markt": [(51.0040, 3.8840, "Markt"), (50.9665, 3.9850, "Markt")]},
+        "landmarks": [],
+    }
+    best, rest = geocode.resolve("Markt, Wetteren", gazetteer=gazetteer, google_resolver=None)
+    assert "candidates" not in best and rest == []

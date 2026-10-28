@@ -356,7 +356,8 @@ Bij een gewone toer zonder klimwens zet je doel=toeren; bij expliciet onverhard 
 Kies de activiteit die bij de vraag past (wandelen, trail, wegloop, stadsfiets, toerfiets, koersfiets, gravel, mtb).
 Stel kasseien, beton_vermijden, strict of doel=hoogtemeters nooit op eigen initiatief in: alleen als de gebruiker ze noemt. Onbekend laat je weg; de tool stelt zo nodig gerichte vragen.
 Bij een wijziging haal je met route_details eerst de actuele revision op als die ontbreekt.
-Bij een vrij tekstantwoord op startplaats: gebruik de kandidaatlabels en geef de gekozen optiesleutel door via adjust_route(startplaats=...). Verzin geen coördinaten.
+Elk gesprek werkt op één actieve route. Het laatste gebruikersbericht begint met een blok [Actieve route …] met draft_id, revision, status en open vragen; werk daarop verder en maak alleen een nieuwe route met plan_route als de gebruiker uitdrukkelijk een nieuwe of andere route vraagt.
+Bij een vrij tekstantwoord op de startplaatsvraag ("de Markt in het centrum van Wetteren zelf") kies je de best passende kandidaat en geef je de optiesleutel door via answer_questions met antwoorden {"startplaats": "<sleutel>"}. Verzin geen coördinaten.
 Gebruik answer_questions voor antwoorden op open vragen bij de bestaande route; gebruik update_profile alleen voor expliciete profielwijzigingen buiten zo’n open routevraag.
 Gebruik plan_route zodra de gebruiker een nieuwe route vraagt. Gebruik adjust_route voor een
 wijziging aan een route die al in het gesprek staat. Verzin nooit routecijfers of route-id's.
@@ -437,6 +438,33 @@ Een tool draait altijd voor de ingelogde gebruiker; vraag of gebruik nooit een u
 _CONVERSATION_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "lusmaker_chat_conversation_id", default=None
 )
+
+
+def _route_context(draft_id: str) -> dict[str, Any] | None:
+    """Compacte stand van een draft voor het model: id, revisie, status en open vragen."""
+    try:
+        d = draft.load(draft_id)
+    except Exception:  # noqa: BLE001 - een verwijderde route mag het gesprek niet breken
+        return None
+    return {
+        "draft_id": d["id"], "revision": int(d.get("revision", 0)), "naam": d.get("name"),
+        "status": "klaar" if d.get("computed") else "wacht op antwoorden",
+        "open_vragen": [
+            {"id": q.get("id"), "vraag": q.get("vraag"),
+             "opties": {key: (opt or {}).get("label") for key, opt in (q.get("opties") or {}).items()}}
+            for q in d.get("open_vragen") or []
+        ],
+    }
+
+
+def _active_route_context(history: list[dict[str, Any]], context_fn) -> str | None:
+    """De laatst genoemde route van het gesprek, vers geladen (kaartantwoorden staan niet in de historiek)."""
+    for item in reversed(history):
+        ids = item.get("route_ids") or []
+        if ids:
+            context = context_fn(ids[-1])
+            return f"[Actieve route {json.dumps(context, ensure_ascii=False)}]" if context else None
+    return None
 
 
 def _latest_user_text(history: list[dict[str, Any]]) -> str | None:
@@ -580,10 +608,12 @@ class BedrockRouteAgent:
         self,
         client: Any | None = None,
         tool_executor: RouteToolExecutor | None = None,
+        context_fn=None,
         model_id: str | None = None,
     ):
         self.client = client or _bedrock_client()
         self.tools = tool_executor or RouteToolExecutor()
+        self.context_fn = context_fn or _route_context
         self.model_id = model_id or os.environ.get(
             "LUSMAKER_BEDROCK_MODEL_ID", "eu.anthropic.claude-sonnet-4-6"
         )
@@ -646,6 +676,7 @@ class BedrockRouteAgent:
 
     def _reply_inner(self, history: list[dict[str, Any]], request_id: str,
                      usage: dict[str, int], state: dict[str, int]) -> dict[str, Any]:
+        active = _active_route_context(history, self.context_fn)
         # Bedrock vereist strikt afwisselende user/assistant-rollen die met
         # 'user' beginnen. Mislukte turns laten soms twee user-berichten na
         # elkaar staan (assistant-antwoord werd niet opgeslagen); zonder
@@ -663,6 +694,10 @@ class BedrockRouteAgent:
                 messages.append({"role": role, "content": [{"text": text}]})
         while messages and messages[0]["role"] != "user":
             messages.pop(0)
+        if active and messages and messages[-1]["role"] == "user":
+            # Tool-resultaten worden niet bewaard; zonder dit blok kent het model de
+            # lopende draft niet en begint het elk bericht een nieuwe route.
+            messages[-1]["content"][0]["text"] = f"{active}\n\n{messages[-1]['content'][0]['text']}"
         route_ids: set[str] = set()
         ready_route_ids: set[str] = set()
         tool_events: list[dict[str, Any]] = []
@@ -696,7 +731,7 @@ class BedrockRouteAgent:
             for tool_use in tool_uses:
                 started = time.monotonic()
                 name = tool_use.get("name", "")
-                labels = {"lookup_place":"Ik zoek de juiste plaats en controleer de locatie.", "nearby_places":"Ik zoek plaatsen in de buurt.", "plan_route":"Ik bereken je route.", "adjust_route":"Ik pas je route aan.", "reroute_from":"Ik bereken de terugweg.", "route_details":"Ik controleer de routedetails.", "get_profile":"Ik bekijk je voorkeuren.", "update_profile":"Ik sla je voorkeuren op."}
+                labels = {"lookup_place":"Ik zoek de juiste plaats en controleer de locatie.", "nearby_places":"Ik zoek plaatsen in de buurt.", "plan_route":"Ik bereken je route.", "adjust_route":"Ik pas je route aan.", "reroute_from":"Ik bereken de terugweg.", "route_details":"Ik controleer de routedetails.", "get_profile":"Ik bekijk je voorkeuren.", "update_profile":"Ik sla je voorkeuren op.", "answer_questions":"Ik verwerk je antwoord en werk de route bij."}
                 progress.emit("tool", labels.get(name, "Ik controleer de routegegevens."))
                 error_detail: str | None = None
                 try:
