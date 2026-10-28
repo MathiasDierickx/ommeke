@@ -167,6 +167,11 @@ def invalidate_profile(profile_name: str) -> int:
     for d in drafts:
         if d.get("profile_doc") != profile_name:
             continue
+        if d.get("computed"):
+            # Een afgewerkte route blijft staan (productie: twee klare routes werden
+            # concept door één chat-profielpatch). Een volgende aanpassing routeert
+            # toch met het nieuwe profiel.
+            continue
         _invalidate_route(d)
         save(d)
         invalidated += 1

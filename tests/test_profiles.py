@@ -252,7 +252,7 @@ def test_loading_pre_t16_profile_adds_autovrij_defaults():
     assert loaded["voorkeuren"]["autovrij"] is None
 
 
-def test_profile_patch_invalidates_computed_route_and_probe_on_linked_drafts():
+def test_profile_patch_invalidates_probes_but_keeps_finished_routes():
     with tempfile.TemporaryDirectory() as temp_dir:
         with _isolated_home(Path(temp_dir)):
             d = draft.new(
@@ -262,10 +262,18 @@ def test_profile_patch_invalidates_computed_route_and_probe_on_linked_drafts():
                 end=None,
                 profile_doc="gravel",
             )
-            d["computed"] = {"total_km": 12.3}
-            d["_geometry"] = [[[50.98, 3.87, 10], [50.99, 3.88, 20]]]
             d["_probe"] = {"km": 12.3}
             draft.save(d)
+            ready = draft.new(
+                start={"lat": 50.98, "lon": 3.87, "label": "Wetteren"},
+                name="klaar",
+                loop=True,
+                end=None,
+                profile_doc="gravel",
+            )
+            ready["computed"] = {"total_km": 12.3}
+            ready["_geometry"] = [[[50.98, 3.87, 10], [50.99, 3.88, 20]]]
+            draft.save(ready)
 
             profiles.apply_patch(
                 "gravel",
@@ -273,10 +281,13 @@ def test_profile_patch_invalidates_computed_route_and_probe_on_linked_drafts():
                 bron="test",
             )
             stored = draft.load(d["id"])
+            stored_ready = draft.load(ready["id"])
 
     assert stored["computed"] is None
-    assert "_geometry" not in stored
     assert "_probe" not in stored
+    # Een afgewerkte route mag niet terug naar concept door een latere profielwijziging.
+    assert stored_ready["computed"] == {"total_km": 12.3}
+    assert stored_ready["_geometry"]
 
 
 def test_preference_validation_and_routing_mapping_keep_graag_scoring_only():
