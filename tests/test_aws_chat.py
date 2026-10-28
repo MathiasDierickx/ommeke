@@ -343,3 +343,32 @@ def test_web_chat_removes_internal_files_from_the_model_context():
     assert "Noem nooit bestandspaden of toolnamen/-syntaxis" in SYSTEM_PROMPT
     assert '"Download GPX/FIT" op de routekaart' in SYSTEM_PROMPT
     assert "zonder adjust_route(...)-syntaxis" in SYSTEM_PROMPT
+
+
+def test_tool_call_written_as_text_is_retried_as_a_real_tool_use():
+    # Sonnet schreef in productie "plan_route({...})" uit als tekst; de route werd nooit gemaakt.
+    class TextualModel:
+        def __init__(self):
+            self.calls = []
+        def converse(self, **kwargs):
+            self.calls.append(deepcopy(kwargs))
+            if len(self.calls) == 1:
+                return {"output": {"message": {"content": [{"text": 'plan_route({\n  start: "de Berendries",\n  target_km: 8\n})'}]}},
+                        "stopReason": "end_turn", "usage": {}}
+            if len(self.calls) == 2:
+                return {"output": {"message": {"content": [{"toolUse": {
+                    "toolUseId": "plan-1", "name": "plan_route",
+                    "input": {"start": "de Berendries", "target_km": 8}}}]}}, "stopReason": "tool_use", "usage": {}}
+            return {"output": {"message": {"content": [{"text": "Nog één vraag."}]}}, "stopReason": "end_turn", "usage": {}}
+    class Tools:
+        def __init__(self): self.calls = []
+        def execute(self, name, arguments, *, request_id):
+            self.calls.append(name)
+            return {"status": "needs_input", "draft": "draft-9", "vragen": []}
+    model, tools = TextualModel(), Tools()
+    result = BedrockRouteAgent(client=model, tool_executor=tools, context_fn=lambda _id: None).reply(
+        [{"role": "user", "content": "Een wandeling van 8 km vanaf de Berendries"}], request_id="text-tool")
+    assert tools.calls == ["plan_route"]
+    assert result["content"] == "Nog één vraag."
+    nudge = model.calls[1]["messages"][-1]
+    assert nudge["role"] == "user" and "tool" in nudge["content"][0]["text"].lower()
