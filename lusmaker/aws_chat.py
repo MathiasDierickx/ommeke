@@ -47,6 +47,9 @@ def _model_tool_output(value: Any) -> Any:
     return value
 
 
+_TEXTUAL_TOOL_CALL_RE = _re.compile(r"\s*[a-z_]+\(\s*\{")
+
+
 def _clean_answer(text: str) -> str:
     """Strip Nova's uitgelekte <thinking>-blokken en trim."""
     return _INTERNAL_PATH_RE.sub("[intern bestand]", _THINKING_RE.sub("", text or "")).strip()
@@ -718,6 +721,11 @@ class BedrockRouteAgent:
                 answer = _clean_answer("\n".join(text_parts))
                 if not answer:
                     raise ChatError("Het model gaf geen antwoord terug")
+                if _TEXTUAL_TOOL_CALL_RE.match(answer) and iteration == 1:
+                    # Sonnet schrijft soms "plan_route({...})" uit als tekst; één keer aandringen.
+                    messages.append({"role": "user", "content": [{"text":
+                        "Je schreef de toolaanroep uit als tekst. Roep de tool nu echt aan via tool use."}]})
+                    continue
                 return {
                     "content": answer,
                     "route_ids": sorted(route_ids),
